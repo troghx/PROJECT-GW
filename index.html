@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cero Deuda | Inicio de sesión</title>
+    <title>Cero Deuda | CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,50 +16,485 @@
     <div class="page-bg"></div>
     <div class="page-overlay"></div>
 
-    <header class="top-nav glass">
-      <div class="brand">
-        <img src="assets/cero-deuda-logo.svg" alt="Cero Deuda" />
-      </div>
-      <nav>
-        <a href="#">Inicio</a>
-        <a href="#">Soporte</a>
-        <a href="#">Contacto</a>
-      </nav>
-    </header>
-
-    <main class="hero-layout">
-      <section class="login-panel glass" aria-label="Panel de inicio de sesión">
-        <h1>Bienvenido de vuelta</h1>
-        <p>Accede con tu cuenta para gestionar clientes, leads y cálculos de programa.</p>
+    <main id="authShell" class="auth-layout">
+      <section class="login-panel glass" aria-label="Panel de inicio de sesion">
+        <img class="login-logo" src="reference/CD logo.png" alt="Cero Deuda" />
+        <h1>Iniciar Sesion</h1>
+        <p class="login-subtitle">Accede para entrar al CRM comercial.</p>
 
         <form id="loginForm" class="login-form">
           <label>
-            Correo corporativo
-            <input type="email" name="email" placeholder="vendedor@cerodeuda.com" required />
+            Usuario
+            <input type="text" name="username" placeholder="admin" required />
           </label>
 
           <label>
-            Contraseña
-            <input type="password" name="password" placeholder="••••••••" required minlength="8" />
+            Clave
+            <input type="password" name="password" placeholder="1234" required minlength="4" />
           </label>
 
-          <div class="form-row">
-            <label class="remember">
-              <input type="checkbox" name="remember" />
-              Recordarme
-            </label>
-            <a href="#">¿Olvidaste tu contraseña?</a>
-          </div>
-
-          <button type="submit">Iniciar sesión</button>
-          <p id="loginStatus" class="status" role="status">Conexión pendiente con base de datos.</p>
+          <button type="submit">Entrar</button>
+          <p id="loginStatus" class="status" role="status">Credenciales demo: admin / 1234</p>
         </form>
       </section>
 
-      <section class="visual-panel" aria-label="Mensajes motivacionales">
-        <p id="quoteText" class="quote">Cada cliente atendido con excelencia crea una historia de confianza.</p>
+      <section class="visual-panel" aria-label="Mensajes inspiradores">
+        <div class="quote-container">
+          <p id="quoteText" class="quote">Como gotas de rocío que alimentan el océano, cada pequeña acción construye mares de transformación.</p>
+        </div>
       </section>
     </main>
+
+    <section id="dashboardView" class="home-view hidden" aria-label="Home">
+      <div class="home-floating">
+        <img class="home-logo" src="reference/CD logo.png" alt="Cero Deuda" />
+
+        <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
+          <div id="toolbarShell" class="toolbar-shell">
+            <div class="toolbar-glass-container">
+              <div class="toolbar-glass-bg"></div>
+              
+              <div class="toolbar-content">
+                <div class="toolbar-group toolbar-left" aria-label="Accesos izquierda">
+                  <button id="leadsBtn" class="tool-btn" type="button" aria-label="Leads">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <!-- Persona izquierda atrás -->
+                      <circle cx="6" cy="7" r="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M2 18C2 15.2386 4.23858 13 7 13H7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <!-- Persona derecha atrás -->
+                      <circle cx="18" cy="7" r="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M22 18C22 15.2386 19.7614 13 17 13H16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <!-- Persona principal enfrente -->
+                      <circle cx="12" cy="9" r="3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M5 21C5 17.134 8.13401 14 12 14C15.866 14 19 17.134 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Leads</span>
+                  </button>
+
+                  <button class="tool-btn" type="button" aria-label="Calendario">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="5" width="18" height="16" rx="3" />
+                      <path d="M3 9h18M8 3v4M16 3v4" />
+                    </svg>
+                    <span>Calendario</span>
+                  </button>
+                </div>
+
+                <div class="search-central-unit">
+                  <label class="home-search-shell search" for="homeSearch">
+                    <svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M10.5 3.5a7 7 0 1 0 4.49 12.37l4.32 4.31 1.41-1.41-4.31-4.32A7 7 0 0 0 10.5 3.5Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" />
+                    </svg>
+                    <input
+                      id="homeSearch"
+                      class="home-search-input"
+                      type="search"
+                      placeholder="Buscar cliente..."
+                      aria-label="Buscar"
+                    />
+                  </label>
+
+                  <button
+                    id="toolbarToggle"
+                    class="toolbar-toggle"
+                    type="button"
+                    aria-label="Mostrar accesos"
+                    aria-expanded="false"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12H21M3 6H21M3 18H21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
+                  <button class="tool-btn" type="button" aria-label="Notificaciones">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
+                      <path d="M10 18a2 2 0 0 0 4 0" />
+                    </svg>
+                    <span>Notifs</span>
+                  </button>
+
+                  <button class="tool-btn" type="button" aria-label="Correos">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="5" width="18" height="14" rx="2" />
+                      <path d="m4 7 8 6 8-6" />
+                    </svg>
+                    <span>Correos</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="home-actions" aria-label="Cuenta y ajustes">
+          <button
+            id="accountBtn"
+            class="account-icon-btn"
+            type="button"
+            aria-label="Cuenta"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 20C4 16.6863 6.68629 14 10 14H14C17.3137 14 20 16.6863 20 20" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <div id="accountMenu" class="account-menu hidden" role="menu" aria-label="Ajustes de cuenta">
+            <p class="account-menu-title">Ajustes rapidos</p>
+
+            <label class="theme-inline-toggle" for="themeSwitch" aria-label="Cambiar tema">
+              <input id="themeSwitch" class="theme-switch-input" type="checkbox" aria-label="Toggle de tema" />
+              
+              <svg class="icon icon-moon-side" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3c.49 0 .74.59.38.93A7 7 0 0 0 20.07 11.4c.34-.36.93-.11.93.39Z" />
+              </svg>
+
+              <span class="theme-switch-track" aria-hidden="true">
+                <span class="theme-switch-thumb"></span>
+              </span>
+
+              <svg class="icon icon-sun-side" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M19.07 4.93l-1.56 1.56M6.49 17.51l-1.56 1.56M19.07 19.07l-1.56-1.56M6.49 6.49 4.93 4.93" />
+              </svg>
+            </label>
+
+            <div class="account-menu-divider" role="separator"></div>
+
+            <button id="logoutBtn" class="logout-btn" type="button" role="menuitem">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>Cerrar sesión</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD WIDGETS -->
+      <div class="dashboard-grid">
+        <!-- Stats Cards Row -->
+        <div class="stats-row">
+          <!-- Contador de Llamadas -->
+          <div class="stat-card calls-card">
+            <div class="stat-card-bg"></div>
+            <div class="stat-content">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Llamadas Hoy</span>
+                <span class="stat-value" id="callsCount">247</span>
+                <span class="stat-sublabel">Conectadas via Five9</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Source más frecuente -->
+          <div class="stat-card source-card">
+            <div class="stat-card-bg"></div>
+            <div class="stat-content">
+              <div class="stat-icon source-icon-facebook">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Source más frecuente</span>
+                <span class="stat-value source-name" id="topSource">Facebook Ads</span>
+                <span class="stat-sublabel">43% del total de leads</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Conversiones del día -->
+          <div class="stat-card conversions-card">
+            <div class="stat-card-bg"></div>
+            <div class="stat-content">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Conversiones Hoy</span>
+                <span class="stat-value" id="conversionsCount">18</span>
+                <span class="stat-sublabel">Sent to Debt Manager</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Vendedores - Podio -->
+        <div class="leaderboard-section">
+          <div class="leaderboard-header">
+            <h2>🏆 Top Vendedores</h2>
+            <div class="month-selector">
+              <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <select id="monthSelector" class="month-select">
+                <option value="1">Enero 2026</option>
+                <option value="2">Febrero 2026</option>
+                <option value="3">Marzo 2026</option>
+                <option value="4">Abril 2026</option>
+                <option value="5">Mayo 2026</option>
+                <option value="6">Junio 2026</option>
+                <option value="7">Julio 2026</option>
+                <option value="8">Agosto 2026</option>
+                <option value="9">Septiembre 2026</option>
+                <option value="10">Octubre 2026</option>
+                <option value="11">Noviembre 2026</option>
+                <option value="12" selected>Diciembre 2026</option>
+              </select>
+              <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          
+          <div class="podium-container">
+            <!-- Segundo Lugar (Izquierda) -->
+            <div class="podium-place second-place">
+              <div class="podium-card silver-card">
+                <div class="podium-medal-top">🥈</div>
+                <div class="podium-avatar">
+                  <img src="https://ui-avatars.com/api/?name=Maria+G&background=C0C0C0&color=fff&size=80" alt="Maria Garcia" />
+                </div>
+                <div class="podium-info">
+                  <span class="podium-name">Maria G.</span>
+                  <span class="podium-amount">$284,500</span>
+                </div>
+              </div>
+              <div class="podium-base silver-base"></div>
+            </div>
+
+            <!-- Primer Lugar (Centro) -->
+            <div class="podium-place first-place">
+              <div class="podium-card gold-card">
+                <div class="podium-medal-top">🥇</div>
+                <div class="podium-avatar">
+                  <img src="https://ui-avatars.com/api/?name=Carlos+R&background=FFD700&color=333&size=100" alt="Carlos Rodriguez" />
+                </div>
+                <div class="podium-info">
+                  <span class="podium-name">Carlos R.</span>
+                  <span class="podium-amount">$425,800</span>
+                </div>
+              </div>
+              <div class="podium-base gold-base"></div>
+            </div>
+
+            <!-- Tercer Lugar (Derecha) -->
+            <div class="podium-place third-place">
+              <div class="podium-card bronze-card">
+                <div class="podium-medal-top">🥉</div>
+                <div class="podium-avatar">
+                  <img src="https://ui-avatars.com/api/?name=Ana+L&background=CD7F32&color=fff&size=80" alt="Ana Lopez" />
+                </div>
+                <div class="podium-info">
+                  <span class="podium-name">Ana L.</span>
+                  <span class="podium-amount">$198,300</span>
+                </div>
+              </div>
+              <div class="podium-base bronze-base"></div>
+            </div>
+          </div>
+
+          <!-- Lista de los demás vendedores -->
+          <div class="sellers-list">
+            <div class="seller-item">
+              <span class="seller-rank">4</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Juan+P&background=4A90A4&color=fff&size=40" alt="Juan Perez" />
+              <span class="seller-name">Juan P.</span>
+              <span class="seller-amount">$156,400</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">5</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Laura+M&background=5A7D9A&color=fff&size=40" alt="Laura Martinez" />
+              <span class="seller-name">Laura M.</span>
+              <span class="seller-amount">$142,800</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">6</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Pedro+S&background=6A8DAA&color=fff&size=40" alt="Pedro Sanchez" />
+              <span class="seller-name">Pedro S.</span>
+              <span class="seller-amount">$128,500</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">7</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Sofia+G&background=7A9DBA&color=fff&size=40" alt="Sofia Gonzalez" />
+              <span class="seller-name">Sofia G.</span>
+              <span class="seller-amount">$115,200</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">8</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Diego+V&background=8AADCA&color=fff&size=40" alt="Diego Vargas" />
+              <span class="seller-name">Diego V.</span>
+              <span class="seller-amount">$98,600</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">9</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Carmen+H&background=9ABDDA&color=fff&size=40" alt="Carmen Herrera" />
+              <span class="seller-name">Carmen H.</span>
+              <span class="seller-amount">$87,300</span>
+            </div>
+            <div class="seller-item">
+              <span class="seller-rank">10</span>
+              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Roberto+K&background=AACDEA&color=fff&size=40" alt="Roberto Kim" />
+              <span class="seller-name">Roberto K.</span>
+              <span class="seller-amount">$76,900</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA DE LEADS -->
+      <div id="leadsView" class="leads-view hidden">
+        <!-- Header de Leads -->
+        <div class="leads-header">
+          <div class="leads-title-section">
+            <h2>Leads <span class="leads-count" id="leadsCount">(0)</span></h2>
+            <button class="create-lead-btn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Nuevo Lead
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla de Leads -->
+        <div class="leads-table-container">
+          <table class="leads-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col">
+                  <input type="checkbox" class="select-all">
+                </th>
+                <th class="sortable">
+                  Nombre
+                  <svg class="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>
+                  </svg>
+                </th>
+                <th>Case ID</th>
+                <th>Estado</th>
+                <th>Agente</th>
+                <th class="sortable">
+                  Fecha Creación
+                  <svg class="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>
+                  </svg>
+                </th>
+                <th>Fecha Modificación</th>
+                <th>Teléfono</th>
+                <th>Email</th>
+                <th>Estado (US)</th>
+                <th>State Type</th>
+                <th>Campaign</th>
+                <th class="actions-col"></th>
+              </tr>
+            </thead>
+            <tbody id="leadsTableBody">
+              <!-- Los leads se cargarán dinámicamente aquí -->
+              <tr class="lead-row empty-state">
+                <td colspan="13" class="empty-message">
+                  <div class="empty-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <p>No hay leads registrados</p>
+                    <span>Haz clic en "Nuevo Lead" para agregar uno</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginación -->
+        <div class="leads-pagination">
+          <button class="page-btn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <span class="page-info">Página <strong>1</strong> de <strong>1</strong></span>
+          <button class="page-btn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- MODAL: NUEVO LEAD -->
+      <div id="newLeadModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <!-- Mac-style close button -->
+          <button class="modal-close-mac" id="closeModalBtn" type="button" title="Cerrar"></button>
+          
+          <div class="modal-header">
+            <h3>Nuevo Lead</h3>
+          </div>
+          
+          <form id="newLeadForm" class="modal-form">
+            <!-- Toggle Test - Arriba -->
+            <div class="form-group toggle-group test-toggle-top">
+              <label class="toggle-label">
+                <input type="checkbox" id="isTestLead" name="isTest">
+                <span class="toggle-switch">
+                  <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-text">Test</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="leadName">Nombre del Cliente *</label>
+              <input type="text" id="leadName" name="fullName" placeholder="Ej: Juan Pérez" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="leadPhone">Número de Teléfono *</label>
+              <input type="tel" id="leadPhone" name="phone" placeholder="Ej: 305-555-0123" required>
+            </div>
+
+            <div class="form-group state-search-group">
+              <label for="leadStateSearch">Estado (US)</label>
+              <div class="state-search-wrapper">
+                <input type="text" id="leadStateSearch" placeholder="Buscar estado..." autocomplete="off">
+                <input type="hidden" id="leadState" name="stateCode">
+                <div id="stateSuggestions" class="state-suggestions hidden"></div>
+                <div id="stateDetected" class="state-detected hidden"></div>
+              </div>
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" id="cancelLeadBtn">Cancelar</button>
+              <button type="submit" class="btn-create">Crear Lead</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
 
     <script src="app.js"></script>
   </body>

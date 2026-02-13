@@ -1,0 +1,29 @@
+{
+  "name": "project-gw",
+  "version": "1.0.0",
+  "description": "CRM base con backend Express y PostgreSQL local",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "db:init-local": "powershell -ExecutionPolicy Bypass -File ./scripts/init-postgres.ps1",
+    "db:start-local": "powershell -ExecutionPolicy Bypass -File ./scripts/start-postgres.ps1",
+    "db:stop-local": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-postgres.ps1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/troghx/PROJECT-GW.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/troghx/PROJECT-GW/issues"
+  },
+  "homepage": "https://github.com/troghx/PROJECT-GW#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "pg": "^8.18.0"
+  }
+}
