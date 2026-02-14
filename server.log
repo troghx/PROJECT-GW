@@ -1,0 +1,2 @@
+[dotenv@17.3.1] injecting env (6) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Servidor activo en http://localhost:3000

@@ -1368,9 +1368,14 @@
       margin-top: 4px;
     }
     
-    /* Payment Schedule Card */
+    /* Payment Schedule Card - Solo visible en Calculator */
     .payment-schedule-card {
       margin-top: 16px;
+      display: none;
+    }
+    
+    #calculatorSection:not(.hidden) .payment-schedule-card {
+      display: block;
     }
     
     /* Responsive Calculator */
@@ -1563,6 +1568,11 @@
     }
     
     /* Grid de contenido - Responsivo y Compacto */
+    /* Global hidden class - must override other display properties */
+    .hidden {
+      display: none !important;
+    }
+    
     .lead-content-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);

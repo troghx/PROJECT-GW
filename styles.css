@@ -1500,6 +1500,141 @@ body.home-active.theme-light .podium-amount {
   border-color: rgba(0, 0, 0, 0.15);
 }
 
+body.home-active.theme-light .podium-stats {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Light mode para rankings laterales */
+body.home-active.theme-light .rankings-column-title {
+  color: rgba(0, 0, 0, 0.4);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+body.home-active.theme-light .ranking-item {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+body.home-active.theme-light .ranking-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body.home-active.theme-light .ranking-num {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+body.home-active.theme-light .ranking-name {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+body.home-active.theme-light .ranking-amount {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+/* Light mode para rankings wheel - MEJORADO CONTRASTE */
+body.home-active.theme-light .rankings-wheel {
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.02) 0%, 
+    rgba(0, 0, 0, 0.05) 50%,
+    rgba(0, 0, 0, 0.02) 100%
+  );
+}
+
+body.home-active.theme-light .rankings-wheel::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+body.home-active.theme-light .rankings-wheel::after {
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+/* Default state in light mode - más visible */
+body.home-active.theme-light .rankings-wheel-item {
+  opacity: 0.35;
+}
+
+body.home-active.theme-light .rankings-wheel-item.near-top,
+body.home-active.theme-light .rankings-wheel-item.near-bottom {
+  opacity: 0.65;
+}
+
+body.home-active.theme-light .rankings-wheel-item.active {
+  opacity: 1;
+  background: linear-gradient(90deg, 
+    rgba(6, 182, 212, 0.15) 0%, 
+    rgba(6, 182, 212, 0.3) 50%, 
+    rgba(6, 182, 212, 0.15) 100%
+  );
+  border-top-color: rgba(6, 182, 212, 0.5);
+  border-bottom-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+body.home-active.theme-light .rankings-wheel-item.active .ranking-wheel-num {
+  color: #0e7490;
+  text-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
+  font-weight: 800;
+}
+
+body.home-active.theme-light .rankings-wheel-item.active .ranking-wheel-name {
+  color: #0c4a6e;
+  font-weight: 700;
+}
+
+body.home-active.theme-light .rankings-wheel-item.active .ranking-wheel-amount {
+  color: #0e7490;
+  font-weight: 700;
+}
+
+body.home-active.theme-light .rankings-wheel-item.active::before {
+  background: linear-gradient(180deg, #06b6d4 0%, rgba(6, 182, 212, 0.4) 100%);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.7);
+}
+
+/* Items lejanos - MÁS contraste en light mode */
+body.home-active.theme-light .rankings-wheel-item {
+  opacity: 0.8;
+}
+
+body.home-active.theme-light .rankings-wheel-item.near-top,
+body.home-active.theme-light .rankings-wheel-item.near-bottom {
+  opacity: 0.95;
+}
+
+body.home-active.theme-light .ranking-wheel-num {
+  color: #475569;
+  font-weight: 700;
+}
+
+body.home-active.theme-light .ranking-wheel-name {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+body.home-active.theme-light .ranking-wheel-amount {
+  color: #475569;
+  font-weight: 600;
+}
+
+/* Items near - MUCHO más contraste */
+body.home-active.theme-light .rankings-wheel-item.near-top .ranking-wheel-num,
+body.home-active.theme-light .rankings-wheel-item.near-bottom .ranking-wheel-num {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+body.home-active.theme-light .rankings-wheel-item.near-top .ranking-wheel-name,
+body.home-active.theme-light .rankings-wheel-item.near-bottom .ranking-wheel-name {
+  color: #020617;
+  font-weight: 700;
+}
+
+body.home-active.theme-light .rankings-wheel-item.near-top .ranking-wheel-amount,
+body.home-active.theme-light .rankings-wheel-item.near-bottom .ranking-wheel-amount {
+  color: #0f172a;
+  font-weight: 700;
+}
+
 body.home-active.theme-light .seller-item {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.08);
@@ -1577,6 +1712,51 @@ body.home-active.theme-light .podium-card.featured .podium-avatar {
 
 body.home-active.theme-light .seller-avatar {
   border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Leaderboard Table Light Mode */
+body.home-active.theme-light .leaderboard-table thead {
+  background: linear-gradient(135deg, 
+    rgba(245, 245, 250, 0.95) 0%, 
+    rgba(235, 235, 240, 0.98) 100%
+  );
+}
+
+body.home-active.theme-light .leaderboard-table th {
+  color: rgba(0, 0, 0, 0.6);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+body.home-active.theme-light .leaderboard-table td {
+  color: rgba(0, 0, 0, 0.8);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+body.home-active.theme-light .leaderboard-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+body.home-active.theme-light .rank {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+body.home-active.theme-light .team-badge.cash-avengers {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
+  border-color: rgba(46, 204, 113, 0.25);
+}
+
+body.home-active.theme-light .team-badge.valedores {
+  background: rgba(52, 152, 219, 0.15);
+  color: #2980b9;
+  border-color: rgba(52, 152, 219, 0.25);
+}
+
+body.home-active.theme-light .team-badge.kill-debts {
+  background: rgba(231, 76, 60, 0.15);
+  color: #c0392b;
+  border-color: rgba(231, 76, 60, 0.25);
 }
 
 /* Scrollbar en tema claro */
@@ -1816,13 +1996,286 @@ body.home-active.theme-light .leads-table-container::-webkit-scrollbar-thumb:hov
 }
 
 /* Podio Container */
+/* Layout principal de 3 columnas */
+.leaderboard-main-layout {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: clamp(16px, 2vw, 32px);
+  align-items: start;
+  margin-bottom: clamp(16px, 2.5vh, 28px);
+}
+
+/* Columnas de rankings laterales - Estilo Wheel */
+.rankings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: clamp(180px, 18vw, 220px);
+}
+
+.rankings-column-title {
+  font-size: clamp(0.7rem, 0.9vw, 0.8rem);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Rankings Wheel - Estilo iOS Ruleta */
+.rankings-wheel-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  height: 260px; /* 5 items × 52px = exacto para mostrar 5 */
+}
+
+.rankings-wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 15%,
+    black 85%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 15%,
+    black 85%,
+    transparent 100%
+  );
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.02) 0%, 
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+.rankings-wheel::before,
+.rankings-wheel::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 52px; /* Igual a la altura de un item */
+  pointer-events: none;
+  z-index: 3;
+}
+
+.rankings-wheel::before {
+  top: 0;
+  background: linear-gradient(180deg, rgba(20, 25, 35, 0.85) 0%, rgba(20, 25, 35, 0) 100%);
+}
+
+.rankings-wheel::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(20, 25, 35, 0.85) 0%, rgba(20, 25, 35, 0) 100%);
+}
+
+.rankings-wheel-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+.rankings-wheel-item {
+  height: 52px;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  transition: all 0.3s cubic-bezier(0.22, 0.75, 0.28, 1);
+  opacity: 0.85; /* Lejanos: 85% - MUCHO más visible */
+  transform: scale(0.95);
+  position: relative;
+}
+
+/* Items cercanos arriba (1-2 posiciones arriba del centro) */
+.rankings-wheel-item.near-top {
+  opacity: 0.95;
+  transform: scale(0.98);
+}
+
+/* Items cercanos abajo (1-2 posiciones abajo del centro) */
+.rankings-wheel-item.near-bottom {
+  opacity: 0.95;
+  transform: scale(0.98);
+}
+
+/* Item central - 100% opacidad + highlight Cyan */
+.rankings-wheel-item.active {
+  opacity: 1;
+  transform: scale(1.02);
+  background: linear-gradient(90deg, 
+    rgba(126, 234, 252, 0.25) 0%, 
+    rgba(126, 234, 252, 0.45) 50%, 
+    rgba(126, 234, 252, 0.25) 100%
+  );
+  border-top: 1px solid rgba(126, 234, 252, 0.6);
+  border-bottom: 1px solid rgba(126, 234, 252, 0.6);
+  box-shadow: 0 0 30px rgba(126, 234, 252, 0.25), inset 0 0 20px rgba(126, 234, 252, 0.1);
+}
+
+.rankings-wheel-item.active .ranking-wheel-num {
+  color: #cffafe;
+  font-weight: 800;
+  text-shadow: 0 0 20px rgba(126, 234, 252, 1), 0 0 10px rgba(126, 234, 252, 0.8);
+}
+
+.rankings-wheel-item.active .ranking-wheel-name {
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+}
+
+.rankings-wheel-item.active .ranking-wheel-amount {
+  color: #cffafe;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(126, 234, 252, 0.8);
+}
+
+/* Estados near - VISIBLES */
+.rankings-wheel-item.near-top .ranking-wheel-num,
+.rankings-wheel-item.near-bottom .ranking-wheel-num {
+  color: #e0f2fe;
+  font-weight: 700;
+}
+
+.rankings-wheel-item.near-top .ranking-wheel-name,
+.rankings-wheel-item.near-bottom .ranking-wheel-name {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rankings-wheel-item.near-top .ranking-wheel-amount,
+.rankings-wheel-item.near-bottom .ranking-wheel-amount {
+  color: #bae6fd;
+  font-weight: 600;
+}
+
+/* Items lejanos - VISIBLES */
+.ranking-wheel-num {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.ranking-wheel-name {
+  font-size: clamp(0.75rem, 0.85vw, 0.82rem);
+  font-weight: 500;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.3s ease;
+}
+
+.ranking-wheel-amount {
+  font-size: clamp(0.7rem, 0.8vw, 0.78rem);
+  font-weight: 600;
+  color: #94a3b8;
+  font-family: 'Inter', monospace;
+  transition: all 0.3s ease;
+}
+
+/* Indicador central del wheel */
+/* Glow effect for active item */
+.rankings-wheel-item.active::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 28px;
+  background: linear-gradient(180deg, #7eeafc 0%, rgba(126, 234, 252, 0.4) 100%);
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(126, 234, 252, 0.6);
+}
+
+/* Old styles - kept for compatibility */
+.rankings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: clamp(320px, 40vh, 450px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.rankings-list::-webkit-scrollbar {
+  display: none;
+}
+
+.ranking-item {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.ranking-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(4px);
+}
+
+.ranking-num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+}
+
+.ranking-name {
+  font-size: clamp(0.75rem, 0.9vw, 0.85rem);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ranking-amount {
+  font-size: clamp(0.7rem, 0.85vw, 0.8rem);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Inter', monospace;
+}
+
+/* Centro: Podium */
+.podium-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .podium-container {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  gap: clamp(16px, 3vw, 28px);
-  margin-bottom: clamp(16px, 2.5vh, 28px);
-  padding: 0 clamp(10px, 2vw, 20px);
+  gap: clamp(12px, 2vw, 20px);
+  padding: 0;
   flex-shrink: 0;
 }
 
@@ -1987,6 +2440,13 @@ body.home-active.theme-light .bronze-card {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.podium-stats {
+  font-size: clamp(0.65rem, 0.85vw, 0.75rem);
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
 .podium-medal {
   display: none;
 }
@@ -2022,14 +2482,138 @@ body.home-active.theme-light .bronze-card {
    SELLERS LIST - Posiciones 4-10 (Modo Lista Delgado)
    ============================================ */
 
+/* Sellers List con Scroll Invisible */
 .sellers-list {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(4px, 0.8vh, 6px);
+  max-height: clamp(280px, 35vh, 400px);
+  overflow-y: scroll;
+  overflow-x: hidden;
   padding: 0 clamp(6px, 1vw, 10px);
-  overflow: hidden;
+  /* Scrollbar invisible */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
+.sellers-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* Leaderboard Table */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(0.75rem, 0.9vw, 0.85rem);
+}
+
+.leaderboard-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(135deg, 
+    rgba(30, 35, 50, 0.95) 0%, 
+    rgba(20, 25, 40, 0.98) 100%
+  );
+  backdrop-filter: blur(10px);
+}
+
+.leaderboard-table th {
+  padding: clamp(10px, 1.2vh, 14px) clamp(8px, 0.8vw, 12px);
+  text-align: left;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: clamp(0.7rem, 0.85vw, 0.8rem);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.leaderboard-table th.numeric {
+  text-align: center;
+}
+
+.leaderboard-table td {
+  padding: clamp(8px, 1vh, 10px) clamp(8px, 0.8vw, 12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  vertical-align: middle;
+}
+
+.leaderboard-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.leaderboard-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.leaderboard-table td.numeric {
+  text-align: center;
+  font-family: 'Inter', monospace;
+  font-weight: 500;
+}
+
+/* Rank Number */
+.rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  margin-right: 8px;
+}
+
+/* Team Badges */
+.team-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.team-badge.cash-avengers {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.team-badge.valedores {
+  background: rgba(52, 152, 219, 0.2);
+  color: #3498db;
+  border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.team-badge.kill-debts {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+/* AVG Colors */
+.avg-high {
+  color: #2ecc71 !important;
+  font-weight: 600;
+}
+
+.avg-med {
+  color: #f1c40f !important;
+  font-weight: 600;
+}
+
+.avg-low {
+  color: #e74c3c !important;
+  font-weight: 600;
+}
+
+/* Old seller-item styles - kept for compatibility */
 .seller-item {
   display: grid;
   grid-template-columns: clamp(24px, 3vw, 30px) clamp(26px, 3vw, 32px) 1fr auto;
@@ -3145,6 +3729,20 @@ body.home-active.theme-light .toast {
   .stat-content {
     flex-direction: row;
     text-align: left;
+  }
+  
+  /* Layout de 3 columnas: en tablet y mobile volver a diseño apilado */
+  .leaderboard-main-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .rankings-column {
+    display: none; /* Ocultar columnas laterales en mobile */
+  }
+  
+  .podium-center {
+    order: -1;
   }
   
   .podium-container {

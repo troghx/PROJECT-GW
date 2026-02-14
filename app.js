@@ -900,3 +900,195 @@ if (existingSession) {
 } else {
   showLogin();
 }
+
+// ============================================
+// RANKINGS WHEEL - Efecto ruleta para rankings laterales
+// ============================================
+
+// Bandera para evitar inicialización múltiple
+let rankingsWheelInitialized = false;
+
+function initRankingsWheel() {
+  if (rankingsWheelInitialized) {
+    console.log('[RankingsWheel] Ya inicializado, ignorando...');
+    return;
+  }
+  rankingsWheelInitialized = true;
+  
+  console.log('[RankingsWheel] Inicializando...');
+  const wheels = document.querySelectorAll('.rankings-wheel');
+  console.log('[RankingsWheel] Wheels encontrados:', wheels.length);
+  
+  if (wheels.length === 0) {
+    console.warn('[RankingsWheel] No se encontraron elementos .rankings-wheel');
+    return;
+  }
+  
+  wheels.forEach((wheel, wheelIndex) => {
+    console.log(`[RankingsWheel] Procesando wheel #${wheelIndex}`);
+    
+    const track = wheel.querySelector('.rankings-wheel-track');
+    let items = Array.from(wheel.querySelectorAll('.rankings-wheel-item'));
+    
+    console.log(`[RankingsWheel] Track:`, track ? 'encontrado' : 'NO encontrado');
+    console.log(`[RankingsWheel] Items:`, items.length);
+    
+    if (!track || items.length === 0) {
+      console.warn(`[RankingsWheel] Wheel #${wheelIndex}: Faltan elementos`);
+      return;
+    }
+    
+    const itemHeight = 52; // Altura de cada item
+    const wheelHeight = wheel.clientHeight;
+    const centerOffset = (wheelHeight - itemHeight) / 2;
+    
+    // Duplicar items para loop infinito perfecto
+    const originalItems = items.map(item => item.cloneNode(true));
+    originalItems.forEach(item => track.appendChild(item));
+    items = Array.from(wheel.querySelectorAll('.rankings-wheel-item'));
+    const totalOriginalItems = originalItems.length;
+    
+    // Posicionar el track para que el primer item esté centrado
+    let baseOffset = centerOffset; // Offset base que reseteamos
+    let currentOffset = 0; // Offset acumulado desde el último reset
+    track.style.transform = `translateY(${baseOffset}px)`;
+    
+    const listHeight = totalOriginalItems * itemHeight;
+    
+    function updateActiveItem() {
+      // Calcular el índice visual basado en cuánto nos hemos movido
+      const totalPixelsMoved = -currentOffset;
+      const visualIndex = Math.round(totalPixelsMoved / itemHeight);
+      
+      // Solo aplicar clases a los items que están dentro del rango visual (0 a totalOriginalItems-1)
+      // Los items duplicados (totalOriginalItems en adelante) son para el loop, no para highlight
+      const effectiveIndex = visualIndex % totalOriginalItems;
+      
+      items.forEach((item, index) => {
+        item.classList.remove('active', 'near-top', 'near-bottom');
+        
+        // Calcular a qué índice original corresponde este item
+        const itemOriginalIndex = index % totalOriginalItems;
+        
+        // Calcular distancia circular al índice activo
+        let distance = itemOriginalIndex - effectiveIndex;
+        // Normalizar distancia para que siempre sea la más corta
+        if (distance > totalOriginalItems / 2) distance -= totalOriginalItems;
+        if (distance < -totalOriginalItems / 2) distance += totalOriginalItems;
+        
+        if (distance === 0) {
+          item.classList.add('active');
+        } else if (distance === -1 || distance === -2) {
+          item.classList.add('near-top'); // 1-2 items arriba
+        } else if (distance === 1 || distance === 2) {
+          item.classList.add('near-bottom'); // 1-2 items abajo
+        }
+      });
+    }
+    
+    // Inicializar estado
+    updateActiveItem();
+    console.log(`[RankingsWheel] Wheel #${wheelIndex}: Iniciando auto-scroll`);
+    
+    // Auto-scroll lento continuo
+    const autoScrollSpeed = 0.6; // pixels por frame a 60fps
+    let isPaused = false;
+    let animationId = null;
+    
+    function autoScroll() {
+      if (!isPaused) {
+        // Mover suavemente
+        currentOffset -= autoScrollSpeed;
+        
+        // LOOP INFINITO: cuando nos hemos movido exactamente listHeight píxeles, reseteamos
+        if (currentOffset <= -listHeight) {
+          currentOffset += listHeight;
+        }
+        
+        // Aplicar transform combinando base + offset actual
+        const transformValue = baseOffset + currentOffset;
+        track.style.transform = `translateY(${transformValue}px)`;
+        updateActiveItem();
+      }
+      animationId = requestAnimationFrame(autoScroll);
+    }
+    
+    // Iniciar auto-scroll
+    animationId = requestAnimationFrame(autoScroll);
+    
+    // Pausar al hover
+    wheel.addEventListener('mouseenter', () => {
+      isPaused = true;
+    });
+    
+    wheel.addEventListener('mouseleave', () => {
+      isPaused = false;
+      lastTime = Date.now();
+    });
+    
+    // Permitir scroll manual con loop
+    let isDragging = false;
+    let startY = 0;
+    let startOffset = 0;
+    
+    wheel.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      isPaused = true;
+      startY = e.clientY;
+      startOffset = currentOffset;
+      wheel.style.cursor = 'grabbing';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const delta = e.clientY - startY;
+      currentOffset = startOffset + delta;
+      
+      // Loop en drag
+      while (currentOffset <= -listHeight) {
+        currentOffset += listHeight;
+        startOffset += listHeight;
+      }
+      while (currentOffset > 0) {
+        currentOffset -= listHeight;
+        startOffset -= listHeight;
+      }
+      
+      track.style.transform = `translateY(${baseOffset + currentOffset}px)`;
+      updateActiveItem();
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        isPaused = false;
+        lastTime = Date.now();
+        wheel.style.cursor = 'default';
+      }
+    });
+  });
+}
+
+// Inicializar rankings wheel cuando se muestre el dashboard
+console.log('[RankingsWheel] Configurando interceptor de showDashboard');
+const originalShowDashboard = showDashboard;
+showDashboard = function() {
+  console.log('[RankingsWheel] Dashboard mostrado, inicializando...');
+  originalShowDashboard();
+  // Pequeño delay para asegurar que el DOM esté listo
+  setTimeout(initRankingsWheel, 300);
+};
+
+// Si ya estamos en el dashboard (sesión existente), inicializar ahora
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[RankingsWheel] DOMContentLoaded, verificando dashboard...');
+  const dashboard = document.getElementById('dashboardView');
+  const isVisible = dashboard && !dashboard.classList.contains('hidden');
+  console.log('[RankingsWheel] Dashboard visible:', isVisible);
+  console.log('[RankingsWheel] Elemento dashboard:', dashboard);
+  
+  if (isVisible) {
+    console.log('[RankingsWheel] Inicializando desde DOMContentLoaded');
+    setTimeout(initRankingsWheel, 500);
+  }
+});

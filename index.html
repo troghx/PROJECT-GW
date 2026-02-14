@@ -266,96 +266,166 @@
             </div>
           </div>
           
-          <div class="podium-container">
-            <!-- Segundo Lugar (Izquierda) -->
-            <div class="podium-place second-place">
-              <div class="podium-card silver-card">
-                <div class="podium-medal-top">🥈</div>
-                <div class="podium-avatar">
-                  <img src="https://ui-avatars.com/api/?name=Maria+G&background=C0C0C0&color=fff&size=80" alt="Maria Garcia" />
-                </div>
-                <div class="podium-info">
-                  <span class="podium-name">Maria G.</span>
-                  <span class="podium-amount">$284,500</span>
+          <!-- Layout de 3 columnas: Rankings | Podium | Rankings -->
+          <div class="leaderboard-main-layout">
+            <!-- Columna Izquierda: Ranks 4-11 - Estilo Wheel -->
+            <div class="rankings-column rankings-left">
+              <h4 class="rankings-column-title">4 - 11</h4>
+              <div class="rankings-wheel-wrapper">
+                <div class="rankings-wheel" id="rankingsWheelLeft">
+                  <div class="rankings-wheel-track" id="rankingsWheelTrackLeft">
+                    <div class="rankings-wheel-item" data-rank="4">
+                      <span class="ranking-wheel-num">4</span>
+                      <span class="ranking-wheel-name">Juan Sandoval</span>
+                      <span class="ranking-wheel-amount">$150,833</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="5">
+                      <span class="ranking-wheel-num">5</span>
+                      <span class="ranking-wheel-name">Kevin Ramirez</span>
+                      <span class="ranking-wheel-amount">$210,886</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="6">
+                      <span class="ranking-wheel-num">6</span>
+                      <span class="ranking-wheel-name">Paloma Saavedra</span>
+                      <span class="ranking-wheel-amount">$158,700</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="7">
+                      <span class="ranking-wheel-num">7</span>
+                      <span class="ranking-wheel-name">Carlos Zacarias</span>
+                      <span class="ranking-wheel-amount">$227,942</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="8">
+                      <span class="ranking-wheel-num">8</span>
+                      <span class="ranking-wheel-name">Grace Zepeda</span>
+                      <span class="ranking-wheel-amount">$161,484</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="9">
+                      <span class="ranking-wheel-num">9</span>
+                      <span class="ranking-wheel-name">Alejandra Gasca</span>
+                      <span class="ranking-wheel-amount">$173,552</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="10">
+                      <span class="ranking-wheel-num">10</span>
+                      <span class="ranking-wheel-name">Said Avalos</span>
+                      <span class="ranking-wheel-amount">$147,386</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="11">
+                      <span class="ranking-wheel-num">11</span>
+                      <span class="ranking-wheel-name">Axel Silva</span>
+                      <span class="ranking-wheel-amount">$142,810</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="podium-base silver-base"></div>
             </div>
 
-            <!-- Primer Lugar (Centro) -->
-            <div class="podium-place first-place">
-              <div class="podium-card gold-card">
-                <div class="podium-medal-top">🥇</div>
-                <div class="podium-avatar">
-                  <img src="https://ui-avatars.com/api/?name=Carlos+R&background=FFD700&color=333&size=100" alt="Carlos Rodriguez" />
+            <!-- Columna Centro: Podium -->
+            <div class="podium-center">
+              <div class="podium-container">
+                <!-- Segundo Lugar (Izquierda) -->
+                <div class="podium-place second-place">
+                  <div class="podium-card silver-card">
+                    <div class="podium-medal-top">🥈</div>
+                    <div class="podium-avatar">
+                      <img src="https://ui-avatars.com/api/?name=Axel+V&background=C0C0C0&color=fff&size=80" alt="Axel Vazquez" />
+                    </div>
+                    <div class="podium-info">
+                      <span class="podium-name">Axel Vazquez</span>
+                      <span class="podium-amount">$203,823</span>
+                      <span class="podium-stats">15 deals • AVG 1.25</span>
+                    </div>
+                  </div>
+                  <div class="podium-base silver-base"></div>
                 </div>
-                <div class="podium-info">
-                  <span class="podium-name">Carlos R.</span>
-                  <span class="podium-amount">$425,800</span>
+
+                <!-- Primer Lugar (Centro) -->
+                <div class="podium-place first-place">
+                  <div class="podium-card gold-card">
+                    <div class="podium-medal-top">🥇</div>
+                    <div class="podium-avatar">
+                      <img src="https://ui-avatars.com/api/?name=Daniel+L&background=FFD700&color=333&size=100" alt="Daniel Lecourtix" />
+                    </div>
+                    <div class="podium-info">
+                      <span class="podium-name">Daniel Lecourtix</span>
+                      <span class="podium-amount">$282,354</span>
+                      <span class="podium-stats">20 deals • AVG 2.00</span>
+                    </div>
+                  </div>
+                  <div class="podium-base gold-base"></div>
+                </div>
+
+                <!-- Tercer Lugar (Derecha) -->
+                <div class="podium-place third-place">
+                  <div class="podium-card bronze-card">
+                    <div class="podium-medal-top">🥉</div>
+                    <div class="podium-avatar">
+                      <img src="https://ui-avatars.com/api/?name=Estefani+G&background=CD7F32&color=fff&size=80" alt="Estefani Gomez" />
+                    </div>
+                    <div class="podium-info">
+                      <span class="podium-name">Estefani Gomez</span>
+                      <span class="podium-amount">$164,247</span>
+                      <span class="podium-stats">13 deals • AVG 1.18</span>
+                    </div>
+                  </div>
+                  <div class="podium-base bronze-base"></div>
                 </div>
               </div>
-              <div class="podium-base gold-base"></div>
             </div>
 
-            <!-- Tercer Lugar (Derecha) -->
-            <div class="podium-place third-place">
-              <div class="podium-card bronze-card">
-                <div class="podium-medal-top">🥉</div>
-                <div class="podium-avatar">
-                  <img src="https://ui-avatars.com/api/?name=Ana+L&background=CD7F32&color=fff&size=80" alt="Ana Lopez" />
-                </div>
-                <div class="podium-info">
-                  <span class="podium-name">Ana L.</span>
-                  <span class="podium-amount">$198,300</span>
+            <!-- Columna Derecha: Ranks 12-20 - Estilo Wheel -->
+            <div class="rankings-column rankings-right">
+              <h4 class="rankings-column-title">12 - 20</h4>
+              <div class="rankings-wheel-wrapper">
+                <div class="rankings-wheel" id="rankingsWheelRight">
+                  <div class="rankings-wheel-track" id="rankingsWheelTrackRight">
+                    <div class="rankings-wheel-item" data-rank="12">
+                      <span class="ranking-wheel-num">12</span>
+                      <span class="ranking-wheel-name">Melissa Hernandez</span>
+                      <span class="ranking-wheel-amount">$141,467</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="13">
+                      <span class="ranking-wheel-num">13</span>
+                      <span class="ranking-wheel-name">Yuridia Moreno</span>
+                      <span class="ranking-wheel-amount">$127,781</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="14">
+                      <span class="ranking-wheel-num">14</span>
+                      <span class="ranking-wheel-name">Viridiana Bandala</span>
+                      <span class="ranking-wheel-amount">$105,738</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="15">
+                      <span class="ranking-wheel-num">15</span>
+                      <span class="ranking-wheel-name">Nery Lopez</span>
+                      <span class="ranking-wheel-amount">$93,587</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="16">
+                      <span class="ranking-wheel-num">16</span>
+                      <span class="ranking-wheel-name">Teresa Fuentes</span>
+                      <span class="ranking-wheel-amount">$101,989</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="17">
+                      <span class="ranking-wheel-num">17</span>
+                      <span class="ranking-wheel-name">Ana Jimenez</span>
+                      <span class="ranking-wheel-amount">$76,836</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="18">
+                      <span class="ranking-wheel-num">18</span>
+                      <span class="ranking-wheel-name">Brandon Cupul</span>
+                      <span class="ranking-wheel-amount">$89,868</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="19">
+                      <span class="ranking-wheel-num">19</span>
+                      <span class="ranking-wheel-name">Jhasia Angeles</span>
+                      <span class="ranking-wheel-amount">$84,247</span>
+                    </div>
+                    <div class="rankings-wheel-item" data-rank="20">
+                      <span class="ranking-wheel-num">20</span>
+                      <span class="ranking-wheel-name">Cecia Ramos</span>
+                      <span class="ranking-wheel-amount">$77,363</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="podium-base bronze-base"></div>
-            </div>
-          </div>
-
-          <!-- Lista de los demás vendedores -->
-          <div class="sellers-list">
-            <div class="seller-item">
-              <span class="seller-rank">4</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Juan+P&background=4A90A4&color=fff&size=40" alt="Juan Perez" />
-              <span class="seller-name">Juan P.</span>
-              <span class="seller-amount">$156,400</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">5</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Laura+M&background=5A7D9A&color=fff&size=40" alt="Laura Martinez" />
-              <span class="seller-name">Laura M.</span>
-              <span class="seller-amount">$142,800</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">6</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Pedro+S&background=6A8DAA&color=fff&size=40" alt="Pedro Sanchez" />
-              <span class="seller-name">Pedro S.</span>
-              <span class="seller-amount">$128,500</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">7</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Sofia+G&background=7A9DBA&color=fff&size=40" alt="Sofia Gonzalez" />
-              <span class="seller-name">Sofia G.</span>
-              <span class="seller-amount">$115,200</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">8</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Diego+V&background=8AADCA&color=fff&size=40" alt="Diego Vargas" />
-              <span class="seller-name">Diego V.</span>
-              <span class="seller-amount">$98,600</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">9</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Carmen+H&background=9ABDDA&color=fff&size=40" alt="Carmen Herrera" />
-              <span class="seller-name">Carmen H.</span>
-              <span class="seller-amount">$87,300</span>
-            </div>
-            <div class="seller-item">
-              <span class="seller-rank">10</span>
-              <img class="seller-avatar" src="https://ui-avatars.com/api/?name=Roberto+K&background=AACDEA&color=fff&size=40" alt="Roberto Kim" />
-              <span class="seller-name">Roberto K.</span>
-              <span class="seller-amount">$76,900</span>
             </div>
           </div>
         </div>
