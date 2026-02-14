@@ -5,6 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "start:mock": "node server/server-db-mock.js",
     "db:init-local": "powershell -ExecutionPolicy Bypass -File ./scripts/init-postgres.ps1",
     "db:start-local": "powershell -ExecutionPolicy Bypass -File ./scripts/start-postgres.ps1",
     "db:stop-local": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-postgres.ps1"

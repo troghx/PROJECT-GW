@@ -92,6 +92,17 @@ BEGIN
   END IF;
 END $$;
 
+-- Migración: Agregar co_applicant_name si no existe
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'leads' AND column_name = 'co_applicant_name'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN co_applicant_name VARCHAR(120);
+  END IF;
+END $$;
+
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_case_id ON leads (case_id);

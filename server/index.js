@@ -137,7 +137,7 @@ app.get('/api/leads/:id', async (req, res) => {
   
   try {
     const { rows } = await pool.query(
-      `SELECT id, case_id, full_name, email, phone, source, state_code, status, 
+      `SELECT id, case_id, full_name, co_applicant_name, email, phone, source, state_code, status, 
               is_test, notes, assigned_to, created_at, updated_at
        FROM leads
        WHERE id = $1`,
@@ -155,6 +155,57 @@ app.get('/api/leads/:id', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener lead:', error);
     res.status(500).json({ message: 'Error al obtener lead.' });
+  }
+});
+
+// Actualizar un lead
+app.patch('/api/leads/:id', async (req, res) => {
+  const leadId = req.params.id;
+  const { fullName, coApplicantName } = req.body;
+  
+  try {
+    let updateFields = [];
+    let values = [];
+    let paramIndex = 1;
+    
+    if (fullName !== undefined) {
+      updateFields.push(`full_name = $${paramIndex}`);
+      values.push(fullName.trim());
+      paramIndex++;
+    }
+    
+    if (coApplicantName !== undefined) {
+      updateFields.push(`co_applicant_name = $${paramIndex}`);
+      values.push(coApplicantName.trim());
+      paramIndex++;
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    }
+    
+    values.push(leadId);
+    
+    const { rows } = await pool.query(
+      `UPDATE leads 
+       SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${paramIndex}
+       RETURNING id, case_id, full_name, co_applicant_name, email, phone, source, state_code, status, 
+                 is_test, notes, assigned_to, created_at, updated_at`,
+      values
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const lead = rows[0];
+    lead.state_type = GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red';
+
+    res.json({ lead, message: 'Lead actualizado correctamente.' });
+  } catch (error) {
+    console.error('Error al actualizar lead:', error);
+    res.status(500).json({ message: 'Error al actualizar lead.' });
   }
 });
 
