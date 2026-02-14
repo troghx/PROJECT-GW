@@ -973,6 +973,34 @@
       color: rgba(255, 255, 255, 0.7);
     }
     
+    .calc-payment-day-row {
+      position: relative;
+    }
+    
+    .calc-payment-day-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      position: relative;
+    }
+    
+    .calc-payment-day-trigger {
+      min-width: 190px;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+    }
+    
+    .calc-payment-day-display {
+      font-weight: 500;
+    }
+    
+    .calc-payment-day-calendar {
+      right: 0;
+      bottom: calc(100% + 6px);
+      left: auto;
+    }
+    
     /* Resultados column */
     .calc-results-column .info-row-value {
       font-weight: 500;
@@ -1089,10 +1117,10 @@
     
     .months-wheel-track-inline {
       position: absolute;
-      top: 50%;
+      top: 0;
       left: 0;
       right: 0;
-      transform: translateY(-50%);
+      transform: translateY(0);
       will-change: transform;
       transition: transform 0.18s cubic-bezier(0.22, 0.75, 0.28, 1);
     }
@@ -3236,6 +3264,42 @@
                     </div>
                   </div>
                 </div>
+                
+                <div class="info-row calc-payment-day-row">
+                  <span class="info-row-label">Monthly Payment Day</span>
+                  <div class="calc-payment-day-wrapper">
+                    <button id="calcPaymentDayTrigger" class="liquid-glass-btn calc-payment-day-trigger" type="button">
+                      <span id="calcPaymentDayDisplay" class="calc-payment-day-display">Seleccionar fecha</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                    </button>
+                    <div id="calcPaymentDayCalendar" class="custom-calendar calc-payment-day-calendar hidden">
+                      <div class="calendar-header">
+                        <button id="calcPaymentDayPrev" class="calendar-nav" type="button">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                          </svg>
+                        </button>
+                        <span id="calcPaymentDayMonthYear" class="calendar-title"></span>
+                        <button id="calcPaymentDayNext" class="calendar-nav" type="button">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <div class="calendar-weekdays">
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
+                        <span>Jue</span><span>Vie</span><span>Sáb</span>
+                      </div>
+                      <div id="calcPaymentDayDays" class="calendar-days"></div>
+                    </div>
+                  </div>
+                  <input type="hidden" id="calcFirstDepositDate" value="">
+                </div>
               </div>
               
               <!-- Columna Derecha: Resultados -->
@@ -3455,6 +3519,7 @@
     const copyCaseBtn = document.getElementById('copyCaseBtn');
     let originalName = '';
     let caseIdValue = '';
+    let currentLeadId = null;
     
     // Manejo de Applicant / Co-Applicant
     let isApplicant = true;
@@ -3991,6 +4056,8 @@
     
     let calculatorInitialized = false;
     let currentMonths = 48;
+    let calcPaymentDayCalendarDate = new Date();
+    let selectedCalcPaymentDay = null;
     
     function initCalculator() {
       if (calculatorInitialized) {
@@ -4027,10 +4094,12 @@
           calculateAll();
         });
       }
-      
-      // Control de meses (wheel + botones rápidos)
+      // Selector de primer deposito (monthly payment day)
+      initCalcPaymentDayCalendar();
+
+      // Control de meses (wheel + botones rapidos)
       initMonthsControl();
-      
+
       // Click para copiar Total Debt
       const copyTotalDebt = document.getElementById('copyTotalDebt');
       if (copyTotalDebt) {
@@ -4211,7 +4280,8 @@
       function updateWheelPosition(monthsValue, animate = false) {
         const clampedValue = clampMonths(monthsValue);
         const index = clampedValue - MIN_MONTHS;
-        const offset = -index * ITEM_HEIGHT;
+        const centerOffset = (wheel.clientHeight - ITEM_HEIGHT) / 2;
+        const offset = centerOffset - (index * ITEM_HEIGHT);
 
         if (animate) {
           wheelTrack.style.transition = 'transform 0.22s cubic-bezier(0.22, 0.75, 0.28, 1)';
@@ -4219,7 +4289,7 @@
           wheelTrack.style.transition = 'none';
         }
 
-        wheelTrack.style.transform = `translateY(calc(-50% + ${offset}px))`;
+        wheelTrack.style.transform = `translateY(${offset}px)`;
 
         const nearestIndex = Math.round(index);
         items.forEach((item, idx) => {
@@ -4333,6 +4403,231 @@
 
       updateMonths(currentMonths, false, false);
     }
+
+    function formatISODate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function parseISODate(value) {
+      if (!value || typeof value !== 'string') return null;
+      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return null;
+
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const parsed = new Date(year, month - 1, day);
+
+      if (
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day
+      ) {
+        return null;
+      }
+
+      return parsed;
+    }
+
+    function formatCalcPaymentDayDisplay(isoDate) {
+      const parsed = parseISODate(isoDate);
+      if (!parsed) return 'Seleccionar fecha';
+      return parsed.toLocaleDateString('es-ES');
+    }
+
+    function getCalcFirstDepositStorageKey() {
+      if (!currentLeadId) return null;
+      return `lead_calc_first_deposit_${currentLeadId}`;
+    }
+
+    function loadPersistedCalcFirstDepositDate() {
+      const storageKey = getCalcFirstDepositStorageKey();
+      if (!storageKey) return null;
+
+      const savedValue = localStorage.getItem(storageKey);
+      const parsedDate = parseISODate(savedValue);
+
+      if (!parsedDate && savedValue) {
+        localStorage.removeItem(storageKey);
+      }
+
+      return parsedDate ? formatISODate(parsedDate) : null;
+    }
+
+    async function persistCalcFirstDepositDateToBackend(isoDate) {
+      if (!currentLeadId) return;
+
+      try {
+        const response = await fetch(`/api/leads/${currentLeadId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firstDepositDate: isoDate })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Error al guardar firstDepositDate en backend:', error);
+        showToast('No se pudo sincronizar la fecha en el servidor', 'info');
+      }
+    }
+
+    function persistCalcFirstDepositDate(isoDate, options = {}) {
+      const { saveToBackend = true } = options;
+      const storageKey = getCalcFirstDepositStorageKey();
+      if (!storageKey) return;
+
+      const parsedDate = parseISODate(isoDate);
+      if (!parsedDate) {
+        localStorage.removeItem(storageKey);
+        if (saveToBackend) {
+          persistCalcFirstDepositDateToBackend(null);
+        }
+        return;
+      }
+
+      const normalizedDate = formatISODate(parsedDate);
+      localStorage.setItem(storageKey, normalizedDate);
+
+      if (saveToBackend) {
+        persistCalcFirstDepositDateToBackend(normalizedDate);
+      }
+    }
+
+    function addMonthsWithDayClamp(baseDate, monthsToAdd, preferredDay = baseDate.getDate()) {
+      const targetMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd, 1);
+      const lastDayOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
+      const safeDay = Math.min(preferredDay, lastDayOfMonth);
+      return new Date(targetMonth.getFullYear(), targetMonth.getMonth(), safeDay);
+    }
+
+    function initCalcPaymentDayCalendar() {
+      const trigger = document.getElementById('calcPaymentDayTrigger');
+      const calendarEl = document.getElementById('calcPaymentDayCalendar');
+      const prevBtn = document.getElementById('calcPaymentDayPrev');
+      const nextBtn = document.getElementById('calcPaymentDayNext');
+      const hiddenInput = document.getElementById('calcFirstDepositDate');
+      const displayEl = document.getElementById('calcPaymentDayDisplay');
+
+      if (!trigger || !calendarEl || !prevBtn || !nextBtn || !hiddenInput || !displayEl) return;
+
+      const persistedDate = loadPersistedCalcFirstDepositDate();
+      const initialDate = parseISODate(hiddenInput.value) || parseISODate(persistedDate);
+      if (initialDate) {
+        const normalizedDate = formatISODate(initialDate);
+        selectedCalcPaymentDay = normalizedDate;
+        calcPaymentDayCalendarDate = new Date(initialDate);
+        hiddenInput.value = normalizedDate;
+        displayEl.textContent = formatCalcPaymentDayDisplay(normalizedDate);
+      } else {
+        selectedCalcPaymentDay = null;
+        calcPaymentDayCalendarDate = new Date();
+        hiddenInput.value = '';
+        displayEl.textContent = 'Seleccionar fecha';
+      }
+
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        calendarEl.classList.toggle('hidden');
+        if (!calendarEl.classList.contains('hidden')) {
+          renderCalcPaymentDayCalendar();
+        }
+      });
+
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        calcPaymentDayCalendarDate.setMonth(calcPaymentDayCalendarDate.getMonth() - 1);
+        renderCalcPaymentDayCalendar();
+      });
+
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        calcPaymentDayCalendarDate.setMonth(calcPaymentDayCalendarDate.getMonth() + 1);
+        renderCalcPaymentDayCalendar();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!calendarEl.contains(e.target) && !trigger.contains(e.target)) {
+          calendarEl.classList.add('hidden');
+        }
+      });
+    }
+
+    function renderCalcPaymentDayCalendar() {
+      const monthYearEl = document.getElementById('calcPaymentDayMonthYear');
+      const daysContainer = document.getElementById('calcPaymentDayDays');
+      const hiddenInput = document.getElementById('calcFirstDepositDate');
+      const displayEl = document.getElementById('calcPaymentDayDisplay');
+      const calendarEl = document.getElementById('calcPaymentDayCalendar');
+
+      if (!monthYearEl || !daysContainer || !hiddenInput || !displayEl || !calendarEl) return;
+
+      const year = calcPaymentDayCalendarDate.getFullYear();
+      const month = calcPaymentDayCalendarDate.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrevMonth = new Date(year, month, 0).getDate();
+      const todayIso = formatISODate(new Date());
+
+      monthYearEl.textContent = new Intl.DateTimeFormat('es-ES', {
+        month: 'long',
+        year: 'numeric'
+      }).format(new Date(year, month, 1));
+
+      daysContainer.innerHTML = '';
+
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const dayEl = document.createElement('button');
+        dayEl.type = 'button';
+        dayEl.className = 'calendar-day other-month';
+        dayEl.textContent = daysInPrevMonth - i;
+        daysContainer.appendChild(dayEl);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayEl = document.createElement('button');
+        dayEl.type = 'button';
+        dayEl.className = 'calendar-day';
+        dayEl.textContent = day;
+
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        if (dateStr === todayIso) {
+          dayEl.classList.add('today');
+        }
+        if (dateStr === selectedCalcPaymentDay) {
+          dayEl.classList.add('selected');
+        }
+
+        dayEl.addEventListener('click', () => {
+          selectedCalcPaymentDay = dateStr;
+          hiddenInput.value = dateStr;
+          persistCalcFirstDepositDate(dateStr, { saveToBackend: true });
+          displayEl.textContent = formatCalcPaymentDayDisplay(dateStr);
+          calendarEl.classList.add('hidden');
+          calculateAll();
+          showToast(`Primer deposito: ${formatCalcPaymentDayDisplay(dateStr)}`, 'success');
+          renderCalcPaymentDayCalendar();
+        });
+
+        daysContainer.appendChild(dayEl);
+      }
+
+      const totalCells = firstDay + daysInMonth;
+      const remainingCells = (Math.ceil(totalCells / 7) * 7) - totalCells;
+      for (let i = 1; i <= remainingCells; i++) {
+        const dayEl = document.createElement('button');
+        dayEl.type = 'button';
+        dayEl.className = 'calendar-day other-month';
+        dayEl.textContent = i;
+        daysContainer.appendChild(dayEl);
+      }
+    }
+
     function calculateAll() {
       // Obtener valores
       const totalDebt = parseCurrency(document.getElementById('calcTotalDebt').value);
@@ -4381,11 +4676,14 @@
       if (!tbody) return;
       
       let html = '';
-      const startDate = new Date();
+      const selectedDateValue = document.getElementById('calcFirstDepositDate')?.value || '';
+      const selectedStartDate = parseISODate(selectedDateValue);
+      const baseDate = selectedStartDate || new Date();
+      const firstMonthOffset = selectedStartDate ? 0 : 1;
+      const paymentDay = baseDate.getDate();
       
       for (let i = 1; i <= Math.min(months, 48); i++) {
-        const paymentDate = new Date(startDate);
-        paymentDate.setMonth(startDate.getMonth() + i);
+        const paymentDate = addMonthsWithDayClamp(baseDate, (i - 1) + firstMonthOffset, paymentDay);
         
         const dateStr = paymentDate.toLocaleDateString('en-US', {
           month: '2-digit',
@@ -4744,6 +5042,7 @@
     async function loadLead() {
       const urlParams = new URLSearchParams(window.location.search);
       const leadId = urlParams.get('id');
+      currentLeadId = leadId || null;
       
       if (!leadId) {
         document.getElementById('leadSection').innerHTML = `
@@ -4761,6 +5060,20 @@
         
         const data = await response.json();
         const lead = data.lead;
+
+        const backendFirstDepositDate = parseISODate(lead.first_deposit_date);
+        const firstDepositInput = document.getElementById('calcFirstDepositDate');
+        const firstDepositDisplay = document.getElementById('calcPaymentDayDisplay');
+        if (backendFirstDepositDate) {
+          const normalizedFirstDepositDate = formatISODate(backendFirstDepositDate);
+          if (firstDepositInput) firstDepositInput.value = normalizedFirstDepositDate;
+          if (firstDepositDisplay) firstDepositDisplay.textContent = formatCalcPaymentDayDisplay(normalizedFirstDepositDate);
+          persistCalcFirstDepositDate(normalizedFirstDepositDate, { saveToBackend: false });
+        } else {
+          if (firstDepositInput) firstDepositInput.value = '';
+          if (firstDepositDisplay) firstDepositDisplay.textContent = 'Seleccionar fecha';
+          persistCalcFirstDepositDate(null, { saveToBackend: false });
+        }
         
         // Guardar valores originales
         originalName = lead.full_name;

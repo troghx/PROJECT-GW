@@ -3,10 +3,12 @@ CREATE TABLE IF NOT EXISTS leads (
   id BIGSERIAL PRIMARY KEY,
   case_id INTEGER UNIQUE,
   full_name VARCHAR(120) NOT NULL,
+  co_applicant_name VARCHAR(120),
   email VARCHAR(160),
   phone VARCHAR(40),
   source VARCHAR(60),
   state_code VARCHAR(2),
+  first_deposit_date DATE,
   status VARCHAR(30) NOT NULL DEFAULT 'New Lead',
   is_test BOOLEAN NOT NULL DEFAULT FALSE,
   notes TEXT,
@@ -100,6 +102,17 @@ BEGIN
     WHERE table_name = 'leads' AND column_name = 'co_applicant_name'
   ) THEN
     ALTER TABLE leads ADD COLUMN co_applicant_name VARCHAR(120);
+  END IF;
+END $$;
+
+-- Migración: Agregar first_deposit_date si no existe
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'first_deposit_date'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN first_deposit_date DATE;
   END IF;
 END $$;
 

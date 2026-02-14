@@ -30,6 +30,14 @@ function cleanText(value, maxLength) {
   return text.slice(0, maxLength);
 }
 
+function isValidISODate(value) {
+  if (typeof value !== 'string') return false;
+  const iso = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso;
+}
+
 async function runMigrations() {
   const sqlPath = path.join(ROOT_DIR, 'db', 'init.sql');
   const sql = await fs.readFile(sqlPath, 'utf8');
@@ -77,7 +85,7 @@ app.get('/api/leads', async (_req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, case_id, full_name, email, phone, source, state_code, status, 
-              is_test, notes, assigned_to, created_at, updated_at
+              is_test, notes, assigned_to, first_deposit_date, created_at, updated_at
        FROM leads
        ORDER BY created_at DESC
        LIMIT 100`
@@ -117,7 +125,7 @@ app.post('/api/leads', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO leads (case_id, full_name, phone, is_test, state_code, assigned_to, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, case_id, full_name, phone, is_test, state_code, assigned_to, status, created_at, updated_at`,
+       RETURNING id, case_id, full_name, phone, is_test, state_code, assigned_to, first_deposit_date, status, created_at, updated_at`,
       [caseId, fullName, phone, isTest, stateCode, assignedTo, isTest ? 'Test' : 'New Lead']
     );
 
@@ -138,7 +146,7 @@ app.get('/api/leads/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, case_id, full_name, co_applicant_name, email, phone, source, state_code, status, 
-              is_test, notes, assigned_to, created_at, updated_at
+              is_test, notes, assigned_to, first_deposit_date, created_at, updated_at
        FROM leads
        WHERE id = $1`,
       [leadId]
@@ -161,7 +169,7 @@ app.get('/api/leads/:id', async (req, res) => {
 // Actualizar un lead
 app.patch('/api/leads/:id', async (req, res) => {
   const leadId = req.params.id;
-  const { fullName, coApplicantName } = req.body;
+  const { fullName, coApplicantName, firstDepositDate } = req.body;
   
   try {
     let updateFields = [];
@@ -179,6 +187,20 @@ app.patch('/api/leads/:id', async (req, res) => {
       values.push(coApplicantName.trim());
       paramIndex++;
     }
+
+    if (firstDepositDate !== undefined) {
+      let normalizedDate = null;
+      if (firstDepositDate !== null && String(firstDepositDate).trim() !== '') {
+        normalizedDate = String(firstDepositDate).trim();
+        if (!isValidISODate(normalizedDate)) {
+          return res.status(400).json({ message: 'firstDepositDate debe tener formato YYYY-MM-DD.' });
+        }
+      }
+
+      updateFields.push(`first_deposit_date = $${paramIndex}`);
+      values.push(normalizedDate);
+      paramIndex++;
+    }
     
     if (updateFields.length === 0) {
       return res.status(400).json({ message: 'No hay campos para actualizar.' });
@@ -191,7 +213,7 @@ app.patch('/api/leads/:id', async (req, res) => {
        SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
        WHERE id = $${paramIndex}
        RETURNING id, case_id, full_name, co_applicant_name, email, phone, source, state_code, status, 
-                 is_test, notes, assigned_to, created_at, updated_at`,
+                 is_test, notes, assigned_to, first_deposit_date, created_at, updated_at`,
       values
     );
 

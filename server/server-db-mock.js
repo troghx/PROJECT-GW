@@ -23,9 +23,9 @@ const db = {
 
 // Datos de ejemplo
 const sampleLeads = [
-  { id: 1, case_id: 1001, full_name: 'Juan Pérez', phone: '555-0101', email: 'juan@example.com', source: 'Web', state_code: 'CA', status: 'New Lead', is_test: false, notes: '', assigned_to: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 2, case_id: 1002, full_name: 'María García', phone: '555-0102', email: 'maria@example.com', source: 'Referral', state_code: 'TX', status: 'New Lead', is_test: false, notes: '', assigned_to: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 3, case_id: 1003, full_name: 'Carlos López', phone: '555-0103', email: 'carlos@example.com', source: 'Web', state_code: 'NY', status: 'Test', is_test: true, notes: '', assigned_to: 'Agente 1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 1, case_id: 1001, full_name: 'Juan Pérez', phone: '555-0101', email: 'juan@example.com', source: 'Web', state_code: 'CA', status: 'New Lead', is_test: false, notes: '', assigned_to: null, first_deposit_date: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 2, case_id: 1002, full_name: 'María García', phone: '555-0102', email: 'maria@example.com', source: 'Referral', state_code: 'TX', status: 'New Lead', is_test: false, notes: '', assigned_to: null, first_deposit_date: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 3, case_id: 1003, full_name: 'Carlos López', phone: '555-0103', email: 'carlos@example.com', source: 'Web', state_code: 'NY', status: 'Test', is_test: true, notes: '', assigned_to: 'Agente 1', first_deposit_date: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
 ];
 
 db.leads.push(...sampleLeads);
@@ -45,6 +45,14 @@ const GREEN_STATES = [
 function cleanText(value, maxLength) {
   const text = String(value || '').trim();
   return text.slice(0, maxLength);
+}
+
+function isValidISODate(value) {
+  if (typeof value !== 'string') return false;
+  const iso = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso;
 }
 
 function addStateType(lead) {
@@ -109,6 +117,7 @@ app.post('/api/leads', async (req, res) => {
     email: null,
     source: 'Web',
     notes: '',
+    first_deposit_date: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -129,6 +138,40 @@ app.get('/api/leads/:id', async (req, res) => {
   res.json({ lead: addStateType(lead) });
 });
 
+
+app.patch('/api/leads/:id', async (req, res) => {
+  const leadId = parseInt(req.params.id, 10);
+  const { fullName, coApplicantName, firstDepositDate } = req.body || {};
+  const lead = db.leads.find(l => l.id === leadId);
+
+  if (!lead) {
+    return res.status(404).json({ message: 'Lead no encontrado.' });
+  }
+
+  if (fullName !== undefined) {
+    lead.full_name = cleanText(fullName, 120);
+  }
+
+  if (coApplicantName !== undefined) {
+    lead.co_applicant_name = cleanText(coApplicantName, 120);
+  }
+
+  if (firstDepositDate !== undefined) {
+    if (firstDepositDate === null || String(firstDepositDate).trim() === '') {
+      lead.first_deposit_date = null;
+    } else {
+      const normalizedDate = String(firstDepositDate).trim();
+      if (!isValidISODate(normalizedDate)) {
+        return res.status(400).json({ message: 'firstDepositDate debe tener formato YYYY-MM-DD.' });
+      }
+      lead.first_deposit_date = normalizedDate;
+    }
+  }
+
+  lead.updated_at = new Date().toISOString();
+
+  res.json({ lead: addStateType(lead), message: 'Lead actualizado correctamente.' });
+});
 app.delete('/api/leads/:id', async (req, res) => {
   const leadId = parseInt(req.params.id);
   const index = db.leads.findIndex(l => l.id === leadId);
