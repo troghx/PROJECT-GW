@@ -8,9 +8,15 @@ const accountBtn = document.getElementById('accountBtn');
 const accountMenu = document.getElementById('accountMenu');
 const toolbarToggle = document.getElementById('toolbarToggle');
 const toolbarWrap = document.getElementById('toolbarWrap');
+const homeSearchInput = document.getElementById('homeSearch');
+const crmHelpers = window.CrmHelpers || {};
 
 const SESSION_KEY = 'project_gw_session';
 const THEME_KEY = 'project_gw_theme';
+const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
+const LEAD_SEARCH_DEBOUNCE_MS = 70;
+const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
+const LEAD_SEARCH_SUGGESTION_Z_INDEX = 2147483000;
 
 // Toast notifications
 function showToast(message, type = 'info') {
@@ -269,22 +275,7 @@ const GREEN_STATES = [
   'IA', 'AK', 'SD'
 ];
 
-// Nombres completos de estados
-const STATE_NAMES = {
-  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 
-  'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-  'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-  'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-  'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-  'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-  'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-  'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-  'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-  'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-  'WI': 'Wisconsin', 'WY': 'Wyoming'
-};
+const STATE_NAMES = crmHelpers.STATE_NAMES || {};
 
 // Función para determinar si un estado es Green o Red
 function getStateType(stateCode) {
@@ -294,7 +285,10 @@ function getStateType(stateCode) {
 
 // Función para obtener nombre completo del estado
 function getStateName(stateCode) {
-  return STATE_NAMES[stateCode.toUpperCase().trim()] || stateCode;
+  if (crmHelpers.getStateName) {
+    return crmHelpers.getStateName(stateCode);
+  }
+  return STATE_NAMES[stateCode?.toUpperCase?.().trim?.()] || stateCode;
 }
 
 // Mapeo de códigos de área (LADA) a estados
@@ -384,6 +378,253 @@ const leadsBtn = document.getElementById('leadsBtn');
 const dashboardGrid = document.querySelector('.dashboard-grid');
 const leadsView = document.getElementById('leadsView');
 let isLeadsView = false;
+let allLeadsCache = [];
+let leadSearchIndex = [];
+let currentLeadSearchQuery = '';
+let leadSearchDebounceTimer = null;
+let leadsLoaded = false;
+let leadsRequestInFlight = null;
+let leadSearchSuggestionBox = null;
+let leadSearchSuggestionShell = null;
+let leadSearchSuggestionMatches = [];
+let leadSearchSuggestionActiveIndex = -1;
+
+function consumeTransferredLeadSearchQuery() {
+  try {
+    const raw = localStorage.getItem(LEAD_SEARCH_TRANSFER_KEY);
+    localStorage.removeItem(LEAD_SEARCH_TRANSFER_KEY);
+    return String(raw || '').trim();
+  } catch (_error) {
+    return '';
+  }
+}
+
+function setLeadSearchQuery(query, { syncInput = true } = {}) {
+  currentLeadSearchQuery = String(query || '').trim();
+  if (syncInput && homeSearchInput) {
+    homeSearchInput.value = currentLeadSearchQuery;
+  }
+}
+
+function buildLeadsSearchIndex(leads) {
+  if (typeof crmHelpers.buildLeadSearchIndex === 'function') {
+    return crmHelpers.buildLeadSearchIndex(leads);
+  }
+  const source = Array.isArray(leads) ? leads : [];
+  return source.map((lead, position) => ({
+    lead,
+    position,
+    textBlob: String(lead?.full_name || '').toLowerCase(),
+    numericBlob: String(lead?.case_id || '')
+  }));
+}
+
+function searchLeadsByQuery(query) {
+  if (!currentLeadSearchQuery && !query) {
+    return allLeadsCache.slice();
+  }
+  const normalizedQuery = String(query ?? currentLeadSearchQuery ?? '').trim();
+  if (!normalizedQuery) return allLeadsCache.slice();
+  if (typeof crmHelpers.searchLeads === 'function') {
+    return crmHelpers.searchLeads(leadSearchIndex, normalizedQuery);
+  }
+  return allLeadsCache.filter((lead) => String(lead?.full_name || '').toLowerCase().includes(normalizedQuery.toLowerCase()));
+}
+
+function updateLeadsCounter(filteredCount) {
+  const countEl = document.getElementById('leadsCount');
+  if (!countEl) return;
+  const safeFilteredCount = Number.isFinite(filteredCount) ? filteredCount : allLeadsCache.length;
+  if (currentLeadSearchQuery) {
+    countEl.textContent = `(${safeFilteredCount}/${allLeadsCache.length})`;
+    return;
+  }
+  countEl.textContent = `(${allLeadsCache.length})`;
+}
+
+function getLeadSearchSuggestionPalette() {
+  const isLight = document.body.classList.contains('theme-light');
+  if (isLight) {
+    return {
+      background: 'rgba(255, 255, 255, 0.97)',
+      border: '1px solid rgba(15, 23, 42, 0.12)',
+      shadow: '0 14px 34px rgba(15, 23, 42, 0.16)',
+      itemBorder: '1px solid rgba(15, 23, 42, 0.08)',
+      itemHover: 'rgba(59, 130, 246, 0.12)',
+      textPrimary: 'rgba(15, 23, 42, 0.95)',
+      textSecondary: 'rgba(15, 23, 42, 0.62)'
+    };
+  }
+
+  return {
+    background: 'rgba(10, 16, 27, 0.96)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    shadow: '0 14px 34px rgba(0, 0, 0, 0.35)',
+    itemBorder: '1px solid rgba(255, 255, 255, 0.1)',
+    itemHover: 'rgba(126, 234, 252, 0.18)',
+    textPrimary: 'rgba(255, 255, 255, 0.94)',
+    textSecondary: 'rgba(255, 255, 255, 0.68)'
+  };
+}
+
+function ensureLeadSearchSuggestionBox() {
+  if (leadSearchSuggestionBox || !homeSearchInput) return leadSearchSuggestionBox;
+
+  const shell = homeSearchInput.closest('.home-search-shell');
+  if (!shell) return null;
+  leadSearchSuggestionShell = shell;
+
+  const box = document.createElement('div');
+  box.setAttribute('role', 'listbox');
+  box.setAttribute('aria-label', 'Sugerencias de leads');
+  box.style.position = 'fixed';
+  box.style.top = '0';
+  box.style.left = '0';
+  box.style.width = '320px';
+  box.style.maxHeight = '320px';
+  box.style.overflowY = 'auto';
+  box.style.borderRadius = '12px';
+  box.style.padding = '8px';
+  box.style.pointerEvents = 'auto';
+  box.style.zIndex = String(LEAD_SEARCH_SUGGESTION_Z_INDEX);
+  box.style.display = 'none';
+
+  document.body.appendChild(box);
+  leadSearchSuggestionBox = box;
+
+  const reposition = () => {
+    if (!leadSearchSuggestionBox || leadSearchSuggestionBox.style.display === 'none') return;
+    positionLeadSearchSuggestionBox();
+  };
+  window.addEventListener('resize', reposition);
+  window.addEventListener('scroll', reposition, true);
+
+  return leadSearchSuggestionBox;
+}
+
+function positionLeadSearchSuggestionBox() {
+  if (!leadSearchSuggestionBox || !leadSearchSuggestionShell) return;
+  const rect = leadSearchSuggestionShell.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  const viewportPadding = 8;
+  const top = rect.bottom + 8;
+  const left = Math.max(viewportPadding, rect.left);
+  const availableWidth = Math.max(220, window.innerWidth - left - viewportPadding);
+  const width = Math.min(rect.width, availableWidth);
+  const availableHeight = Math.max(140, window.innerHeight - top - viewportPadding);
+
+  leadSearchSuggestionBox.style.left = `${left}px`;
+  leadSearchSuggestionBox.style.top = `${top}px`;
+  leadSearchSuggestionBox.style.width = `${Math.max(220, width)}px`;
+  leadSearchSuggestionBox.style.maxHeight = `${Math.min(360, availableHeight)}px`;
+}
+
+function hideLeadSearchSuggestions() {
+  if (!leadSearchSuggestionBox) return;
+  leadSearchSuggestionBox.style.display = 'none';
+  leadSearchSuggestionBox.innerHTML = '';
+  leadSearchSuggestionMatches = [];
+  leadSearchSuggestionActiveIndex = -1;
+}
+
+function navigateToLeadFromSuggestion(leadId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const numericLeadId = Number(leadId);
+  if (!Number.isFinite(numericLeadId) || numericLeadId <= 0) return;
+  hideLeadSearchSuggestions();
+  window.location.assign(`/client.html?id=${numericLeadId}`);
+}
+
+function setLeadSearchSuggestionActive(nextIndex) {
+  if (!leadSearchSuggestionBox) return;
+  const buttons = Array.from(leadSearchSuggestionBox.querySelectorAll('[data-suggest-index]'));
+  if (!buttons.length) return;
+
+  let target = Number(nextIndex);
+  if (!Number.isFinite(target)) target = -1;
+  if (target < 0) target = buttons.length - 1;
+  if (target >= buttons.length) target = 0;
+
+  leadSearchSuggestionActiveIndex = target;
+  const palette = getLeadSearchSuggestionPalette();
+  buttons.forEach((button, index) => {
+    button.style.background = index === target ? palette.itemHover : 'transparent';
+  });
+}
+
+function renderLeadSearchSuggestions(matches) {
+  const box = ensureLeadSearchSuggestionBox();
+  if (!box) return;
+
+  const query = String(currentLeadSearchQuery || '').trim();
+  if (!query) {
+    hideLeadSearchSuggestions();
+    return;
+  }
+
+  const list = Array.isArray(matches) ? matches.slice(0, LEAD_SEARCH_SUGGESTION_LIMIT) : [];
+  if (!list.length) {
+    hideLeadSearchSuggestions();
+    return;
+  }
+
+  const palette = getLeadSearchSuggestionPalette();
+  box.style.background = palette.background;
+  box.style.border = palette.border;
+  box.style.boxShadow = palette.shadow;
+
+  leadSearchSuggestionMatches = list;
+  leadSearchSuggestionActiveIndex = -1;
+
+  box.innerHTML = list.map((lead, index) => {
+    const linePrimary = escapeHtml(lead.full_name || 'Sin nombre');
+    const lineSecondary = `#${escapeHtml(String(lead.case_id || '-'))} · ${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')}`;
+    return `
+      <button
+        type="button"
+        data-suggest-index="${index}"
+        data-lead-id="${lead.id}"
+        style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:${palette.itemBorder};border-radius:9px;padding:9px 10px;margin:0 0 6px;background:transparent;cursor:pointer;text-align:left;"
+      >
+        <span style="font-size:0.86rem;font-weight:600;color:${palette.textPrimary};">${linePrimary}</span>
+        <span style="font-size:0.75rem;color:${palette.textSecondary};">${lineSecondary}</span>
+      </button>
+    `;
+  }).join('');
+
+  box.querySelectorAll('[data-suggest-index]').forEach((button) => {
+    button.addEventListener('mouseenter', () => {
+      setLeadSearchSuggestionActive(Number(button.dataset.suggestIndex));
+    });
+    button.addEventListener('pointerdown', (event) => {
+      navigateToLeadFromSuggestion(button.dataset.leadId, event);
+    });
+    button.addEventListener('mousedown', (event) => {
+      navigateToLeadFromSuggestion(button.dataset.leadId, event);
+    });
+    button.addEventListener('click', (event) => {
+      navigateToLeadFromSuggestion(button.dataset.leadId, event);
+    });
+  });
+
+  positionLeadSearchSuggestionBox();
+  box.style.display = 'block';
+}
+
+function openActiveLeadSearchSuggestion() {
+  if (leadSearchSuggestionActiveIndex < 0 || leadSearchSuggestionActiveIndex >= leadSearchSuggestionMatches.length) {
+    return false;
+  }
+  const targetLead = leadSearchSuggestionMatches[leadSearchSuggestionActiveIndex];
+  if (!targetLead?.id) return false;
+  hideLeadSearchSuggestions();
+  openLeadById(targetLead.id);
+  return true;
+}
 
 function showLeadsView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
@@ -442,12 +683,138 @@ function showDashboardView() {
   }
 }
 
+function applyDashboardRouteFromHash() {
+  const route = (window.location.hash || '').replace('#', '').toLowerCase();
+  if (route === 'leads') {
+    showLeadsView();
+  } else {
+    showDashboardView();
+  }
+}
+
 if (leadsBtn) {
   leadsBtn.addEventListener('click', () => {
+    showLeadsView();
+    if (window.location.hash !== '#leads') {
+      window.location.hash = 'leads';
+    }
+  });
+}
+
+window.addEventListener('hashchange', () => {
+  if (getSession()) {
+    applyDashboardRouteFromHash();
+  }
+});
+
+function ensureLeadsViewForSearch() {
+  if (!isLeadsView) {
+    showLeadsView();
+  }
+  if (window.location.hash !== '#leads') {
+    window.location.hash = 'leads';
+  }
+}
+
+function scheduleLeadSearch(query) {
+  if (leadSearchDebounceTimer) {
+    clearTimeout(leadSearchDebounceTimer);
+  }
+  leadSearchDebounceTimer = setTimeout(async () => {
+    setLeadSearchQuery(query, { syncInput: false });
+    if (!currentLeadSearchQuery) {
+      hideLeadSearchSuggestions();
+      if (isLeadsView) {
+        renderFilteredLeads();
+      }
+      return;
+    }
+
+    await loadLeads();
+    const matches = searchLeadsByQuery(currentLeadSearchQuery);
+    renderLeadSearchSuggestions(matches);
     if (isLeadsView) {
-      showDashboardView();
-    } else {
-      showLeadsView();
+      renderLeadsRows(matches);
+    }
+  }, LEAD_SEARCH_DEBOUNCE_MS);
+}
+
+async function runLeadSearchSubmit() {
+  const query = String(homeSearchInput?.value || '').trim();
+  if (!query) {
+    setLeadSearchQuery('', { syncInput: false });
+    hideLeadSearchSuggestions();
+    if (isLeadsView) renderFilteredLeads();
+    return;
+  }
+
+  if (openActiveLeadSearchSuggestion()) {
+    return;
+  }
+
+  setLeadSearchQuery(query, { syncInput: false });
+  await loadLeads();
+
+  const matches = searchLeadsByQuery(query);
+  if (matches.length === 1) {
+    hideLeadSearchSuggestions();
+    openLeadById(matches[0].id);
+    return;
+  }
+
+  hideLeadSearchSuggestions();
+  ensureLeadsViewForSearch();
+  renderLeadsRows(matches);
+}
+
+if (homeSearchInput) {
+  homeSearchInput.addEventListener('focus', async () => {
+    if (getSession()) {
+      await loadLeads();
+      if (currentLeadSearchQuery) {
+        renderLeadSearchSuggestions(searchLeadsByQuery(currentLeadSearchQuery));
+      }
+    }
+  });
+
+  homeSearchInput.addEventListener('input', (event) => {
+    scheduleLeadSearch(event.target.value);
+  });
+
+  homeSearchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (leadSearchSuggestionMatches.length > 0) {
+        setLeadSearchSuggestionActive(leadSearchSuggestionActiveIndex + 1);
+      }
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (leadSearchSuggestionMatches.length > 0) {
+        setLeadSearchSuggestionActive(leadSearchSuggestionActiveIndex - 1);
+      }
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void runLeadSearchSubmit();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setLeadSearchQuery('', { syncInput: true });
+      hideLeadSearchSuggestions();
+      if (isLeadsView) renderFilteredLeads();
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const shell = homeSearchInput.closest('.home-search-shell');
+    if (!shell) return;
+    const clickedInsideSuggestions = Boolean(leadSearchSuggestionBox && leadSearchSuggestionBox.contains(event.target));
+    if (!shell.contains(event.target) && !clickedInsideSuggestions) {
+      hideLeadSearchSuggestions();
     }
   });
 }
@@ -477,6 +844,96 @@ const stateHiddenInput = document.getElementById('leadState');
 const stateSuggestions = document.getElementById('stateSuggestions');
 const stateDetected = document.getElementById('stateDetected');
 const phoneInput = document.getElementById('leadPhone');
+const duplicateAlert = document.getElementById('duplicateAlert');
+const duplicateSummary = document.getElementById('duplicateSummary');
+const duplicateList = document.getElementById('duplicateList');
+const openDuplicateBtn = document.getElementById('openDuplicateBtn');
+const linkAndCreateBtn = document.getElementById('linkAndCreateBtn');
+const forceCreateBtn = document.getElementById('forceCreateBtn');
+
+let duplicateMatches = [];
+let duplicateDecision = null;
+let duplicatePhone = null;
+
+function normalizePhoneForLead(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  const normalizedDigits = digits.length === 11 && digits.startsWith('1')
+    ? digits.slice(1)
+    : digits;
+
+  if (normalizedDigits.length !== 10) {
+    return null;
+  }
+
+  return `${normalizedDigits.slice(0, 3)}-${normalizedDigits.slice(3, 6)}-${normalizedDigits.slice(6)}`;
+}
+
+function clearDuplicateAlert() {
+  duplicateMatches = [];
+  duplicateDecision = null;
+  duplicatePhone = null;
+
+  if (duplicateAlert) duplicateAlert.classList.add('hidden');
+  if (duplicateSummary) duplicateSummary.textContent = '';
+  if (duplicateList) duplicateList.innerHTML = '';
+}
+
+function openLeadById(leadId) {
+  if (!leadId) return;
+  window.location.href = `/client.html?id=${leadId}`;
+}
+
+function triggerNewLeadSubmit() {
+  if (!newLeadForm) return;
+  if (typeof newLeadForm.requestSubmit === 'function') {
+    newLeadForm.requestSubmit();
+    return;
+  }
+  newLeadForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+function renderDuplicateAlert(matches, normalizedPhone) {
+  if (!duplicateAlert || !duplicateSummary || !duplicateList) {
+    return;
+  }
+
+  duplicateMatches = Array.isArray(matches) ? matches : [];
+  duplicateDecision = null;
+  duplicatePhone = normalizedPhone;
+
+  const total = duplicateMatches.length;
+  duplicateSummary.textContent = `Encontramos ${total} lead${total === 1 ? '' : 's'} con el telefono ${normalizedPhone}.`;
+
+  duplicateList.innerHTML = duplicateMatches.map((lead) => {
+    const stateType = lead.state_type || (lead.state_code ? getStateType(lead.state_code) : '-');
+    return `
+      <button type="button" class="duplicate-item duplicate-open-link" data-id="${lead.id}">
+        <span class="duplicate-item-name">${escapeHtml(lead.full_name || 'Sin nombre')} · Case #${lead.case_id || '-'}</span>
+        <span class="duplicate-item-meta">${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')} · ${escapeHtml(stateType)} · ${escapeHtml(lead.status || '-')}</span>
+      </button>
+    `;
+  }).join('');
+
+  duplicateList.querySelectorAll('.duplicate-open-link').forEach((button) => {
+    button.addEventListener('click', () => {
+      const leadId = Number(button.dataset.id);
+      openLeadById(leadId);
+    });
+  });
+
+  duplicateAlert.classList.remove('hidden');
+}
+
+async function findPhoneDuplicates(phone) {
+  const response = await fetch(`/api/leads/duplicates?phone=${encodeURIComponent(phone)}`);
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo validar duplicados.');
+  }
+
+  return data;
+}
 
 // Abrir modal
 if (createLeadBtn && newLeadModal) {
@@ -488,6 +945,7 @@ if (createLeadBtn && newLeadModal) {
     if (stateHiddenInput) stateHiddenInput.value = '';
     if (stateSuggestions) stateSuggestions.classList.add('hidden');
     if (stateDetected) stateDetected.classList.add('hidden');
+    clearDuplicateAlert();
     
     document.getElementById('leadName').focus();
   });
@@ -504,6 +962,7 @@ function closeModal() {
     if (stateHiddenInput) stateHiddenInput.value = '';
     if (stateSuggestions) stateSuggestions.classList.add('hidden');
     if (stateDetected) stateDetected.classList.add('hidden');
+    clearDuplicateAlert();
   }
 }
 
@@ -630,6 +1089,7 @@ function updateActiveSuggestion(items) {
 // Detección automática por código de área
 if (phoneInput) {
   phoneInput.addEventListener('input', (e) => {
+    clearDuplicateAlert();
     const phone = e.target.value;
     const detectedState = detectStateByAreaCode(phone);
     
@@ -645,6 +1105,31 @@ if (phoneInput) {
   });
 }
 
+if (openDuplicateBtn) {
+  openDuplicateBtn.addEventListener('click', () => {
+    const firstMatch = duplicateMatches[0];
+    if (firstMatch?.id) {
+      openLeadById(firstMatch.id);
+    }
+  });
+}
+
+if (linkAndCreateBtn) {
+  linkAndCreateBtn.addEventListener('click', () => {
+    if (!duplicateMatches.length) return;
+    duplicateDecision = 'link';
+    triggerNewLeadSubmit();
+  });
+}
+
+if (forceCreateBtn) {
+  forceCreateBtn.addEventListener('click', () => {
+    if (!duplicateMatches.length) return;
+    duplicateDecision = 'force';
+    triggerNewLeadSubmit();
+  });
+}
+
 // ============================================
 // CREAR LEAD
 // ============================================
@@ -656,9 +1141,16 @@ if (newLeadForm) {
     const phone = document.getElementById('leadPhone').value.trim();
     const stateCode = stateHiddenInput ? stateHiddenInput.value : '';
     const isTest = document.getElementById('isTestLead').checked;
+    const normalizedPhone = normalizePhoneForLead(phone);
     
     if (!fullName || !phone) {
       alert('Por favor completa todos los campos obligatorios.');
+      return;
+    }
+
+    if (!normalizedPhone) {
+      alert('Ingresa un teléfono válido de 10 dígitos (ej: 305-555-0123).');
+      if (phoneInput) phoneInput.focus();
       return;
     }
     
@@ -669,11 +1161,25 @@ if (newLeadForm) {
     }
     
     try {
+      if (!duplicateDecision) {
+        const duplicateData = await findPhoneDuplicates(normalizedPhone);
+        const matches = Array.isArray(duplicateData.matches) ? duplicateData.matches : [];
+        if (matches.length > 0) {
+          renderDuplicateAlert(matches, normalizedPhone);
+          return;
+        }
+      }
+
       // Obtener el usuario actual para asignar el lead
       const session = getSession();
       const assignedTo = session ? (session.username || session.name || 'Usuario') : 'Usuario';
       
-      const payload = { fullName, phone, stateCode, isTest, assignedTo };
+      const payload = { fullName, phone: normalizedPhone, stateCode, isTest, assignedTo };
+      if (duplicateDecision === 'link' && duplicateMatches.length > 0) {
+        const baseLead = duplicateMatches[0];
+        payload.relatedLeadId = baseLead.id;
+        payload.notes = `Telefono compartido detectado con lead #${baseLead.case_id || baseLead.id}.`;
+      }
       console.log('Enviando datos:', payload);
       
       const response = await fetch('/api/leads', {
@@ -694,12 +1200,12 @@ if (newLeadForm) {
       // Cerrar modal
       closeModal();
       
-      // Redirigir a la página de detalle del cliente
-      window.location.href = `/client.html?id=${lead.id}`;
+      // Redirigir a detalle iniciando siempre en pestaña de información
+      window.location.href = `/client.html?id=${lead.id}&tab=lead`;
       
     } catch (error) {
       console.error('Error:', error);
-      alert('No se pudo crear el lead. Intenta de nuevo.');
+      alert(error.message || 'No se pudo crear el lead. Intenta de nuevo.');
     }
   });
 }
@@ -708,106 +1214,152 @@ if (newLeadForm) {
 // CARGAR LEADS EXISTENTES
 // ============================================
 
-async function loadLeads() {
-  try {
-    const response = await fetch('/api/leads');
-    if (!response.ok) throw new Error('Error al cargar leads');
-    
-    const data = await response.json();
-    const leads = data.leads || [];
-    
-    // Actualizar contador
-    const countEl = document.getElementById('leadsCount');
-    if (countEl) countEl.textContent = `(${leads.length})`;
-    
-    const tbody = document.getElementById('leadsTableBody');
-    if (!tbody) return;
-    
-    if (leads.length === 0) {
-      // Mostrar estado vacío
-      tbody.innerHTML = `
-        <tr class="lead-row empty-state">
-          <td colspan="12" class="empty-message">
-            <div class="empty-content">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-              <p>No hay leads registrados</p>
-              <span>Haz clic en "Nuevo Lead" para agregar uno</span>
-            </div>
-          </td>
-        </tr>
-      `;
-      return;
-    }
-    
-    // Renderizar leads
-    tbody.innerHTML = leads.map(lead => `
-      <tr class="lead-row" data-id="${lead.id}">
-        <td><input type="checkbox" class="lead-checkbox"></td>
-        <td class="lead-name">
-          <a href="/client.html?id=${lead.id}" class="name-link">
-            <div class="name-avatar">
-              <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(lead.full_name)}&background=random&color=fff&size=32" alt="">
-              <span>${escapeHtml(lead.full_name)}</span>
-            </div>
-          </a>
-        </td>
-        <td class="lead-case">${lead.case_id}</td>
-        <td>${getStatusBadge(lead.status, lead.is_test)}</td>
-        <td class="lead-user">${escapeHtml(lead.assigned_to || '-')}</td>
-        <td class="lead-date">${formatDate(lead.created_at)}</td>
-        <td class="lead-date">${formatDate(lead.updated_at)}</td>
-        <td class="lead-phone">${escapeHtml(lead.phone || '-')}</td>
-        <td class="lead-email">${escapeHtml(lead.email || '-')}</td>
-        <td class="lead-state">${lead.state_code || '-'}</td>
-        <td>${getStateTypeBadge(lead.state_code, lead.state_type)}</td>
-        <td class="lead-campaign">${escapeHtml(lead.source || '-')}</td>
-        <td class="lead-actions">
-          <button class="action-btn delete-btn" data-id="${lead.id}" data-name="${escapeHtml(lead.full_name)}" title="Eliminar lead">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+function renderLeadsRows(leads) {
+  const tbody = document.getElementById('leadsTableBody');
+  if (!tbody) return;
+
+  const rows = Array.isArray(leads) ? leads : [];
+  updateLeadsCounter(rows.length);
+
+  if (allLeadsCache.length === 0) {
+    tbody.innerHTML = `
+      <tr class="lead-row empty-state">
+        <td colspan="12" class="empty-message">
+          <div class="empty-content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-          </button>
+            <p>No hay leads registrados</p>
+            <span>Haz clic en "Nuevo Lead" para agregar uno</span>
+          </div>
         </td>
       </tr>
-    `).join('');
-    
-    // Agregar event listeners a los botones de eliminar
-    tbody.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const leadId = btn.dataset.id;
-        const leadName = btn.dataset.name;
-        
-        if (confirm(`¿Estás seguro de eliminar el lead "${leadName}"?\n\nEsta acción no se puede deshacer.`)) {
-          try {
-            const response = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
-            if (response.ok) {
-              loadLeads(); // Recargar la lista
-              showToast('Lead eliminado correctamente', 'success');
-            } else {
-              showToast('Error al eliminar el lead', 'error');
-            }
-          } catch (error) {
-            console.error('Error:', error);
+    `;
+    return;
+  }
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `
+      <tr class="lead-row empty-state">
+        <td colspan="12" class="empty-message">
+          <div class="empty-content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <p>No se encontraron coincidencias</p>
+            <span>Busca por nombre, SSN/ITIN, telefono, ID o Case ID (${escapeHtml(currentLeadSearchQuery)})</span>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const leadMapById = new Map(allLeadsCache.map((lead) => [Number(lead.id), lead]));
+  tbody.innerHTML = rows.map((lead) => `
+    <tr class="lead-row" data-id="${lead.id}">
+      <td><input type="checkbox" class="lead-checkbox"></td>
+      <td class="lead-name">
+        <a href="/client.html?id=${lead.id}" class="name-link">
+          <div class="name-avatar">
+            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(lead.full_name)}&background=random&color=fff&size=32" alt="">
+            <span>${escapeHtml(lead.full_name)}</span>
+          </div>
+        </a>
+      </td>
+      <td class="lead-case">${lead.case_id}</td>
+      <td>${getLeadBadgesCell(lead, leadMapById)}</td>
+      <td class="lead-user">${escapeHtml(lead.assigned_to || '-')}</td>
+      <td class="lead-date">${formatDate(lead.created_at)}</td>
+      <td class="lead-date">${formatDate(lead.updated_at)}</td>
+      <td class="lead-phone">${escapeHtml(lead.phone || '-')}</td>
+      <td class="lead-email">${escapeHtml(lead.email || '-')}</td>
+      <td class="lead-state">${lead.state_code || '-'}</td>
+      <td>${getStateTypeBadge(lead.state_code, lead.state_type)}</td>
+      <td class="lead-campaign">${escapeHtml(lead.source || '-')}</td>
+      <td class="lead-actions">
+        <button class="action-btn delete-btn" data-id="${lead.id}" data-name="${escapeHtml(lead.full_name)}" title="Eliminar lead">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const leadId = btn.dataset.id;
+      const leadName = btn.dataset.name;
+
+      if (confirm(`¿Estás seguro de eliminar el lead "${leadName}"?\n\nEsta acción no se puede deshacer.`)) {
+        try {
+          const response = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
+          if (response.ok) {
+            await loadLeads(true);
+            showToast('Lead eliminado correctamente', 'success');
+          } else {
             showToast('Error al eliminar el lead', 'error');
           }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error al eliminar el lead', 'error');
         }
-      });
+      }
     });
-    
-  } catch (error) {
-    console.error('Error cargando leads:', error);
+  });
+}
+
+function renderFilteredLeads() {
+  const matches = searchLeadsByQuery(currentLeadSearchQuery);
+  renderLeadsRows(matches);
+}
+
+async function loadLeads(forceReload = false) {
+  if (leadsLoaded && !forceReload) {
+    renderFilteredLeads();
+    return allLeadsCache;
   }
+
+  if (leadsRequestInFlight) {
+    return leadsRequestInFlight;
+  }
+
+  leadsRequestInFlight = (async () => {
+    try {
+      const response = await fetch('/api/leads');
+      if (!response.ok) throw new Error('Error al cargar leads');
+
+      const data = await response.json();
+      allLeadsCache = Array.isArray(data.leads) ? data.leads : [];
+      leadSearchIndex = buildLeadsSearchIndex(allLeadsCache);
+      leadsLoaded = true;
+
+      renderFilteredLeads();
+      return allLeadsCache;
+    } catch (error) {
+      console.error('Error cargando leads:', error);
+      updateLeadsCounter(0);
+      return [];
+    } finally {
+      leadsRequestInFlight = null;
+    }
+  })();
+
+  return leadsRequestInFlight;
 }
 
 // Helpers
 function escapeHtml(text) {
+  if (crmHelpers.escapeHtml) {
+    return crmHelpers.escapeHtml(text);
+  }
   if (!text) return '';
   const div = document.createElement('div');
   div.textContent = text;
@@ -815,12 +1367,18 @@ function escapeHtml(text) {
 }
 
 function formatDate(dateString) {
+  if (crmHelpers.formatDateEs) {
+    return crmHelpers.formatDateEs(dateString);
+  }
   if (!dateString) return '-';
   const date = new Date(dateString);
   return date.toLocaleDateString('es-ES');
 }
 
 function getStatusBadge(status, isTest) {
+  if (crmHelpers.getStatusBadgeHtml) {
+    return crmHelpers.getStatusBadgeHtml(status, isTest);
+  }
   if (isTest) {
     return '<span class="status-badge test">Test</span>';
   }
@@ -835,27 +1393,46 @@ function getStatusBadge(status, isTest) {
 }
 
 function getStateTypeBadge(stateCode, stateType) {
+  if (crmHelpers.getStateTypeBadgeHtml) {
+    return crmHelpers.getStateTypeBadgeHtml(stateCode, stateType);
+  }
   if (!stateCode) return '-';
   const typeClass = stateType === 'Green' ? 'green' : 'red';
-  const stateNames = {
-    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 
-    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-    'WI': 'Wisconsin', 'WY': 'Wyoming'
-  };
-  const stateName = stateNames[stateCode] || stateCode;
+  const stateName = getStateName(stateCode);
   return `<span class="type-badge ${typeClass}" title="${stateName} (${stateCode}) - ${stateType} State">${stateType}</span>`;
 }
 
+function getRelatedLeadBadge(lead, leadMapById) {
+  const relatedLeadId = Number(lead?.related_lead_id);
+  if (!Number.isInteger(relatedLeadId) || relatedLeadId <= 0) {
+    return '';
+  }
+
+  const relatedLead = leadMapById?.get(relatedLeadId);
+  if (!relatedLead) {
+    return '';
+  }
+  const relatedLabel = `Relacionado con #${escapeHtml(String(relatedLead.case_id || relatedLeadId))}`;
+
+  return `
+    <a class="relation-badge" href="/client.html?id=${relatedLeadId}" title="Abrir lead relacionado">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
+        <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"/>
+      </svg>
+      <span>${relatedLabel}</span>
+    </a>
+  `;
+}
+
+function getLeadBadgesCell(lead, leadMapById) {
+  return `
+    <div class="lead-badges-inline">
+      ${getStatusBadge(lead.status, lead.is_test)}
+      ${getRelatedLeadBadge(lead, leadMapById)}
+    </div>
+  `;
+}
 // Cargar leads al mostrar la vista de leads
 const originalShowLeadsView = showLeadsView;
 showLeadsView = function() {
@@ -884,7 +1461,10 @@ if (loginForm) {
 
       saveSession(data.user);
       loginStatus.textContent = data.message;
-      setTimeout(() => showDashboard(), 240);
+      setTimeout(() => {
+        showDashboard();
+        applyDashboardRouteFromHash();
+      }, 240);
     } catch (error) {
       loginStatus.textContent = error.message;
     }
@@ -894,9 +1474,20 @@ if (loginForm) {
 applyTheme(getInitialTheme());
 setToolbarExpanded(false);
 
+const transferredLeadSearchQuery = consumeTransferredLeadSearchQuery();
 const existingSession = getSession();
 if (existingSession) {
+  if (transferredLeadSearchQuery) {
+    setLeadSearchQuery(transferredLeadSearchQuery, { syncInput: true });
+    if (window.location.hash !== '#leads') {
+      window.location.hash = 'leads';
+    }
+  }
   showDashboard();
+  applyDashboardRouteFromHash();
+  if (window.location.hash === '#leads' || currentLeadSearchQuery) {
+    void loadLeads();
+  }
 } else {
   showLogin();
 }
@@ -991,7 +1582,7 @@ function initRankingsWheel() {
     console.log(`[RankingsWheel] Wheel #${wheelIndex}: Iniciando auto-scroll`);
     
     // Auto-scroll lento continuo
-    const autoScrollSpeed = 0.6; // pixels por frame a 60fps
+    const autoScrollSpeed = 0.25; // pixels por frame a 60fps
     let isPaused = false;
     let animationId = null;
     
@@ -1092,3 +1683,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initRankingsWheel, 500);
   }
 });
+
+
+

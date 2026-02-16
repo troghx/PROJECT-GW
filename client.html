@@ -7,12 +7,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260216e">
   <style>
+    :root {
+      --lead-viewport-height: 100vh;
+    }
+
+    @supports (height: 100dvh) {
+      :root {
+        --lead-viewport-height: 100dvh;
+      }
+    }
+
     /* Wrapper principal - Scroll interno si es necesario */
     .lead-view-wrapper {
       width: 100%;
-      height: 100vh;
+      min-height: var(--lead-viewport-height);
+      height: var(--lead-viewport-height);
       position: relative;
       z-index: 1;
       overflow-y: auto;
@@ -38,12 +49,27 @@
       grid-column: 1;
       grid-row: 1;
       width: clamp(70px, 5vw, 100px);
-      height: auto;
       display: block;
       justify-self: start;
       align-self: center;
       position: relative;
       z-index: 5;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .lead-logo img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .lead-logo:focus-visible {
+      outline: 2px solid var(--accent, #7eeafc);
+      outline-offset: 4px;
+      border-radius: 8px;
     }
     
     /* Toolbar en misma posición que dashboard */
@@ -67,7 +93,7 @@
     .lead-content-area {
       grid-column: 1 / -1;
       grid-row: 2;
-      padding: 12px 24px 24px;
+      padding: clamp(10px, 1.8vh, 18px) clamp(12px, 2vw, 24px) clamp(18px, 2.5vh, 24px);
       position: relative;
       z-index: 2;
       min-height: 0;
@@ -253,6 +279,33 @@
       position: relative;
       z-index: 4;
     }
+
+    .lead-related-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.35);
+      background: rgba(56, 189, 248, 0.14);
+      color: #7dd3fc;
+      text-decoration: none;
+      position: relative;
+      z-index: 4;
+      transition: background 0.2s ease;
+    }
+
+    .lead-related-badge:hover {
+      background: rgba(56, 189, 248, 0.24);
+    }
+
+    .lead-related-badge svg {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+    }
     
     /* Case ID debajo del nombre */
     .lead-case-id {
@@ -317,6 +370,574 @@
     .action-icon-btn svg {
       width: 18px;
       height: 18px;
+    }
+
+    .notes-anchor {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .notes-panel {
+      position: absolute;
+      top: calc(100% + 12px);
+      right: 0;
+      width: min(420px, calc(100vw - 28px));
+      max-height: min(72vh, 620px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background:
+        linear-gradient(155deg, rgba(21, 29, 44, 0.9) 0%, rgba(16, 23, 35, 0.88) 55%, rgba(10, 16, 26, 0.92) 100%),
+        rgba(10, 16, 26, 0.9);
+      backdrop-filter: blur(20px) saturate(130%);
+      box-shadow:
+        0 20px 42px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      z-index: 5000;
+      overflow: visible;
+    }
+
+    .notes-panel::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      right: 12px;
+      width: 14px;
+      height: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      border-left: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(16, 23, 35, 0.93);
+      transform: rotate(45deg);
+      backdrop-filter: blur(20px) saturate(130%);
+    }
+
+    .notes-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notes-panel-title {
+      font-size: 0.86rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .notes-panel-close.modal-close-mac {
+      position: static;
+      width: 12px;
+      height: 12px;
+      margin-left: auto;
+      flex-shrink: 0;
+      transform: none;
+    }
+
+    .notes-panel-close.modal-close-mac:hover {
+      transform: scale(1.12);
+    }
+
+    .notes-panel-body {
+      padding: 12px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: visible;
+    }
+
+    .notes-composer-label {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.68);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-composer {
+      width: 100%;
+      min-height: 82px;
+      max-height: 140px;
+      resize: vertical;
+      padding: 10px 11px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(3, 8, 18, 0.48);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.88rem;
+      line-height: 1.32;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .notes-composer:focus {
+      border-color: rgba(126, 234, 252, 0.62);
+      background: rgba(10, 18, 30, 0.68);
+    }
+
+    .notes-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .notes-save-status {
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .notes-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: none;
+      overflow: visible;
+      padding-right: 2px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .notes-feed-empty {
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: center;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .note-card {
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .note-card.note-card-menu-open {
+      z-index: 12000;
+    }
+
+    .note-card.note-color-yellow {
+      border-color: rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(165deg, rgba(255, 239, 176, 0.17) 0%, rgba(255, 225, 138, 0.12) 100%),
+        rgba(255, 255, 255, 0.05);
+    }
+
+    .note-card.note-color-red {
+      border-color: rgba(248, 113, 113, 0.32);
+      background:
+        linear-gradient(165deg, rgba(248, 113, 113, 0.2) 0%, rgba(239, 68, 68, 0.14) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-green {
+      border-color: rgba(74, 222, 128, 0.3);
+      background:
+        linear-gradient(165deg, rgba(74, 222, 128, 0.19) 0%, rgba(34, 197, 94, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-blue {
+      border-color: rgba(96, 165, 250, 0.3);
+      background:
+        linear-gradient(165deg, rgba(96, 165, 250, 0.19) 0%, rgba(59, 130, 246, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-gray {
+      border-color: rgba(148, 163, 184, 0.28);
+      background:
+        linear-gradient(165deg, rgba(148, 163, 184, 0.2) 0%, rgba(100, 116, 139, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.72rem;
+      line-height: 1.1;
+    }
+
+    .note-card-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+
+    .note-card-author {
+      color: rgba(255, 255, 255, 0.88);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .note-card-time {
+      color: rgba(255, 255, 255, 0.64);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .note-card-menu-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.82);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .note-card-menu-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    .note-card-menu-btn svg {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+    }
+
+    .note-card-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 176px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background:
+        linear-gradient(160deg, rgba(19, 28, 42, 0.95) 0%, rgba(12, 18, 30, 0.95) 100%),
+        rgba(12, 18, 30, 0.95);
+      box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      z-index: 12001;
+    }
+
+    .note-card-menu.note-card-menu-up {
+      top: auto;
+      bottom: calc(100% + 6px);
+    }
+
+    .note-card-menu-item {
+      width: 100%;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.88);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .note-card-menu-item:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .note-card-menu-item.danger {
+      color: #fecaca;
+    }
+
+    .note-card-menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.36);
+    }
+
+    .note-card-menu-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.14);
+      margin: 4px 2px;
+    }
+
+    .note-card-menu-color-option.active {
+      border-color: rgba(125, 211, 252, 0.48);
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    .note-color-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      flex-shrink: 0;
+    }
+
+    .note-color-swatch-yellow {
+      background: #facc15;
+    }
+
+    .note-color-swatch-red {
+      background: #ef4444;
+    }
+
+    .note-color-swatch-green {
+      background: #22c55e;
+    }
+
+    .note-color-swatch-blue {
+      background: #3b82f6;
+    }
+
+    .note-color-swatch-gray {
+      background: #94a3b8;
+    }
+
+    .note-card-content {
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.84rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .notes-templates-block {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .notes-templates-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .notes-templates-title {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.68);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-template-select {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(6, 12, 22, 0.5);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.84rem;
+      padding: 9px 10px;
+      outline: none;
+    }
+
+    .notes-template-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .notes-template-actions-clean {
+      grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+    }
+
+    .notes-templates-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 5600;
+    }
+
+    .notes-templates-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 14, 0.56);
+      backdrop-filter: blur(2px);
+    }
+
+    .notes-templates-modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(760px, calc(100vw - 26px));
+      max-height: min(82vh, 720px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background:
+        linear-gradient(155deg, rgba(20, 27, 40, 0.93) 0%, rgba(11, 17, 29, 0.95) 100%),
+        rgba(10, 16, 28, 0.94);
+      backdrop-filter: blur(20px) saturate(125%);
+      box-shadow: 0 28px 52px rgba(0, 0, 0, 0.42);
+      overflow: hidden;
+    }
+
+    .notes-templates-modal-close.modal-close-mac {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+    }
+
+    .notes-templates-modal-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notes-templates-modal-header h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .notes-templates-modal-body {
+      display: grid;
+      grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+      gap: 14px;
+      padding: 14px 16px 16px;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .notes-templates-manager-list,
+    .notes-templates-manager-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .notes-templates-manager-label {
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.72);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-templates-manager-select {
+      min-height: 230px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(4, 9, 18, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.85rem;
+      padding: 8px;
+      outline: none;
+    }
+
+    .notes-templates-manager-input,
+    .notes-templates-manager-textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(4, 9, 18, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.84rem;
+      padding: 9px 10px;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .notes-templates-manager-input:focus,
+    .notes-templates-manager-textarea:focus {
+      border-color: rgba(126, 234, 252, 0.6);
+      background: rgba(8, 14, 24, 0.66);
+    }
+
+    .notes-templates-manager-textarea {
+      min-height: 210px;
+      resize: vertical;
+    }
+
+    .notes-templates-manager-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 760px) {
+      .notes-templates-modal-body {
+        grid-template-columns: 1fr;
+      }
+
+      .notes-templates-manager-select {
+        min-height: 160px;
+      }
+    }
+
+    .notes-btn {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .notes-btn:hover {
+      background: rgba(126, 234, 252, 0.16);
+      border-color: rgba(126, 234, 252, 0.34);
+    }
+
+    .notes-btn:active {
+      transform: translateY(1px);
+    }
+
+    .notes-btn.primary {
+      background: rgba(59, 130, 246, 0.24);
+      border-color: rgba(96, 165, 250, 0.45);
+      color: rgba(239, 246, 255, 0.96);
+    }
+
+    .notes-btn.primary:hover {
+      background: rgba(59, 130, 246, 0.34);
+      border-color: rgba(125, 211, 252, 0.62);
+    }
+
+    .notes-btn.danger {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(248, 113, 113, 0.38);
+      color: rgba(254, 226, 226, 0.95);
+    }
+
+    .notes-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.28);
+      border-color: rgba(248, 113, 113, 0.56);
     }
     
     /* Botón de copiar para Case ID - solo icono, sin box */
@@ -763,6 +1384,53 @@
         rgba(25, 30, 45, 0.9) 100%
       ) !important;
     }
+
+    .calc-months-payment-card {
+      margin-top: -4px;
+      background: linear-gradient(135deg, 
+        rgba(35, 40, 55, 0.8) 0%, 
+        rgba(25, 30, 45, 0.9) 100%
+      ) !important;
+    }
+
+    /* Program Duration + Monthly Payment - Integrado en la card */
+    .calc-duration-payment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 16px 0 0 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 16px;
+    }
+    
+    .calc-duration-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+    
+    .calc-duration-wheel-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .calc-duration-label-compact {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    
+    .calc-months-payment-card .calc-months-section {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
     
     .calculator-main-card h3 {
       display: flex;
@@ -906,7 +1574,7 @@
     
     /* Monthly Payment - Minimalista sin fondo/borde */
     .calc-monthly-payment-minimal {
-      min-width: 180px;
+      min-width: clamp(150px, 22vw, 220px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -972,6 +1640,29 @@
       font-size: 0.85rem;
       color: rgba(255, 255, 255, 0.7);
     }
+
+    .calc-legal-state-hint {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.72);
+      white-space: nowrap;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
+    }
+
+    .calc-legal-state-word {
+      font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .calc-legal-state-word.red {
+      color: #ef4444;
+    }
+
+    .calc-legal-state-word.green {
+      color: #22c55e;
+    }
     
     .calc-payment-day-row {
       position: relative;
@@ -984,7 +1675,7 @@
     }
     
     .calc-payment-day-trigger {
-      min-width: 190px;
+      min-width: clamp(150px, 24vw, 220px);
       justify-content: space-between;
       gap: 8px;
       padding: 7px 12px;
@@ -1053,34 +1744,36 @@
     /* Wheel Picker Inline - Integrado en el layout */
     .months-inline-wheel-wrapper {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 130px;
+      align-items: stretch;
+      justify-content: center;
+      width: 100%;
+      height: 86px;
       position: relative;
     }
     
     .months-inline-wheel {
       position: relative;
-      width: 96px;
-      height: 130px;
+      width: min(100%, 360px);
+      max-width: 100%;
+      height: 100%;
       overflow: hidden;
-      cursor: ns-resize;
+      cursor: ew-resize;
       touch-action: none;
       user-select: none;
       perspective: 900px;
       border-radius: 12px;
       mask-image: linear-gradient(
-        to bottom,
+        to right,
         transparent 0%,
-        black 18%,
-        black 82%,
+        black 14%,
+        black 86%,
         transparent 100%
       );
       -webkit-mask-image: linear-gradient(
-        to bottom,
+        to right,
         transparent 0%,
-        black 18%,
-        black 82%,
+        black 14%,
+        black 86%,
         transparent 100%
       );
     }
@@ -1098,39 +1791,43 @@
     .months-inline-wheel::after {
       content: '';
       position: absolute;
-      left: 0;
-      right: 0;
-      height: 28px;
+      top: 0;
+      bottom: 0;
+      width: 48px;
       pointer-events: none;
       z-index: 3;
     }
     
     .months-inline-wheel::before {
-      top: 0;
-      background: linear-gradient(180deg, rgba(20, 25, 35, 0.5) 0%, rgba(20, 25, 35, 0) 100%);
+      left: 0;
+      background: linear-gradient(90deg, rgba(20, 25, 35, 0.55) 0%, rgba(20, 25, 35, 0) 100%);
     }
     
     .months-inline-wheel::after {
-      bottom: 0;
-      background: linear-gradient(0deg, rgba(20, 25, 35, 0.5) 0%, rgba(20, 25, 35, 0) 100%);
+      right: 0;
+      background: linear-gradient(270deg, rgba(20, 25, 35, 0.55) 0%, rgba(20, 25, 35, 0) 100%);
     }
     
     .months-wheel-track-inline {
       position: absolute;
       top: 0;
+      bottom: 0;
       left: 0;
-      right: 0;
-      transform: translateY(0);
+      display: flex;
+      align-items: center;
+      transform: translateX(0);
       will-change: transform;
       transition: transform 0.18s cubic-bezier(0.22, 0.75, 0.28, 1);
     }
     
     .months-wheel-item-inline {
-      height: 34px;
+      width: 58px;
+      height: 100%;
+      flex: 0 0 58px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       line-height: 1;
       color: rgba(255, 255, 255, 0.24);
       font-weight: 600;
@@ -1152,23 +1849,35 @@
     }
     
     .months-wheel-indicator-inline {
-      position: absolute;
-      top: 50%;
-      left: 0;
-      right: 0;
-      height: 34px;
-      transform: translateY(-50%);
-      border-top: 1px solid rgba(126, 234, 252, 0.28);
-      border-bottom: 1px solid rgba(126, 234, 252, 0.28);
-      background: linear-gradient(180deg, rgba(126, 234, 252, 0.04) 0%, rgba(126, 234, 252, 0.08) 50%, rgba(126, 234, 252, 0.04) 100%);
-      pointer-events: none;
+      display: none;
       z-index: 2;
     }
     
     .months-unit-inline {
-      font-size: 0.95rem;
-      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.4);
       font-weight: 500;
+      margin-left: 4px;
+    }
+    
+    /* Botones rápidos debajo de la ruleta */
+    .months-quick-buttons.minimal.under-wheel {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      padding-left: 0;
+    }
+    
+    /* Badge del plan en Payment Schedule header */
+    .plan-duration-badge {
+      font-size: 0.85rem;
+      color: var(--accent, #7eeafc);
+      font-weight: 600;
+      padding: 4px 12px;
+      background: rgba(126, 234, 252, 0.1);
+      border-radius: 20px;
+      border: 1px solid rgba(126, 234, 252, 0.2);
     }
     
     /* Botones rápidos - sin cajas */
@@ -1307,7 +2016,7 @@
     
     /* Monthly Payment Box */
     .calc-monthly-payment-box {
-      min-width: 220px;
+      min-width: clamp(190px, 24vw, 280px);
       background: linear-gradient(135deg, 
         rgba(126, 234, 252, 0.15) 0%, 
         rgba(126, 234, 252, 0.05) 100%
@@ -1380,6 +2089,11 @@
     
     /* Responsive Calculator */
     @media (max-width: 900px) {
+      .calc-duration-payment-wrapper {
+        flex-direction: column;
+        gap: 24px;
+      }
+      
       .calc-months-section {
         flex-direction: column;
       }
@@ -1400,6 +2114,20 @@
         rgba(255, 255, 255, 0.8) 0%, 
         rgba(245, 245, 250, 0.9) 100%
       ) !important;
+    }
+
+    body.home-active.theme-light .calc-duration-payment-row {
+      border-top-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calc-duration-label-compact {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .plan-duration-badge {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
     }
     
     body.home-active.theme-light .calc-column-title {
@@ -1422,6 +2150,10 @@
     body.home-active.theme-light .calc-input-prefix,
     body.home-active.theme-light .calc-input-suffix {
       color: rgba(0, 0, 0, 0.4);
+    }
+
+    body.home-active.theme-light .calc-legal-state-hint {
+      color: rgba(0, 0, 0, 0.6);
     }
     
     body.home-active.theme-light .lock-toggle-btn {
@@ -1486,22 +2218,27 @@
     }
     
     body.home-active.theme-light .months-wheel-indicator-inline {
-      border-color: rgba(59, 130, 246, 0.25);
-      background: linear-gradient(180deg, rgba(59, 130, 246, 0.03) 0%, rgba(59, 130, 246, 0.08) 50%, rgba(59, 130, 246, 0.03) 100%);
+      display: none;
     }
     
     body.home-active.theme-light .months-inline-wheel::before {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
     }
     
     body.home-active.theme-light .months-inline-wheel::after {
-      background: linear-gradient(0deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+      background: linear-gradient(270deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
     }
     
     body.home-active.theme-light .months-unit-inline {
       color: rgba(0, 0, 0, 0.5);
     }
     
+    body.home-active.theme-light .plan-duration-badge {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+
     body.home-active.theme-light .monthly-payment-content:hover {
       background: rgba(59, 130, 246, 0.08);
     }
@@ -1575,7 +2312,7 @@
     
     .lead-content-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
       align-content: start;
     }
@@ -1584,32 +2321,58 @@
       .lead-content-grid {
         grid-template-columns: repeat(2, 1fr);
       }
+
+      .calc-months-section {
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      .calc-monthly-payment-minimal,
+      .calc-monthly-payment-box {
+        width: 100%;
+      }
     }
     
     @media (max-width: 900px) {
+      .lead-view-wrapper {
+        height: auto;
+        min-height: var(--lead-viewport-height);
+      }
+
       .lead-content-grid {
         grid-template-columns: 1fr;
         gap: 10px;
       }
       
       .lead-floating {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: auto minmax(0, 1fr) auto;
       }
       
       .lead-logo {
-        display: none;
+        display: block;
+        width: clamp(56px, 12vw, 76px);
       }
       
       .lead-floating .toolbar-wrap {
-        grid-column: 1;
+        grid-column: 2;
       }
       
       .lead-floating .home-actions {
-        grid-column: 2;
+        grid-column: 3;
       }
       
       .lead-content-area {
         padding: 8px 16px;
+      }
+
+      .calc-payment-day-wrapper {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .calc-payment-day-trigger {
+        width: 100%;
+        min-width: 0;
       }
     }
     
@@ -1638,9 +2401,38 @@
       }
       
       .custom-calendar {
-        width: 260px;
+        width: min(260px, calc(100vw - 24px));
         left: 50% !important;
         transform: translateX(-50%);
+      }
+
+      .info-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      .info-row-value,
+      .info-row-value.editable {
+        width: 100%;
+        max-width: 100%;
+        text-align: left;
+        justify-content: flex-start;
+      }
+
+      .calc-input-minimal {
+        min-width: 0;
+      }
+
+      .calc-months-section {
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+      }
+
+      .calc-monthly-payment-minimal,
+      .calc-monthly-payment-box {
+        min-width: 0;
       }
       
       .include-toggle-wrapper {
@@ -1674,6 +2466,7 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
       padding: 16px 20px;
+      min-width: 0;
     }
     
     .lead-info-card h3 {
@@ -1693,7 +2486,7 @@
     .two-column-layout {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      gap: clamp(14px, 2vw, 24px);
       align-items: start;
     }
     
@@ -1816,10 +2609,11 @@
     body {
       margin: 0;
       padding: 0;
-      height: 100vh;
-      width: 100vw;
-      overflow: hidden;
-      position: fixed;
+      min-height: var(--lead-viewport-height);
+      width: 100%;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      position: relative;
     }
     
     /* Callback Row - Contenedor relativo */
@@ -1844,6 +2638,7 @@
       bottom: calc(100% + 4px);
       right: 0;
       width: 260px;
+      max-width: min(260px, calc(100vw - 32px));
       background: linear-gradient(135deg, 
         rgba(40, 40, 55, 0.98) 0%, 
         rgba(25, 25, 35, 0.99) 100%
@@ -1858,6 +2653,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
       z-index: 1000;
       animation: calendarAppear 0.2s ease;
+      min-height: 322px;
     }
     
     @keyframes calendarAppear {
@@ -1934,11 +2730,13 @@
     .calendar-days {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(6, 32px);
       gap: 2px;
+      min-height: calc((32px * 6) + (2px * 5));
     }
     
     .calendar-day {
-      width: 32px;
+      width: 100%;
       height: 32px;
       display: flex;
       align-items: center;
@@ -2007,6 +2805,70 @@
     @keyframes pinPulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.2); opacity: 0.8; }
+    }
+
+    .calendar-jump-popover {
+      position: absolute;
+      top: 52px;
+      left: 12px;
+      right: 12px;
+      z-index: 4;
+      background: rgba(15, 20, 30, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 9px;
+      padding: 8px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .calendar-jump-popover.hidden {
+      display: none;
+    }
+
+    .calendar-jump-popover-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .calendar-jump-input {
+      flex: 1;
+      height: 30px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.78rem;
+      padding: 0 9px;
+      outline: none;
+    }
+
+    .calendar-jump-input:focus {
+      border-color: rgba(126, 234, 252, 0.55);
+      box-shadow: 0 0 0 2px rgba(126, 234, 252, 0.16);
+    }
+
+    .calendar-jump-apply {
+      height: 30px;
+      min-width: 40px;
+      border-radius: 7px;
+      border: 1px solid rgba(126, 234, 252, 0.45);
+      background: rgba(126, 234, 252, 0.12);
+      color: rgba(220, 248, 255, 0.95);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+
+    .calendar-jump-apply:hover {
+      background: rgba(126, 234, 252, 0.2);
+    }
+
+    .calendar-jump-error {
+      margin-top: 6px;
+      min-height: 14px;
+      font-size: 0.68rem;
+      color: rgba(251, 146, 60, 0.95);
     }
     
     /* Callback Button - Estilo Mac simple (Verde) */
@@ -2217,6 +3079,7 @@
       position: absolute;
       right: 0;
       width: 260px;
+      max-width: min(260px, calc(100vw - 32px));
       z-index: 1001;
     }
     
@@ -2305,6 +3168,233 @@
       background: rgba(0, 0, 0, 0.1);
       border-color: rgba(0, 0, 0, 0.15);
       color: #1a1a1a;
+    }
+
+    body.home-active.theme-light .notes-panel {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 251, 255, 0.94) 100%),
+        rgba(255, 255, 255, 0.96);
+      box-shadow:
+        0 20px 42px rgba(15, 23, 42, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    body.home-active.theme-light .notes-panel::before {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    body.home-active.theme-light .notes-panel-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-panel-title,
+    body.home-active.theme-light .notes-composer-label,
+    body.home-active.theme-light .notes-templates-title {
+      color: rgba(15, 23, 42, 0.78);
+    }
+
+    body.home-active.theme-light .notes-save-status {
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    body.home-active.theme-light .notes-composer {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.95);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-composer:focus {
+      border-color: rgba(59, 130, 246, 0.58);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    body.home-active.theme-light .notes-feed-empty {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(15, 23, 42, 0.03);
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .note-card {
+      border-color: rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.75);
+    }
+
+    body.home-active.theme-light .note-card.note-color-yellow {
+      border-color: rgba(15, 23, 42, 0.12);
+      background:
+        linear-gradient(165deg, rgba(255, 235, 170, 0.45) 0%, rgba(255, 220, 120, 0.28) 100%),
+        rgba(255, 255, 255, 0.75);
+    }
+
+    body.home-active.theme-light .note-card.note-color-red {
+      border-color: rgba(239, 68, 68, 0.32);
+      background:
+        linear-gradient(165deg, rgba(248, 113, 113, 0.26) 0%, rgba(239, 68, 68, 0.17) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-green {
+      border-color: rgba(34, 197, 94, 0.3);
+      background:
+        linear-gradient(165deg, rgba(74, 222, 128, 0.25) 0%, rgba(34, 197, 94, 0.16) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-blue {
+      border-color: rgba(59, 130, 246, 0.3);
+      background:
+        linear-gradient(165deg, rgba(96, 165, 250, 0.26) 0%, rgba(59, 130, 246, 0.16) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-gray {
+      border-color: rgba(100, 116, 139, 0.28);
+      background:
+        linear-gradient(165deg, rgba(148, 163, 184, 0.26) 0%, rgba(100, 116, 139, 0.15) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card-author {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .note-card-time {
+      color: rgba(15, 23, 42, 0.58);
+    }
+
+    body.home-active.theme-light .note-card-content {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .note-card-menu-btn {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(15, 23, 42, 0.08);
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .note-card-menu-btn:hover {
+      border-color: rgba(15, 23, 42, 0.3);
+      background: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .note-card-menu {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.98) 100%),
+        rgba(255, 255, 255, 0.98);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .note-card-menu-item {
+      background: rgba(15, 23, 42, 0.04);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .note-card-menu-item:hover {
+      background: rgba(15, 23, 42, 0.1);
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+
+    body.home-active.theme-light .note-card-menu-item.danger {
+      color: #b91c1c;
+    }
+
+    body.home-active.theme-light .note-card-menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    body.home-active.theme-light .note-card-menu-divider {
+      background: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .note-card-menu-color-option.active {
+      border-color: rgba(59, 130, 246, 0.38);
+      background: rgba(59, 130, 246, 0.16);
+    }
+
+    body.home-active.theme-light .note-color-swatch {
+      border-color: rgba(15, 23, 42, 0.28);
+    }
+
+    body.home-active.theme-light .notes-templates-block {
+      border-top-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-template-select {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.96);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notes-btn {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.88);
+    }
+
+    body.home-active.theme-light .notes-btn:hover {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: rgba(59, 130, 246, 0.32);
+    }
+
+    body.home-active.theme-light .notes-btn.primary {
+      background: rgba(37, 99, 235, 0.18);
+      border-color: rgba(37, 99, 235, 0.36);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-btn.primary:hover {
+      background: rgba(37, 99, 235, 0.24);
+      border-color: rgba(37, 99, 235, 0.44);
+    }
+
+    body.home-active.theme-light .notes-btn.danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.32);
+      color: rgba(127, 29, 29, 0.92);
+    }
+
+    body.home-active.theme-light .notes-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.44);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-backdrop {
+      background: rgba(15, 23, 42, 0.32);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-content {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.96) 100%),
+        rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 46px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-header h3,
+    body.home-active.theme-light .notes-templates-manager-label {
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .notes-templates-manager-select,
+    body.home-active.theme-light .notes-templates-manager-input,
+    body.home-active.theme-light .notes-templates-manager-textarea {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.95);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-templates-manager-input:focus,
+    body.home-active.theme-light .notes-templates-manager-textarea:focus {
+      border-color: rgba(59, 130, 246, 0.54);
+      background: rgba(255, 255, 255, 1);
     }
     
     body.home-active.theme-light .copy-icon-btn {
@@ -2480,6 +3570,16 @@
       color: #7c3aed;
       border-color: rgba(168, 85, 247, 0.4);
     }
+
+    body.home-active.theme-light .lead-related-badge {
+      background: rgba(59, 130, 246, 0.14);
+      color: #1d4ed8;
+      border-color: rgba(59, 130, 246, 0.35);
+    }
+
+    body.home-active.theme-light .lead-related-badge:hover {
+      background: rgba(59, 130, 246, 0.22);
+    }
     
     body.home-active.theme-light .lead-toolbar {
       border-top-color: rgba(0, 0, 0, 0.1);
@@ -2582,6 +3682,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 16px;
     }
     
     .notif-modal-backdrop {
@@ -2595,6 +3696,7 @@
       position: relative;
       width: 90%;
       max-width: 420px;
+      max-height: min(86vh, 760px);
       background: linear-gradient(135deg, 
         rgba(30, 30, 40, 0.95) 0%, 
         rgba(20, 20, 30, 0.98) 100%
@@ -2605,6 +3707,7 @@
       padding: 24px;
       box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
       animation: modalSlideIn 0.3s ease;
+      overflow-y: auto;
     }
     
     @keyframes modalSlideIn {
@@ -2865,6 +3968,37 @@
     body.home-active.theme-light .calendar-day.selected::after {
       background: #22c55e;
     }
+
+    body.home-active.theme-light .calendar-jump-popover {
+      background: rgba(255, 255, 255, 0.98);
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+    }
+
+    body.home-active.theme-light .calendar-jump-input {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(148, 163, 184, 0.12);
+      color: rgba(15, 23, 42, 0.95);
+    }
+
+    body.home-active.theme-light .calendar-jump-input:focus {
+      border-color: rgba(59, 130, 246, 0.55);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+    }
+
+    body.home-active.theme-light .calendar-jump-apply {
+      border-color: rgba(59, 130, 246, 0.35);
+      background: rgba(59, 130, 246, 0.12);
+      color: rgba(30, 64, 175, 0.95);
+    }
+
+    body.home-active.theme-light .calendar-jump-apply:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+
+    body.home-active.theme-light .calendar-jump-error {
+      color: rgba(217, 119, 6, 0.95);
+    }
     
     body.home-active.theme-light .liquid-glass-btn {
       background: linear-gradient(135deg, 
@@ -2893,6 +4027,165 @@
     body.home-active.theme-light .callback-mac-btn:hover {
       background: #16a34a;
     }
+
+    /* Pass de contraste global para tema claro */
+    body.home-active.theme-light .loading {
+      color: rgba(15, 23, 42, 0.66);
+    }
+
+    body.home-active.theme-light .loading svg {
+      color: #2563eb;
+      stroke: #2563eb;
+    }
+
+    body.home-active.theme-light .lead-state-badge,
+    body.home-active.theme-light .lead-test-badge,
+    body.home-active.theme-light .lead-related-badge,
+    body.home-active.theme-light .plan-duration-badge {
+      font-weight: 700;
+    }
+
+    body.home-active.theme-light .notif-item-date.today-badge {
+      color: #15803d;
+    }
+
+    body.home-active.theme-light #bankingSection,
+    body.home-active.theme-light #budgetSection,
+    body.home-active.theme-light #creditorsSection {
+      color: rgba(15, 23, 42, 0.62) !important;
+    }
+
+    body.home-active.theme-light #bankingSection h2,
+    body.home-active.theme-light #budgetSection h2,
+    body.home-active.theme-light #creditorsSection h2 {
+      color: rgba(15, 23, 42, 0.9) !important;
+    }
+
+    body.home-active.theme-light #bankingSection p,
+    body.home-active.theme-light #budgetSection p,
+    body.home-active.theme-light #creditorsSection p {
+      color: rgba(15, 23, 42, 0.62) !important;
+    }
+
+    body.home-active.theme-light #bankingSection svg,
+    body.home-active.theme-light #budgetSection svg,
+    body.home-active.theme-light #creditorsSection svg {
+      stroke: rgba(15, 23, 42, 0.5) !important;
+      opacity: 0.72 !important;
+    }
+
+    /* Pass de contraste v2 por pantalla (detalle de lead) */
+    body.home-active.theme-light .lead-tabs-nav {
+      background: rgba(255, 255, 255, 0.76);
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .lead-tab {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .lead-tab:hover {
+      color: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.08);
+    }
+
+    body.home-active.theme-light .lead-tab.active {
+      color: #1d4ed8;
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    body.home-active.theme-light .lead-info-card {
+      background: rgba(255, 255, 255, 0.7);
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    body.home-active.theme-light .lead-info-card h3 {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .info-row-label {
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    body.home-active.theme-light .info-row-value {
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .calc-column-title {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .calc-result-label,
+    body.home-active.theme-light .monthly-payment-label-minimal,
+    body.home-active.theme-light .months-unit-inline {
+      color: rgba(15, 23, 42, 0.68);
+    }
+
+    body.home-active.theme-light .calc-result-value,
+    body.home-active.theme-light .monthly-payment-amount-minimal,
+    body.home-active.theme-light .months-number,
+    body.home-active.theme-light .calc-input-field {
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .schedule-table th {
+      color: rgba(15, 23, 42, 0.78);
+    }
+
+    body.home-active.theme-light .schedule-table td {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notif-item-name {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notif-item-date {
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .notif-item-link {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .calendar-weekdays span {
+      color: rgba(15, 23, 42, 0.56);
+    }
+
+    body.home-active.theme-light .calendar-day {
+      color: rgba(15, 23, 42, 0.84);
+    }
+
+    body.home-active.theme-light .calendar-day.other-month {
+      color: rgba(15, 23, 42, 0.36);
+    }
+
+    body.home-active.theme-light .liquid-glass-btn {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .calc-toggle-label-small {
+      color: rgba(15, 23, 42, 0.84);
+    }
+
+    body.home-active.theme-light .calc-legal-state-hint {
+      color: rgba(15, 23, 42, 0.72);
+    }
+
+    body.home-active.theme-light .calc-toggle {
+      background: rgba(15, 23, 42, 0.18);
+      border-color: rgba(15, 23, 42, 0.24);
+    }
+
+    body.home-active.theme-light .calc-toggle-thumb {
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+    }
+
+    body.home-active.theme-light .calc-toggle.active {
+      background: rgba(22, 163, 74, 0.72);
+      border-color: rgba(22, 163, 74, 0.66);
+    }
     
     body.home-active.theme-light {
       background: #f5f5f7;
@@ -2906,7 +4199,9 @@
   <main class="lead-view-wrapper">
     <div class="lead-floating">
       <!-- Logo -->
-      <img class="lead-logo" src="reference/CD logo.png" alt="Cero Deuda" />
+      <button class="lead-logo" type="button" aria-label="Ir al leaderboard" onclick="window.location.href='index.html'">
+        <img src="reference/CD logo.png" alt="Cero Deuda" />
+      </button>
       
       <!-- TOOLBAR - Copiado idéntico del dashboard -->
       <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
@@ -3066,6 +4361,15 @@
             
             <!-- Badge de Test (si aplica) -->
             <span id="testBadge" class="lead-test-badge hidden">Test</span>
+
+            <!-- Badge de relación -->
+            <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
+                <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"/>
+              </svg>
+              <span id="relatedLeadBadgeText">Relacionado con #</span>
+            </a>
           </div>
           
           <!-- Case ID y botones de acción -->
@@ -3105,12 +4409,43 @@
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
               </button>
-              <button class="action-icon-btn" id="notesBtn" title="Notas">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
+              <div class="notes-anchor">
+                <button class="action-icon-btn" id="notesBtn" title="Notas" aria-controls="notesPanel" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <section id="notesPanel" class="notes-panel hidden" aria-label="Notas del lead">
+                  <div class="notes-panel-header">
+                    <span class="notes-panel-title">Notas</span>
+                    <button class="notes-panel-close modal-close-mac" id="notesCloseBtn" type="button" title="Cerrar notas"></button>
+                  </div>
+                  <div class="notes-panel-body">
+                    <div id="notesComposerWrap" class="hidden">
+                      <label class="notes-composer-label" for="notesComposerTextarea">Nueva nota</label>
+                      <textarea id="notesComposerTextarea" class="notes-composer" placeholder="Escribe una nota y presiona Agregar..."></textarea>
+                    </div>
+                    <div class="notes-actions-row">
+                      <button id="notesAddBtn" class="notes-btn primary" type="button">Agregar nota</button>
+                      <span id="notesStatus" class="notes-save-status">Sin notas</span>
+                    </div>
+                    <div id="notesList" class="notes-feed" aria-live="polite"></div>
+                    <div class="notes-templates-block">
+                      <div class="notes-templates-header">
+                        <span class="notes-templates-title">Templates</span>
+                      </div>
+                      <select id="notesTemplateSelect" class="notes-template-select" aria-label="Seleccionar template">
+                        <option value="">Seleccionar template...</option>
+                      </select>
+                      <div class="notes-template-actions notes-template-actions-clean">
+                        <button id="notesTemplateUseBtn" class="notes-btn" type="button">Usar</button>
+                        <button id="notesTemplateManageBtn" class="notes-btn" type="button">Editar mis templates</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
           
@@ -3207,7 +4542,7 @@
                   <span class="info-row-label">Total Debt</span>
                   <div class="calc-input-minimal copy-on-click" id="copyTotalDebt" title="Click para copiar">
                     <span class="calc-input-prefix">$</span>
-                    <input type="text" class="calc-input-field" id="calcTotalDebt" value="21,694.00" readonly>
+                    <input type="text" class="calc-input-field" id="calcTotalDebt" value="0.00" readonly>
                   </div>
                 </div>
                 
@@ -3224,7 +4559,7 @@
                         <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
                       </svg>
                     </button>
-                    <input type="text" class="calc-input-field percent" id="calcSettlementPercent" value="55" readonly>
+                    <input type="text" class="calc-input-field percent" id="calcSettlementPercent" value="0" readonly>
                     <span class="calc-input-suffix">%</span>
                   </div>
                 </div>
@@ -3242,7 +4577,7 @@
                         <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
                       </svg>
                     </button>
-                    <input type="text" class="calc-input-field percent" id="calcProgramFeePercent" value="25" readonly>
+                    <input type="text" class="calc-input-field percent" id="calcProgramFeePercent" value="0" readonly>
                     <span class="calc-input-suffix">%</span>
                   </div>
                 </div>
@@ -3261,13 +4596,14 @@
                       </svg>
                     </button>
                     <span class="calc-input-prefix">$</span>
-                    <input type="text" class="calc-input-field" id="calcBankFee" value="9.95" readonly>
+                    <input type="text" class="calc-input-field" id="calcBankFee" value="0.00" readonly>
                   </div>
                 </div>
                 
                 <div class="info-row">
                   <span class="info-row-label">Legal Plan</span>
                   <div class="calc-toggle-wrapper-inline" id="calcLegalPlanToggle">
+                    <span id="calcLegalPlanStateHint" class="calc-legal-state-hint hidden" aria-live="polite"></span>
                     <span class="calc-toggle-label-small">Incluir ($24.99/mes)</span>
                     <div class="calc-toggle" id="calcLegalPlanSwitch">
                       <div class="calc-toggle-thumb"></div>
@@ -3356,36 +4692,33 @@
               </div>
             </div>
             
-            <!-- Sección especial: Meses y Monthly Payment -->
-            <div class="calc-months-section">
-              <div class="calc-months-control">
-                <span class="calc-months-label">Program Duration</span>
-                
-                <!-- Wheel Picker Inline - Integrado directamente -->
-                <div class="months-inline-wheel-wrapper">
-                  <div class="months-inline-wheel" id="monthsInlineWheel" role="spinbutton" aria-label="Program duration in months" aria-valuemin="6" aria-valuemax="120" aria-valuenow="48" tabindex="0">
-                    <div class="months-wheel-track-inline" id="monthsWheelTrackInline">
-                      <!-- Items generados dinámicamente -->
+            <!-- Sección especial: Meses y Monthly Payment - Compacto -->
+            <div class="calc-duration-payment-row">
+              <!-- Program Duration -->
+              <div class="calc-duration-compact">
+                <div class="calc-duration-wheel-area">
+                  <span class="calc-duration-label-compact">Program Duration</span>
+                  <div class="months-inline-wheel-wrapper compact">
+                    <div class="months-inline-wheel compact" id="monthsInlineWheel" role="spinbutton" aria-label="Program duration in months" aria-valuemin="6" aria-valuemax="120" aria-valuenow="48" tabindex="0">
+                      <div class="months-wheel-track-inline" id="monthsWheelTrackInline"></div>
                     </div>
-                    <div class="months-wheel-indicator-inline"></div>
                   </div>
-                  <span class="months-unit-inline">months</span>
                 </div>
                 
-                <!-- Botones rápidos sin caja -->
-                <div class="months-quick-buttons minimal">
+                <!-- Botones rápidos debajo de la ruleta -->
+                <div class="months-quick-buttons minimal under-wheel">
                   <button class="months-quick-btn minimal" data-months="12">12</button>
                   <button class="months-quick-btn minimal" data-months="24">24</button>
                   <button class="months-quick-btn minimal" data-months="36">36</button>
                   <button class="months-quick-btn minimal active" data-months="48">48</button>
                   <button class="months-quick-btn minimal" data-months="60">60</button>
-                  </div>
+                  <span class="months-unit-inline">months</span>
                 </div>
                 
                 <input type="hidden" id="calcMonths" value="48">
               </div>
               
-              <!-- Monthly Payment destacado - Minimalista -->
+              <!-- Monthly Payment -->
               <div class="calc-monthly-payment-minimal">
                 <div class="monthly-payment-content" id="copyMonthlyPayment" title="Click para copiar (meses + monto)">
                   <span class="monthly-payment-label-minimal">Monthly Payment</span>
@@ -3399,12 +4732,12 @@
                 </div>
               </div>
             </div>
-          </div>
           
           <!-- Payment Schedule -->
           <div class="lead-info-card lead-info-card-wide payment-schedule-card">
             <div class="schedule-header">
               <h3 class="calculator-section-title" style="margin:0;padding:0;border:none;">Payment Schedule</h3>
+              <span class="plan-duration-badge" id="planDurationText">4 años</span>
             </div>
             <div class="schedule-table-container">
               <table class="schedule-table">
@@ -3457,1936 +4790,39 @@
       </div>
     </div>
   </main>
-  
-  <script>
-    // ============================================
-    // TEMA
-    // ============================================
-    const THEME_KEY = 'project_gw_theme';
-    const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
-    document.body.classList.remove('theme-dark', 'theme-light');
-    document.body.classList.add(`theme-${savedTheme}`);
-    
-    const themeSwitch = document.getElementById('themeSwitch');
-    if (themeSwitch) {
-      themeSwitch.checked = savedTheme === 'light';
-      themeSwitch.addEventListener('change', () => {
-        const newTheme = themeSwitch.checked ? 'light' : 'dark';
-        document.body.classList.remove('theme-dark', 'theme-light');
-        document.body.classList.add(`theme-${newTheme}`);
-        localStorage.setItem(THEME_KEY, newTheme);
-      });
-    }
-    
-    // ============================================
-    // MENU DE CUENTA
-    // ============================================
-    const accountBtn = document.getElementById('accountBtn');
-    const accountMenu = document.getElementById('accountMenu');
-    
-    if (accountBtn && accountMenu) {
-      accountBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = accountMenu.classList.toggle('hidden');
-        accountBtn.setAttribute('aria-expanded', !isOpen);
-      });
-      
-      document.addEventListener('click', () => {
-        accountMenu.classList.add('hidden');
-        accountBtn.setAttribute('aria-expanded', 'false');
-      });
-    }
-    
-    // Cerrar sesión
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem('project_gw_session');
-        window.location.href = 'index.html';
-      });
-    }
-    
-    // ============================================
-    // TOOLBAR TOGGLE
-    // ============================================
-    const toolbarToggle = document.getElementById('toolbarToggle');
-    const toolbarWrap = document.getElementById('toolbarWrap');
-    
-    if (toolbarToggle && toolbarWrap) {
-      toolbarToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = toolbarWrap.classList.toggle('expanded');
-        toolbarToggle.setAttribute('aria-expanded', isOpen);
-      });
-    }
-    
-    // ============================================
-    // NOMBRE EDITABLE Y COPIAR
-    // ============================================
-    const leadNameEl = document.getElementById('leadName');
-    const copyNameBtn = document.getElementById('copyNameBtn');
-    const caseNumberEl = document.getElementById('caseNumber');
-    const copyCaseBtn = document.getElementById('copyCaseBtn');
-    let originalName = '';
-    let caseIdValue = '';
-    let currentLeadId = null;
-    
-    // Manejo de Applicant / Co-Applicant
-    let isApplicant = true;
-    let applicantData = { fullName: '', phone: '', email: '', dob: '', ssn: '' };
-    let coApplicantData = { fullName: '', phone: '', email: '', dob: '', ssn: '' };
-    
-    const applicantToggleBtn = document.getElementById('applicantToggleBtn');
-    const applicantTypeLabel = document.getElementById('applicantTypeLabel');
-    
-    if (applicantToggleBtn && applicantTypeLabel) {
-      // Elementos del toggle "Incluir en contrato"
-      const includeToggleWrapper = document.getElementById('includeCoAppToggleWrapper');
-      const includeToggle = document.getElementById('includeCoAppToggle');
-      const includeToggleStatus = document.getElementById('includeToggleStatus');
-      
-      // Función para actualizar el estado visual del toggle
-      function updateToggleVisualState() {
-        if (includeToggleWrapper && includeToggle && includeToggleStatus) {
-          const isChecked = includeToggle.checked;
-          includeToggleWrapper.classList.toggle('active', isChecked);
-          includeToggleStatus.textContent = isChecked ? 'ON' : 'OFF';
-        }
-      }
-      
-      applicantToggleBtn.addEventListener('click', () => {
-        // Guardar datos actuales antes de cambiar
-        if (isApplicant) {
-          applicantData.fullName = leadNameEl ? leadNameEl.textContent.trim() : '';
-        } else {
-          coApplicantData.fullName = leadNameEl ? leadNameEl.textContent.trim() : '';
-        }
-        
-        // Cambiar estado
-        isApplicant = !isApplicant;
-        
-        // Rotar botón
-        applicantToggleBtn.classList.toggle('rotated', !isApplicant);
-        
-        // Actualizar etiqueta y estilos
-        if (isApplicant) {
-          applicantTypeLabel.textContent = 'Applicant';
-          applicantTypeLabel.classList.remove('co-applicant');
-          applicantToggleBtn.title = 'Cambiar a Co-Applicant';
-          
-          // Ocultar toggle de "Incluir en contrato"
-          if (includeToggleWrapper) {
-            includeToggleWrapper.classList.add('hidden');
-          }
-          
-          // Restaurar datos del Applicant
-          if (leadNameEl) {
-            leadNameEl.textContent = applicantData.fullName || originalName;
-          }
-        } else {
-          applicantTypeLabel.textContent = 'Co-Applicant';
-          applicantTypeLabel.classList.add('co-applicant');
-          applicantToggleBtn.title = 'Cambiar a Applicant';
-          
-          // Mostrar toggle de "Incluir en contrato"
-          if (includeToggleWrapper) {
-            includeToggleWrapper.classList.remove('hidden');
-            updateToggleVisualState();
-          }
-          
-          // Mostrar datos del Co-Applicant
-          if (leadNameEl) {
-            leadNameEl.textContent = coApplicantData.fullName || 'Nuevo Co-Applicant';
-          }
-        }
-        
-        showToast(`Cambiado a ${isApplicant ? 'Applicant' : 'Co-Applicant'}`, 'info');
-      });
-      
-      // Event listener para el toggle "Incluir en contrato"
-      if (includeToggle) {
-        includeToggle.addEventListener('change', () => {
-          updateToggleVisualState();
-          showToast(
-            includeToggle.checked 
-              ? 'Co-Applicant será incluido en el contrato' 
-              : 'Co-Applicant no será incluido en el contrato', 
-            includeToggle.checked ? 'success' : 'info'
-          );
-        });
-      }
-    }
-    
-    // Hacer el nombre editable al hacer click
-    if (leadNameEl) {
-      leadNameEl.addEventListener('click', () => {
-        if (leadNameEl.contentEditable === 'false') {
-          leadNameEl.contentEditable = 'true';
-          leadNameEl.classList.add('editing');
-          leadNameEl.focus();
-          
-          // Seleccionar todo el texto
-          const range = document.createRange();
-          range.selectNodeContents(leadNameEl);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      });
-      
-      // Guardar al perder foco o presionar Enter
-      leadNameEl.addEventListener('blur', () => {
-        saveName();
-      });
-      
-      leadNameEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          leadNameEl.blur();
-        } else if (e.key === 'Escape') {
-          leadNameEl.textContent = originalName;
-          leadNameEl.blur();
-        }
-      });
-    }
-    
-    async function saveName() {
-      if (!leadNameEl) return;
-      
-      leadNameEl.contentEditable = 'false';
-      leadNameEl.classList.remove('editing');
-      
-      const newName = leadNameEl.textContent.trim();
-      const currentOriginal = isApplicant ? originalName : (coApplicantData.fullName || '');
-      
-      if (newName && newName !== currentOriginal) {
-        try {
-          // Obtener el ID del lead de la URL
-          const urlParams = new URLSearchParams(window.location.search);
-          const leadId = urlParams.get('id');
-          
-          if (!leadId) {
-            showToast('Error: No se encontró el ID del lead', 'error');
-            leadNameEl.textContent = currentOriginal;
-            return;
-          }
-          
-          // Guardar en memoria según el tipo
-          if (isApplicant) {
-            applicantData.fullName = newName;
-          } else {
-            coApplicantData.fullName = newName;
-          }
-          
-          // Llamada al backend para actualizar
-          const response = await fetch(`/api/leads/${leadId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              fullName: isApplicant ? newName : originalName,
-              coApplicantName: isApplicant ? (coApplicantData.fullName || '') : newName
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error('Error al actualizar');
-          }
-          
-          if (isApplicant) {
-            originalName = newName;
-          }
-          
-          showToast(`${isApplicant ? 'Applicant' : 'Co-Applicant'} actualizado correctamente`, 'success');
-        } catch (error) {
-          console.error('Error:', error);
-          showToast('Error al actualizar el nombre', 'error');
-          leadNameEl.textContent = currentOriginal;
-        }
-      } else {
-        leadNameEl.textContent = currentOriginal;
-      }
-    }
-    
-    // Botón de copiar nombre (con box)
-    if (copyNameBtn) {
-      copyNameBtn.addEventListener('click', async () => {
-        const name = leadNameEl ? leadNameEl.textContent.trim() : '';
-        if (name) {
-          try {
-            await navigator.clipboard.writeText(name);
-            copyNameBtn.classList.add('copied');
-            copyNameBtn.innerHTML = `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            `;
-            
-            setTimeout(() => {
-              copyNameBtn.classList.remove('copied');
-              copyNameBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              `;
-            }, 2000);
-          } catch (err) {
-            console.error('Error al copiar:', err);
-          }
-        }
-      });
-    }
-    
-    // Botón de copiar Case ID (solo icono, sin box)
-    if (copyCaseBtn) {
-      copyCaseBtn.addEventListener('click', async () => {
-        if (caseIdValue) {
-          try {
-            await navigator.clipboard.writeText(caseIdValue);
-            copyCaseBtn.classList.add('copied');
-            copyCaseBtn.innerHTML = `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            `;
-            
-            setTimeout(() => {
-              copyCaseBtn.classList.remove('copied');
-              copyCaseBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              `;
-            }, 2000);
-          } catch (err) {
-            console.error('Error al copiar:', err);
-          }
-        }
-      });
-    }
-    
-    // ============================================
-    // TOAST NOTIFICATIONS
-    // ============================================
-    function showToast(message, type = 'info') {
-      let container = document.getElementById('toastContainer');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'toastContainer';
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-      }
-      
-      const toast = document.createElement('div');
-      toast.className = `toast ${type}`;
-      
-      const iconSvg = type === 'success' 
-        ? '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="20" height="20"><path d="M5 13l4 4L19 7"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><path d="M12 7v6m0 4v-2"/></svg>';
-      
-      toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-      container.appendChild(toast);
-      
-      setTimeout(() => {
-        toast.classList.add('hide');
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    }
-    
-    // ============================================
-    // CUSTOM CALENDAR - LIQUID GLASS
-    // ============================================
-    let currentCalendarDate = new Date();
-    let selectedCallbackDate = null;
-    let calendarLeadId = null;
-    let calendarLeadName = '';
-    
-    function initCallbackCalendar(leadId, leadName) {
-      calendarLeadId = leadId;
-      calendarLeadName = leadName;
-      
-      const calendarBtn = document.getElementById('callbackCalendarBtn');
-      const calendarEl = document.getElementById('customCalendar');
-      const dateDisplay = document.getElementById('callbackDateDisplay');
-      const macBtn = document.getElementById('callbackMacBtn');
-      
-      // Cargar fecha guardada
-      const savedCallback = localStorage.getItem(`lead_callback_${leadId}`);
-      if (savedCallback) {
-        selectedCallbackDate = savedCallback;
-        dateDisplay.textContent = new Date(savedCallback).toLocaleDateString('es-ES');
-        if (macBtn) macBtn.classList.remove('hidden');
-      }
-      
-      function openCalendar() {
-        calendarEl.classList.remove('hidden');
-        renderCalendar();
-      }
-      
-      function closeCalendar() {
-        calendarEl.classList.add('hidden');
-      }
-      
-      // Abrir/cerrar calendario
-      if (calendarBtn) {
-        calendarBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (calendarEl.classList.contains('hidden')) {
-            openCalendar();
-          } else {
-            closeCalendar();
-          }
-        });
-      }
-      
-      // Cerrar al hacer click fuera
-      document.addEventListener('click', (e) => {
-        if (!calendarEl.contains(e.target) && !calendarBtn.contains(e.target)) {
-          closeCalendar();
-        }
-      });
-      
-      // Navegación del calendario
-      document.getElementById('calendarPrev').addEventListener('click', (e) => {
-        e.stopPropagation();
-        currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
-        renderCalendar();
-      });
-      
-      document.getElementById('calendarNext').addEventListener('click', (e) => {
-        e.stopPropagation();
-        currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
-        renderCalendar();
-      });
-      
-      // Botón Mac para eliminar callback
-      if (macBtn) {
-        macBtn.addEventListener('click', () => {
-          selectedCallbackDate = null;
-          localStorage.removeItem(`lead_callback_${leadId}`);
-          localStorage.removeItem(`lead_callback_name_${leadId}`);
-          macBtn.classList.add('hidden');
-          dateDisplay.textContent = 'Seleccionar fecha';
-          showToast('Callback eliminado', 'info');
-          updateNotificationBadge();
-          renderCalendar();
-        });
-      }
-    }
-    
-    // ============================================
-    // CAMPOS EDITABLES Y FUNCIONALIDAD DE COPIAR
-    // ============================================
-    
-    function initEditableFields() {
-      const editableFields = document.querySelectorAll('.info-row-value.editable[data-field]');
-      
-      editableFields.forEach(field => {
-        const canCopy = field.dataset.copy === 'true';
-        const fieldName = field.dataset.field;
-        
-        // Agregar icono de copiar si aplica
-        if (canCopy && !field.querySelector('.copy-icon')) {
-          const copyIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          copyIcon.setAttribute('viewBox', '0 0 24 24');
-          copyIcon.setAttribute('fill', 'none');
-          copyIcon.setAttribute('stroke', 'currentColor');
-          copyIcon.setAttribute('stroke-width', '2');
-          copyIcon.classList.add('copy-icon');
-          copyIcon.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
-          copyIcon.title = 'Copiar';
-          
-          copyIcon.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const textToCopy = field.textContent.trim();
-            navigator.clipboard.writeText(textToCopy).then(() => {
-              showToast('Copiado al portapapeles', 'success');
-            }).catch(() => {
-              showToast('Error al copiar', 'error');
-            });
-          });
-          
-          field.appendChild(copyIcon);
-        }
-        
-        // Hacer editable al hacer click (excepto DOB que tiene calendario)
-        if (fieldName !== 'dob') {
-          field.addEventListener('click', () => {
-            makeFieldEditable(field, fieldName);
-          });
-        }
-      });
-    }
-    
-    function makeFieldEditable(field, fieldName) {
-      if (field.querySelector('input')) return; // Ya está en modo edición
-      
-      const currentValue = field.childNodes[0]?.textContent?.trim() || field.textContent.trim();
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = currentValue === 'No especificado' ? '' : currentValue;
-      
-      // Guardar referencia al icono de copiar si existe
-      const copyIcon = field.querySelector('.copy-icon');
-      if (copyIcon) copyIcon.style.display = 'none';
-      
-      field.textContent = '';
-      field.appendChild(input);
-      input.focus();
-      
-      function saveEdit() {
-        const newValue = input.value.trim() || 'No especificado';
-        field.textContent = newValue;
-        if (copyIcon) {
-          field.appendChild(copyIcon);
-          copyIcon.style.display = '';
-        }
-        
-        // Aquí se puede agregar llamada a API para guardar cambios
-        console.log(`Campo ${fieldName} actualizado:`, newValue);
-        showToast('Campo actualizado', 'success');
-      }
-      
-      input.addEventListener('blur', saveEdit);
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          input.blur();
-        } else if (e.key === 'Escape') {
-          input.value = currentValue;
-          input.blur();
-        }
-      });
-    }
-    
-    // ============================================
-    // CALENDARIO PARA DOB
-    // ============================================
-    
-    let dobCalendarDate = new Date();
-    let selectedDOB = null;
-    
-    function initDOBCalendar() {
-      const dobTrigger = document.getElementById('dobTrigger');
-      const dobCalendar = document.getElementById('dobCalendar');
-      
-      if (!dobTrigger || !dobCalendar) return;
-      
-      dobTrigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dobCalendar.classList.toggle('hidden');
-        if (!dobCalendar.classList.contains('hidden')) {
-          renderDOBCalendar();
-        }
-      });
-      
-      // Cerrar al hacer click fuera
-      document.addEventListener('click', (e) => {
-        if (!dobCalendar.contains(e.target) && !dobTrigger.contains(e.target)) {
-          dobCalendar.classList.add('hidden');
-        }
-      });
-      
-      // Navegación
-      document.getElementById('dobCalendarPrev').addEventListener('click', (e) => {
-        e.stopPropagation();
-        dobCalendarDate.setMonth(dobCalendarDate.getMonth() - 1);
-        renderDOBCalendar();
-      });
-      
-      document.getElementById('dobCalendarNext').addEventListener('click', (e) => {
-        e.stopPropagation();
-        dobCalendarDate.setMonth(dobCalendarDate.getMonth() + 1);
-        renderDOBCalendar();
-      });
-    }
-    
-    function renderDOBCalendar() {
-      const year = dobCalendarDate.getFullYear();
-      const month = dobCalendarDate.getMonth();
-      
-      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      document.getElementById('dobCalendarMonthYear').textContent = `${monthNames[month]} ${year}`;
-      
-      const daysContainer = document.getElementById('dobCalendarDays');
-      daysContainer.innerHTML = '';
-      
-      const firstDay = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const daysInPrevMonth = new Date(year, month, 0).getDate();
-      
-      // Días del mes anterior
-      for (let i = firstDay - 1; i >= 0; i--) {
-        const dayEl = document.createElement('button');
-        dayEl.className = 'calendar-day other-month';
-        dayEl.textContent = daysInPrevMonth - i;
-        daysContainer.appendChild(dayEl);
-      }
-      
-      // Días del mes actual
-      const today = new Date();
-      for (let i = 1; i <= daysInMonth; i++) {
-        const dayEl = document.createElement('button');
-        dayEl.className = 'calendar-day';
-        dayEl.textContent = i;
-        
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        
-        if (selectedDOB === dateStr) {
-          dayEl.classList.add('selected');
-        }
-        
-        // Deshabilitar fechas futuras para DOB
-        const currentDate = new Date(year, month, i);
-        if (currentDate > today) {
-          dayEl.classList.add('disabled');
-          dayEl.disabled = true;
-        } else {
-          dayEl.addEventListener('click', () => {
-            selectedDOB = dateStr;
-            document.getElementById('dobValue').textContent = new Date(dateStr).toLocaleDateString('es-ES');
-            document.getElementById('dobCalendar').classList.add('hidden');
-            showToast('Fecha de nacimiento actualizada', 'success');
-            renderDOBCalendar();
-          });
-        }
-        
-        daysContainer.appendChild(dayEl);
-      }
-    }
-    
-    // ============================================
-    // TOGGLE SELF EMPLOYED
-    // ============================================
-    
-    // ============================================
-    // CALCULATOR LOGIC - REDESIGNED
-    // ============================================
-    
-    let calculatorInitialized = false;
-    let currentMonths = 48;
-    let calcPaymentDayCalendarDate = new Date();
-    let selectedCalcPaymentDay = null;
-    
-    function initCalculator() {
-      if (calculatorInitialized) {
-        calculateAll();
-        return;
-      }
-      
-      calculatorInitialized = true;
-      
-      // Todos los inputs de configuración
-      const configInputs = [
-        'calcTotalDebt',
-        'calcSettlementPercent',
-        'calcProgramFeePercent',
-        'calcBankFee'
-      ];
-      configInputs.forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-          input.addEventListener('input', debounce(calculateAll, 300));
-          input.addEventListener('change', calculateAll);
-        }
-      });
-      
-      // Campos protegidos con doble-click
-      initProtectedFields();
-      
-      // Toggle Legal Plan
-      const legalToggle = document.getElementById('calcLegalPlanToggle');
-      if (legalToggle) {
-        legalToggle.addEventListener('click', () => {
-          const switchEl = document.getElementById('calcLegalPlanSwitch');
-          switchEl.classList.toggle('active');
-          calculateAll();
-        });
-      }
-      // Selector de primer deposito (monthly payment day)
-      initCalcPaymentDayCalendar();
 
-      // Control de meses (wheel + botones rapidos)
-      initMonthsControl();
-
-      // Click para copiar Total Debt
-      const copyTotalDebt = document.getElementById('copyTotalDebt');
-      if (copyTotalDebt) {
-        copyTotalDebt.addEventListener('click', () => {
-          const value = document.getElementById('calcTotalDebt').value;
-          const formattedValue = '$' + value;
-          navigator.clipboard.writeText(formattedValue).then(() => {
-            copyTotalDebt.classList.add('copied');
-            showToast('Total Debt copiado: ' + formattedValue, 'success');
-            setTimeout(() => copyTotalDebt.classList.remove('copied'), 1000);
-          });
-        });
-      }
-      
-      // Click para copiar Monthly Payment (formato: "meses $monto")
-      const copyMonthlyPayment = document.getElementById('copyMonthlyPayment');
-      if (copyMonthlyPayment) {
-        copyMonthlyPayment.addEventListener('click', () => {
-          const months = currentMonths;
-          const amount = document.getElementById('resultMonthlyPayment').textContent;
-          const textToCopy = months + ' ' + amount;
-          navigator.clipboard.writeText(textToCopy).then(() => {
-            copyMonthlyPayment.classList.add('copied');
-            showToast('Copiado: ' + textToCopy, 'success');
-            setTimeout(() => copyMonthlyPayment.classList.remove('copied'), 1000);
-          });
-        });
-      }
-      
-      // Calcular inicial
-      calculateAll();
-    }
-    
-
-    function initProtectedFields() {
-      const lockButtons = document.querySelectorAll('.lock-toggle-btn');
-      
-      lockButtons.forEach(btn => {
-        const targetId = btn.dataset.target;
-        const input = document.getElementById(targetId);
-        const lockedIcon = btn.querySelector('.lock-icon-svg.locked');
-        const unlockedIcon = btn.querySelector('.lock-icon-svg.unlocked');
-        
-        if (!input) return;
-        
-        // Click en el candado para toggle
-        btn.addEventListener('click', () => {
-          const isLocked = input.readOnly;
-          
-          if (isLocked) {
-            // Desbloquear
-            input.readOnly = false;
-            btn.classList.add('unlocked');
-            lockedIcon.classList.add('hidden');
-            unlockedIcon.classList.remove('hidden');
-            btn.title = 'Click para bloquear';
-            input.focus();
-            input.select();
-            showToast('Campo desbloqueado', 'info');
-          } else {
-            // Bloquear
-            input.readOnly = true;
-            btn.classList.remove('unlocked');
-            lockedIcon.classList.remove('hidden');
-            unlockedIcon.classList.add('hidden');
-            btn.title = 'Click para desbloquear';
-            calculateAll();
-            showToast('Campo bloqueado', 'success');
-          }
-        });
-        
-        // Guardar al perder foco si está desbloqueado
-        input.addEventListener('blur', () => {
-          if (!input.readOnly) {
-            // Auto-bloquear al salir
-            input.readOnly = true;
-            btn.classList.remove('unlocked');
-            lockedIcon.classList.remove('hidden');
-            unlockedIcon.classList.add('hidden');
-            btn.title = 'Click para desbloquear';
-            calculateAll();
-          }
-        });
-        
-        // Teclas
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            input.blur();
-          } else if (e.key === 'Escape') {
-            input.value = input.defaultValue;
-            input.blur();
-          }
-        });
-      });
-    }
-    
-    function initMonthsControl() {
-      const MIN_MONTHS = 6;
-      const MAX_MONTHS = 120;
-      const ITEM_HEIGHT = 34;
-      const hiddenInput = document.getElementById('calcMonths');
-      const wheel = document.getElementById('monthsInlineWheel');
-      const wheelTrack = document.getElementById('monthsWheelTrackInline');
-
-      if (!wheel || !wheelTrack || !hiddenInput) return;
-
-      const initialMonths = parseInt(hiddenInput.value, 10);
-      if (Number.isFinite(initialMonths)) {
-        currentMonths = Math.max(MIN_MONTHS, Math.min(MAX_MONTHS, initialMonths));
-      }
-
-      let items = [];
-      let isDragging = false;
-      let dragPointerId = null;
-      let dragStartY = 0;
-      let dragStartValue = currentMonths;
-      let dragMoved = false;
-      let suppressClickUntil = 0;
-
-      function clampMonths(value) {
-        return Math.max(MIN_MONTHS, Math.min(MAX_MONTHS, value));
-      }
-
-      function syncQuickButtons() {
-        document.querySelectorAll('.months-quick-btn.minimal').forEach(btn => {
-          btn.classList.toggle('active', parseInt(btn.dataset.months, 10) === currentMonths);
-        });
-      }
-
-      function syncWheelA11y() {
-        wheel.setAttribute('aria-valuenow', String(currentMonths));
-        wheel.setAttribute('aria-valuetext', `${currentMonths} months`);
-      }
-
-      function updateMonths(value, animate = false, shouldCalculate = true) {
-        currentMonths = Math.round(clampMonths(value));
-        hiddenInput.value = currentMonths;
-        syncQuickButtons();
-        syncWheelA11y();
-        updateWheelPosition(currentMonths, animate);
-
-        if (shouldCalculate) {
-          calculateAll();
-        }
-      }
-
-      function setDraggedMonths(value) {
-        const snappedValue = Math.round(clampMonths(value));
-        if (snappedValue === currentMonths) return;
-
-        currentMonths = snappedValue;
-        hiddenInput.value = currentMonths;
-        syncQuickButtons();
-        syncWheelA11y();
-        calculateAll();
-      }
-
-      function generateWheelItems() {
-        let wheelHTML = '';
-        for (let i = MIN_MONTHS; i <= MAX_MONTHS; i++) {
-          wheelHTML += `<div class="months-wheel-item-inline" data-months="${i}">${i}</div>`;
-        }
-        wheelTrack.innerHTML = wheelHTML;
-        items = Array.from(wheelTrack.querySelectorAll('.months-wheel-item-inline'));
-
-        items.forEach(item => {
-          item.addEventListener('click', () => {
-            if (Date.now() < suppressClickUntil) return;
-            const months = parseInt(item.dataset.months, 10);
-            if (Number.isFinite(months)) {
-              updateMonths(months, true);
-            }
-          });
-        });
-      }
-      generateWheelItems();
-
-      function updateWheelPosition(monthsValue, animate = false) {
-        const clampedValue = clampMonths(monthsValue);
-        const index = clampedValue - MIN_MONTHS;
-        const centerOffset = (wheel.clientHeight - ITEM_HEIGHT) / 2;
-        const offset = centerOffset - (index * ITEM_HEIGHT);
-
-        if (animate) {
-          wheelTrack.style.transition = 'transform 0.22s cubic-bezier(0.22, 0.75, 0.28, 1)';
-        } else {
-          wheelTrack.style.transition = 'none';
-        }
-
-        wheelTrack.style.transform = `translateY(${offset}px)`;
-
-        const nearestIndex = Math.round(index);
-        items.forEach((item, idx) => {
-          item.classList.remove('active', 'near');
-          if (idx === nearestIndex) {
-            item.classList.add('active');
-          } else if (Math.abs(idx - nearestIndex) <= 1) {
-            item.classList.add('near');
-          }
-
-          const signedDistance = idx - index;
-          const absDistance = Math.abs(signedDistance);
-          const rotate = Math.max(-70, Math.min(70, signedDistance * 18));
-          const scale = Math.max(0.56, 1 - absDistance * 0.16);
-          const opacity = Math.max(0.08, 1 - absDistance * 0.22);
-          const blur = Math.max(0, absDistance - 0.15) * 0.32;
-
-          item.style.transform = `rotateX(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
-          item.style.opacity = opacity.toFixed(3);
-          item.style.filter = `blur(${blur.toFixed(2)}px)`;
-        });
-      }
-
-      function endDrag(pointerId) {
-        if (!isDragging || pointerId !== dragPointerId) return;
-
-        isDragging = false;
-        dragPointerId = null;
-        wheel.classList.remove('dragging');
-        if (dragMoved) {
-          suppressClickUntil = Date.now() + 120;
-        }
-        dragMoved = false;
-        updateMonths(currentMonths, true, false);
-      }
-
-      wheel.addEventListener('pointerdown', (e) => {
-        if (typeof e.button === 'number' && e.button !== 0) return;
-
-        isDragging = true;
-        dragPointerId = e.pointerId;
-        dragStartY = e.clientY;
-        dragStartValue = currentMonths;
-        dragMoved = false;
-        wheel.classList.add('dragging');
-
-        if (wheel.setPointerCapture) {
-          wheel.setPointerCapture(dragPointerId);
-        }
-
-        e.preventDefault();
-      });
-
-      wheel.addEventListener('pointermove', (e) => {
-        if (!isDragging || e.pointerId !== dragPointerId) return;
-
-        const deltaY = dragStartY - e.clientY;
-        if (Math.abs(deltaY) > 2) {
-          dragMoved = true;
-        }
-
-        const liveValue = clampMonths(dragStartValue + (deltaY / ITEM_HEIGHT));
-        setDraggedMonths(liveValue);
-        updateWheelPosition(liveValue, false);
-        e.preventDefault();
-      });
-
-      wheel.addEventListener('pointerup', (e) => {
-        endDrag(e.pointerId);
-      });
-
-      wheel.addEventListener('pointercancel', (e) => {
-        endDrag(e.pointerId);
-      });
-
-      wheel.addEventListener('lostpointercapture', () => {
-        if (isDragging) {
-          endDrag(dragPointerId);
-        }
-      });
-
-      wheel.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        const step = Math.abs(e.deltaY) > 40 ? 2 : 1;
-        const delta = e.deltaY > 0 ? step : -step;
-        updateMonths(currentMonths + delta, true);
-      }, { passive: false });
-
-      wheel.addEventListener('keydown', (e) => {
-        let nextValue = null;
-        if (e.key === 'ArrowUp') nextValue = currentMonths + 1;
-        if (e.key === 'ArrowDown') nextValue = currentMonths - 1;
-        if (e.key === 'PageUp') nextValue = currentMonths + 6;
-        if (e.key === 'PageDown') nextValue = currentMonths - 6;
-        if (e.key === 'Home') nextValue = MIN_MONTHS;
-        if (e.key === 'End') nextValue = MAX_MONTHS;
-
-        if (nextValue === null) return;
-        e.preventDefault();
-        updateMonths(nextValue, true);
-      });
-
-      document.querySelectorAll('.months-quick-btn.minimal').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const months = parseInt(btn.dataset.months, 10);
-          if (Number.isFinite(months)) {
-            updateMonths(months, true);
-          }
-        });
-      });
-
-      updateMonths(currentMonths, false, false);
-    }
-
-    function formatISODate(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    function parseISODate(value) {
-      if (!value || typeof value !== 'string') return null;
-      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!match) return null;
-
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      const day = Number(match[3]);
-      const parsed = new Date(year, month - 1, day);
-
-      if (
-        parsed.getFullYear() !== year ||
-        parsed.getMonth() !== month - 1 ||
-        parsed.getDate() !== day
-      ) {
-        return null;
-      }
-
-      return parsed;
-    }
-
-    function formatCalcPaymentDayDisplay(isoDate) {
-      const parsed = parseISODate(isoDate);
-      if (!parsed) return 'Seleccionar fecha';
-      return parsed.toLocaleDateString('es-ES');
-    }
-
-    function getCalcFirstDepositStorageKey() {
-      if (!currentLeadId) return null;
-      return `lead_calc_first_deposit_${currentLeadId}`;
-    }
-
-    function loadPersistedCalcFirstDepositDate() {
-      const storageKey = getCalcFirstDepositStorageKey();
-      if (!storageKey) return null;
-
-      const savedValue = localStorage.getItem(storageKey);
-      const parsedDate = parseISODate(savedValue);
-
-      if (!parsedDate && savedValue) {
-        localStorage.removeItem(storageKey);
-      }
-
-      return parsedDate ? formatISODate(parsedDate) : null;
-    }
-
-    async function persistCalcFirstDepositDateToBackend(isoDate) {
-      if (!currentLeadId) return;
-
-      try {
-        const response = await fetch(`/api/leads/${currentLeadId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ firstDepositDate: isoDate })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-      } catch (error) {
-        console.error('Error al guardar firstDepositDate en backend:', error);
-        showToast('No se pudo sincronizar la fecha en el servidor', 'info');
-      }
-    }
-
-    function persistCalcFirstDepositDate(isoDate, options = {}) {
-      const { saveToBackend = true } = options;
-      const storageKey = getCalcFirstDepositStorageKey();
-      if (!storageKey) return;
-
-      const parsedDate = parseISODate(isoDate);
-      if (!parsedDate) {
-        localStorage.removeItem(storageKey);
-        if (saveToBackend) {
-          persistCalcFirstDepositDateToBackend(null);
-        }
-        return;
-      }
-
-      const normalizedDate = formatISODate(parsedDate);
-      localStorage.setItem(storageKey, normalizedDate);
-
-      if (saveToBackend) {
-        persistCalcFirstDepositDateToBackend(normalizedDate);
-      }
-    }
-
-    function addMonthsWithDayClamp(baseDate, monthsToAdd, preferredDay = baseDate.getDate()) {
-      const targetMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd, 1);
-      const lastDayOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
-      const safeDay = Math.min(preferredDay, lastDayOfMonth);
-      return new Date(targetMonth.getFullYear(), targetMonth.getMonth(), safeDay);
-    }
-
-    function initCalcPaymentDayCalendar() {
-      const trigger = document.getElementById('calcPaymentDayTrigger');
-      const calendarEl = document.getElementById('calcPaymentDayCalendar');
-      const prevBtn = document.getElementById('calcPaymentDayPrev');
-      const nextBtn = document.getElementById('calcPaymentDayNext');
-      const hiddenInput = document.getElementById('calcFirstDepositDate');
-      const displayEl = document.getElementById('calcPaymentDayDisplay');
-
-      if (!trigger || !calendarEl || !prevBtn || !nextBtn || !hiddenInput || !displayEl) return;
-
-      const persistedDate = loadPersistedCalcFirstDepositDate();
-      const initialDate = parseISODate(hiddenInput.value) || parseISODate(persistedDate);
-      if (initialDate) {
-        const normalizedDate = formatISODate(initialDate);
-        selectedCalcPaymentDay = normalizedDate;
-        calcPaymentDayCalendarDate = new Date(initialDate);
-        hiddenInput.value = normalizedDate;
-        displayEl.textContent = formatCalcPaymentDayDisplay(normalizedDate);
-      } else {
-        selectedCalcPaymentDay = null;
-        calcPaymentDayCalendarDate = new Date();
-        hiddenInput.value = '';
-        displayEl.textContent = 'Seleccionar fecha';
-      }
-
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        calendarEl.classList.toggle('hidden');
-        if (!calendarEl.classList.contains('hidden')) {
-          renderCalcPaymentDayCalendar();
-        }
-      });
-
-      prevBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        calcPaymentDayCalendarDate.setMonth(calcPaymentDayCalendarDate.getMonth() - 1);
-        renderCalcPaymentDayCalendar();
-      });
-
-      nextBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        calcPaymentDayCalendarDate.setMonth(calcPaymentDayCalendarDate.getMonth() + 1);
-        renderCalcPaymentDayCalendar();
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!calendarEl.contains(e.target) && !trigger.contains(e.target)) {
-          calendarEl.classList.add('hidden');
-        }
-      });
-    }
-
-    function renderCalcPaymentDayCalendar() {
-      const monthYearEl = document.getElementById('calcPaymentDayMonthYear');
-      const daysContainer = document.getElementById('calcPaymentDayDays');
-      const hiddenInput = document.getElementById('calcFirstDepositDate');
-      const displayEl = document.getElementById('calcPaymentDayDisplay');
-      const calendarEl = document.getElementById('calcPaymentDayCalendar');
-
-      if (!monthYearEl || !daysContainer || !hiddenInput || !displayEl || !calendarEl) return;
-
-      const year = calcPaymentDayCalendarDate.getFullYear();
-      const month = calcPaymentDayCalendarDate.getMonth();
-      const firstDay = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const daysInPrevMonth = new Date(year, month, 0).getDate();
-      const todayIso = formatISODate(new Date());
-
-      monthYearEl.textContent = new Intl.DateTimeFormat('es-ES', {
-        month: 'long',
-        year: 'numeric'
-      }).format(new Date(year, month, 1));
-
-      daysContainer.innerHTML = '';
-
-      for (let i = firstDay - 1; i >= 0; i--) {
-        const dayEl = document.createElement('button');
-        dayEl.type = 'button';
-        dayEl.className = 'calendar-day other-month';
-        dayEl.textContent = daysInPrevMonth - i;
-        daysContainer.appendChild(dayEl);
-      }
-
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dayEl = document.createElement('button');
-        dayEl.type = 'button';
-        dayEl.className = 'calendar-day';
-        dayEl.textContent = day;
-
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-        if (dateStr === todayIso) {
-          dayEl.classList.add('today');
-        }
-        if (dateStr === selectedCalcPaymentDay) {
-          dayEl.classList.add('selected');
-        }
-
-        dayEl.addEventListener('click', () => {
-          selectedCalcPaymentDay = dateStr;
-          hiddenInput.value = dateStr;
-          persistCalcFirstDepositDate(dateStr, { saveToBackend: true });
-          displayEl.textContent = formatCalcPaymentDayDisplay(dateStr);
-          calendarEl.classList.add('hidden');
-          calculateAll();
-          showToast(`Primer deposito: ${formatCalcPaymentDayDisplay(dateStr)}`, 'success');
-          renderCalcPaymentDayCalendar();
-        });
-
-        daysContainer.appendChild(dayEl);
-      }
-
-      const totalCells = firstDay + daysInMonth;
-      const remainingCells = (Math.ceil(totalCells / 7) * 7) - totalCells;
-      for (let i = 1; i <= remainingCells; i++) {
-        const dayEl = document.createElement('button');
-        dayEl.type = 'button';
-        dayEl.className = 'calendar-day other-month';
-        dayEl.textContent = i;
-        daysContainer.appendChild(dayEl);
-      }
-    }
-
-    function calculateAll() {
-      // Obtener valores
-      const totalDebt = parseCurrency(document.getElementById('calcTotalDebt').value);
-      const settlementPercent = parsePercent(document.getElementById('calcSettlementPercent').value);
-      const programFeePercent = parsePercent(document.getElementById('calcProgramFeePercent').value);
-      const monthlyBankFee = parseCurrency(document.getElementById('calcBankFee').value);
-      const months = currentMonths;
-      const hasLegalPlan = document.getElementById('calcLegalPlanSwitch').classList.contains('active');
-      
-      // Cálculos principales
-      const estimatedSettlement = totalDebt * (settlementPercent / 100);
-      const programFees = totalDebt * (programFeePercent / 100);
-      
-      // Legal fees: $24.99 mensuales si tiene plan legal
-      const monthlyLegalFee = hasLegalPlan ? 24.99 : 0;
-      const totalLegalFees = monthlyLegalFee * months;
-      
-      // Bank fees: mensual x número de meses
-      const totalBankFees = monthlyBankFee * months;
-      
-      // Total del programa
-      const totalProgram = estimatedSettlement + programFees + totalLegalFees + totalBankFees;
-      
-      // Pago mensual
-      const monthlyPayment = totalProgram / months;
-      
-      // Ahorros (comparando con pagar la deuda completa)
-      const totalSavings = totalDebt - estimatedSettlement;
-      const monthlySavings = totalSavings / months;
-      
-      // Actualizar resultados en UI
-      document.getElementById('resultSettlement').textContent = formatCurrency(estimatedSettlement);
-      document.getElementById('resultProgramFees').textContent = formatCurrency(programFees);
-      document.getElementById('resultLegalFees').textContent = formatCurrency(totalLegalFees);
-      document.getElementById('resultBankFees').textContent = formatCurrency(totalBankFees);
-      document.getElementById('resultMonthlyPayment').textContent = formatCurrency(monthlyPayment);
-      document.getElementById('resultTotalProgram').textContent = formatCurrency(totalProgram);
-      document.getElementById('resultSavings').textContent = formatCurrency(totalSavings);
-      
-      // Generar tabla de pagos
-      generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings);
-    }
-    
-    function generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings) {
-      const tbody = document.getElementById('scheduleTableBody');
-      if (!tbody) return;
-      
-      let html = '';
-      const selectedDateValue = document.getElementById('calcFirstDepositDate')?.value || '';
-      const selectedStartDate = parseISODate(selectedDateValue);
-      const baseDate = selectedStartDate || new Date();
-      const firstMonthOffset = selectedStartDate ? 0 : 1;
-      const paymentDay = baseDate.getDate();
-      
-      for (let i = 1; i <= Math.min(months, 48); i++) {
-        const paymentDate = addMonthsWithDayClamp(baseDate, (i - 1) + firstMonthOffset, paymentDay);
-        
-        const dateStr = paymentDate.toLocaleDateString('en-US', {
-          month: '2-digit',
-          day: '2-digit',
-          year: 'numeric'
-        });
-        
-        html += `
-          <tr>
-            <td>${i}</td>
-            <td>${dateStr}</td>
-            <td class="mono">${formatCurrency(monthlyPayment)}</td>
-            <td class="mono">${formatCurrency(monthlyLegalFee)}</td>
-            <td class="mono">${formatCurrency(monthlyBankFee)}</td>
-            <td class="mono savings">${formatCurrency(monthlySavings)}</td>
-          </tr>
-        `;
-      }
-      
-      // Si hay más de 48 meses, agregar indicador de truncamiento
-      if (months > 48) {
-        html += `
-          <tr>
-            <td colspan="6" style="text-align:center;color:rgba(255,255,255,0.5);padding:12px;">
-              ... y ${months - 48} pagos más
-            </td>
-          </tr>
-        `;
-      }
-      
-      tbody.innerHTML = html;
-    }
-    
-    // Helpers para la calculadora
-    function parseCurrency(value) {
-      if (!value) return 0;
-      return parseFloat(value.toString().replace(/[^0-9.-]/g, '')) || 0;
-    }
-    
-    function parsePercent(value) {
-      if (!value) return 0;
-      return parseFloat(value.toString().replace(/[^0-9.-]/g, '')) || 0;
-    }
-    
-    function formatCurrency(value) {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      }).format(value);
-    }
-    
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    }
-    
-    function initSelfEmployedToggle() {
-      const toggle = document.getElementById('selfEmployedToggle');
-      if (!toggle) return;
-      
-      const label = toggle.closest('.self-employed-toggle').querySelector('.self-employed-label');
-      
-      toggle.addEventListener('change', () => {
-        label.textContent = toggle.checked ? 'Sí' : 'No';
-        showToast(`Self Employed: ${toggle.checked ? 'Sí' : 'No'}`, 'success');
-        console.log('Self employed:', toggle.checked);
-      });
-    }
-    
-    // ============================================
-    // NAVEGACIÓN DE PESTAÑAS
-    // ============================================
-    
-    const ACTIVE_TAB_KEY = 'lead_active_tab';
-    
-    function initLeadTabs() {
-      const tabs = document.querySelectorAll('.lead-tab');
-      
-      // Secciones
-      const sections = {
-        'lead': document.getElementById('leadSection'),
-        'banking': document.getElementById('bankingSection'),
-        'calculator': document.getElementById('calculatorSection'),
-        'budget': document.getElementById('budgetSection'),
-        'creditors': document.getElementById('creditorsSection')
-      };
-      
-      // Función para activar una pestaña
-      function activateTab(tabName) {
-        // Remover clase active de todas las pestañas
-        tabs.forEach(t => t.classList.remove('active'));
-        
-        // Agregar clase active a la pestaña seleccionada
-        const activeTab = document.querySelector(`.lead-tab[data-tab="${tabName}"]`);
-        if (activeTab) activeTab.classList.add('active');
-        
-        // Ocultar todas las secciones
-        Object.values(sections).forEach(section => {
-          if (section) section.classList.add('hidden');
-        });
-        
-        // Mostrar la sección seleccionada
-        if (sections[tabName]) {
-          sections[tabName].classList.remove('hidden');
-        }
-        
-        // Guardar en localStorage
-        localStorage.setItem(ACTIVE_TAB_KEY, tabName);
-        
-        // Inicializar calculadora si es la pestaña de calculator
-        if (tabName === 'calculator') {
-          initCalculator();
-        }
-      }
-      
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          const tabName = tab.dataset.tab;
-          console.log('Cambiando a pestaña:', tabName);
-          activateTab(tabName);
-        });
-      });
-      
-      // Restaurar pestaña activa al cargar
-      const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
-      if (savedTab && sections[savedTab]) {
-        activateTab(savedTab);
-      }
-    }
-    
-    function renderCalendar() {
-      const year = currentCalendarDate.getFullYear();
-      const month = currentCalendarDate.getMonth();
-      
-      // Actualizar título
-      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      document.getElementById('calendarMonthYear').textContent = `${monthNames[month]} ${year}`;
-      
-      const daysContainer = document.getElementById('calendarDays');
-      daysContainer.innerHTML = '';
-      
-      // Primer día del mes
-      const firstDay = new Date(year, month, 1).getDay();
-      // Días en el mes
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      // Días en el mes anterior
-      const daysInPrevMonth = new Date(year, month, 0).getDate();
-      
-      // Días del mes anterior
-      for (let i = firstDay - 1; i >= 0; i--) {
-        const dayEl = document.createElement('button');
-        dayEl.className = 'calendar-day other-month';
-        dayEl.textContent = daysInPrevMonth - i;
-        daysContainer.appendChild(dayEl);
-      }
-      
-      // Días del mes actual
-      const today = new Date().toISOString().split('T')[0];
-      
-      for (let i = 1; i <= daysInMonth; i++) {
-        const dayEl = document.createElement('button');
-        dayEl.className = 'calendar-day';
-        dayEl.textContent = i;
-        
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        
-        // Marcar hoy
-        if (dateStr === today) {
-          dayEl.classList.add('today');
-        }
-        
-        // Marcar seleccionado
-        if (dateStr === selectedCallbackDate) {
-          dayEl.classList.add('selected');
-        }
-        
-        // Verificar si hay callback en este día para este lead
-        if (dateStr === localStorage.getItem(`lead_callback_${calendarLeadId}`)) {
-          dayEl.classList.add('has-pin');
-        }
-        
-        dayEl.addEventListener('click', () => {
-          selectedCallbackDate = dateStr;
-          localStorage.setItem(`lead_callback_${calendarLeadId}`, dateStr);
-          localStorage.setItem(`lead_callback_name_${calendarLeadId}`, calendarLeadName);
-          
-          document.getElementById('callbackDateDisplay').textContent = new Date(dateStr).toLocaleDateString('es-ES');
-          const mb = document.getElementById('callbackMacBtn');
-          if (mb) mb.classList.remove('hidden');
-          
-          showToast(`Callback programado para: ${new Date(dateStr).toLocaleDateString('es-ES')}`, 'success');
-          updateNotificationBadge();
-          renderCalendar();
-          // El calendario se mantiene abierto para permitir cambiar la fecha si se desea
-        });
-        
-        daysContainer.appendChild(dayEl);
-      }
-      
-      // Días del mes siguiente (solo para completar la última fila)
-      const totalCells = firstDay + daysInMonth;
-      const remainingCells = (Math.ceil(totalCells / 7) * 7) - totalCells;
-      for (let i = 1; i <= remainingCells; i++) {
-        const dayEl = document.createElement('button');
-        dayEl.className = 'calendar-day other-month';
-        dayEl.textContent = i;
-        daysContainer.appendChild(dayEl);
-      }
-    }
-    
-    // ============================================
-    // NOTIFICACIONES DE CALLBACK
-    // ============================================
-    function getAllCallbacks() {
-      const callbacks = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('lead_callback_') && !key.includes('_name_')) {
-          const leadId = key.replace('lead_callback_', '');
-          const date = localStorage.getItem(key);
-          const name = localStorage.getItem(`lead_callback_name_${leadId}`) || `Lead #${leadId}`;
-          if (date) {
-            callbacks.push({ leadId, date, name });
-          }
-        }
-      }
-      return callbacks.sort((a, b) => new Date(a.date) - new Date(b.date));
-    }
-    
-    function updateNotificationBadge() {
-      const callbacks = getAllCallbacks();
-      const today = new Date().toISOString().split('T')[0];
-      const todayCallbacks = callbacks.filter(cb => cb.date === today);
-      
-      // Buscar el botón de notificaciones en el toolbar
-      const notifBtn = document.querySelector('.tool-btn[aria-label="Notificaciones"]');
-      if (notifBtn) {
-        // Remover badge anterior si existe
-        const existingBadge = notifBtn.querySelector('.notif-badge');
-        if (existingBadge) existingBadge.remove();
-        
-        // Agregar nuevo badge si hay callbacks para hoy
-        if (todayCallbacks.length > 0) {
-          const badge = document.createElement('span');
-          badge.className = 'notif-badge';
-          badge.textContent = todayCallbacks.length;
-          badge.style.cssText = `
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: #ef4444;
-            color: white;
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 10px;
-            min-width: 18px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-          `;
-          notifBtn.style.position = 'relative';
-          notifBtn.appendChild(badge);
-        }
-      }
-    }
-    
-    function showCallbackNotifications() {
-      const callbacks = getAllCallbacks();
-      const today = new Date().toISOString().split('T')[0];
-      const upcoming = callbacks.filter(cb => cb.date >= today);
-      
-      if (upcoming.length === 0) {
-        showToast('No hay callbacks programados', 'info');
-        return;
-      }
-      
-      // Crear modal de notificaciones
-      let notifModal = document.getElementById('callbackNotifModal');
-      if (notifModal) notifModal.remove();
-      
-      notifModal = document.createElement('div');
-      notifModal.id = 'callbackNotifModal';
-      notifModal.className = 'notif-modal';
-      notifModal.innerHTML = `
-        <div class="notif-modal-backdrop"></div>
-        <div class="notif-modal-content">
-          <div class="notif-modal-header">
-            <h3>📞 Callbacks Programados</h3>
-            <button class="notif-modal-close" onclick="this.closest('.notif-modal').remove()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-          <div class="notif-modal-body">
-            ${upcoming.map(cb => {
-              const isToday = cb.date === today;
-              const dateObj = new Date(cb.date);
-              const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' });
-              return `
-                <div class="notif-item ${isToday ? 'today' : ''}">
-                  <div class="notif-item-pin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  </div>
-                  <div class="notif-item-info">
-                    <span class="notif-item-name">${escapeHtml(cb.name)}</span>
-                    <span class="notif-item-date ${isToday ? 'today-badge' : ''}">${isToday ? '📅 HOY - ' : ''}${dateStr}</span>
-                  </div>
-                  <button class="notif-item-link" onclick="window.location.href='/client.html?id=${cb.leadId}'">
-                    Ver
-                  </button>
-                </div>
-              `;
-            }).join('')}
+  <div id="notesTemplatesModal" class="notes-templates-modal hidden" aria-hidden="true">
+    <div id="notesTemplatesModalBackdrop" class="notes-templates-modal-backdrop"></div>
+    <div class="notes-templates-modal-content" role="dialog" aria-modal="true" aria-labelledby="notesTemplatesModalTitle">
+      <button class="modal-close-mac notes-templates-modal-close" id="notesTemplatesModalClose" type="button" title="Cerrar"></button>
+      <div class="notes-templates-modal-header">
+        <h3 id="notesTemplatesModalTitle">Editar mis templates</h3>
+      </div>
+      <div class="notes-templates-modal-body">
+        <div class="notes-templates-manager-list">
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerSelect">Mis templates</label>
+          <select id="notesTemplatesManagerSelect" class="notes-templates-manager-select" size="8" aria-label="Lista de templates"></select>
+          <button id="notesTemplatesManagerNewBtn" class="notes-btn" type="button">Nuevo</button>
+        </div>
+        <div class="notes-templates-manager-editor">
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerName">Nombre</label>
+          <input id="notesTemplatesManagerName" class="notes-templates-manager-input" type="text" maxlength="120" placeholder="Ej: Contacto inicial" />
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerContent">Contenido</label>
+          <textarea id="notesTemplatesManagerContent" class="notes-templates-manager-textarea" maxlength="5000" placeholder="Escribe el contenido del template..."></textarea>
+          <div class="notes-templates-manager-actions">
+            <button id="notesTemplatesManagerSaveBtn" class="notes-btn primary" type="button">Guardar</button>
+            <button id="notesTemplatesManagerSaveAsNewBtn" class="notes-btn" type="button">Guardar como nuevo</button>
+            <button id="notesTemplatesManagerDeleteBtn" class="notes-btn danger" type="button">Eliminar</button>
           </div>
         </div>
-      `;
-      
-      document.body.appendChild(notifModal);
-      
-      // Cerrar al hacer click fuera
-      notifModal.querySelector('.notif-modal-backdrop').addEventListener('click', () => {
-        notifModal.remove();
-      });
-    }
-    
-    // Actualizar badge al cargar la página
-    document.addEventListener('DOMContentLoaded', () => {
-      updateNotificationBadge();
-      
-      // Conectar botón de notificaciones
-      const notifBtn = document.querySelector('.tool-btn[aria-label="Notificaciones"]');
-      if (notifBtn) {
-        notifBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showCallbackNotifications();
-        });
-      }
-    });
-    
-    // ============================================
-    // CARGAR DATOS DEL LEAD
-    // ============================================
-    async function loadLead() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const leadId = urlParams.get('id');
-      currentLeadId = leadId || null;
-      
-      if (!leadId) {
-        document.getElementById('leadSection').innerHTML = `
-          <div class="error">
-            <h2>Error</h2>
-            <p>No se especificó un ID de cliente.</p>
-          </div>
-        `;
-        return;
-      }
-      
-      try {
-        const response = await fetch(`/api/leads/${leadId}`);
-        if (!response.ok) throw new Error('Lead no encontrado');
-        
-        const data = await response.json();
-        const lead = data.lead;
+      </div>
+    </div>
+  </div>
 
-        const backendFirstDepositDate = parseISODate(lead.first_deposit_date);
-        const firstDepositInput = document.getElementById('calcFirstDepositDate');
-        const firstDepositDisplay = document.getElementById('calcPaymentDayDisplay');
-        if (backendFirstDepositDate) {
-          const normalizedFirstDepositDate = formatISODate(backendFirstDepositDate);
-          if (firstDepositInput) firstDepositInput.value = normalizedFirstDepositDate;
-          if (firstDepositDisplay) firstDepositDisplay.textContent = formatCalcPaymentDayDisplay(normalizedFirstDepositDate);
-          persistCalcFirstDepositDate(normalizedFirstDepositDate, { saveToBackend: false });
-        } else {
-          if (firstDepositInput) firstDepositInput.value = '';
-          if (firstDepositDisplay) firstDepositDisplay.textContent = 'Seleccionar fecha';
-          persistCalcFirstDepositDate(null, { saveToBackend: false });
-        }
-        
-        // Guardar valores originales
-        originalName = lead.full_name;
-        caseIdValue = String(lead.case_id);
-        
-        // Guardar datos de Co-Applicant si existe
-        if (lead.co_applicant_name) {
-          coApplicantData.fullName = lead.co_applicant_name;
-        }
-        
-        // Setear nombre (Applicant por defecto)
-        if (leadNameEl) {
-          leadNameEl.textContent = lead.full_name;
-        }
-        
-        // Setear Case ID
-        if (caseNumberEl) {
-          caseNumberEl.textContent = lead.case_id;
-        }
-        
-        // Setear badge de estado (Green/Red)
-        const stateBadge = document.getElementById('stateBadge');
-        if (stateBadge) {
-          const isGreen = lead.state_type === 'Green';
-          stateBadge.className = `lead-state-badge ${isGreen ? 'green' : 'red'}`;
-          stateBadge.textContent = lead.state_type;
-          stateBadge.title = `${getStateName(lead.state_code)} (${lead.state_code}) - ${lead.state_type} State`;
-        }
-        
-        // Badge de Test
-        const testBadge = document.getElementById('testBadge');
-        if (testBadge) {
-          testBadge.classList.toggle('hidden', !lead.is_test);
-        }
-        
-        // Renderizar contenido
-        document.getElementById('leadSection').innerHTML = `
-          <!-- Card 1: Información de Contacto -->
-          <div class="lead-info-card">
-            <h3>Información de Contacto</h3>
-            <div class="info-row">
-              <span class="info-row-label">Home Phone</span>
-              <span class="info-row-value editable mono" data-field="home_phone" data-copy="true" tabindex="0">${escapeHtml(lead.phone || 'No especificado')}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Cell Phone</span>
-              <span class="info-row-value editable mono" data-field="cell_phone" data-copy="true" tabindex="0">${escapeHtml(lead.phone || 'No especificado')}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">DOB</span>
-              <div class="dob-calendar-wrapper">
-                <span class="info-row-value editable dob-calendar-trigger" data-field="dob" id="dobTrigger" tabindex="0">
-                  <span id="dobValue">No especificado</span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                    <line x1="16" y1="2" x2="16" y2="6"/>
-                    <line x1="8" y1="2" x2="8" y2="6"/>
-                    <line x1="3" y1="10" x2="21" y2="10"/>
-                  </svg>
-                </span>
-                <div id="dobCalendar" class="custom-calendar dob-calendar hidden">
-                  <div class="calendar-header">
-                    <button id="dobCalendarPrev" class="calendar-nav">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="15 18 9 12 15 6"/>
-                      </svg>
-                    </button>
-                    <span id="dobCalendarMonthYear" class="calendar-title"></span>
-                    <button id="dobCalendarNext" class="calendar-nav">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="calendar-weekdays">
-                    <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
-                    <span>Jue</span><span>Vie</span><span>Sáb</span>
-                  </div>
-                  <div id="dobCalendarDays" class="calendar-days"></div>
-                </div>
-              </div>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Email</span>
-              <span class="info-row-value editable" data-field="email" data-copy="true" tabindex="0">${escapeHtml(lead.email || 'No especificado')}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">SSN / ITIN</span>
-              <span class="info-row-value editable mono" data-field="ssn" data-copy="true" tabindex="0">***-**-****</span>
-            </div>
-          </div>
-          
-          <!-- Card 2: Dirección & WC -->
-          <div class="lead-info-card">
-            <h3>DIRECCIÓN & WC</h3>
-            <div class="info-row">
-              <span class="info-row-label">Address Street</span>
-              <span class="info-row-value editable" data-field="address_street" data-copy="true" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">City</span>
-              <span class="info-row-value editable" data-field="city" data-copy="true" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">ZIP Code</span>
-              <span class="info-row-value editable mono" data-field="zip_code" data-copy="true" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">State</span>
-              <span class="info-row-value editable" data-field="state" data-copy="true" tabindex="0">${lead.state_code ? `${getStateName(lead.state_code)} (${lead.state_code})` : 'No especificado'}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Best time to call</span>
-              <span class="info-row-value editable" data-field="best_time" data-copy="true" tabindex="0">No especificado</span>
-            </div>
-          </div>
-          
-          <!-- Card 3: Employment Details -->
-          <div class="lead-info-card">
-            <h3>EMPLOYMENT DETAILS</h3>
-            <div class="info-row">
-              <span class="info-row-label">Currently employed</span>
-              <span class="info-row-value editable" data-field="currently_employed" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Employer name</span>
-              <span class="info-row-value editable" data-field="employer_name" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Occupation</span>
-              <span class="info-row-value editable" data-field="occupation" tabindex="0">No especificado</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">Self Employed</span>
-              <label class="self-employed-toggle">
-                <input type="checkbox" id="selfEmployedToggle" data-field="self_employed">
-                <span class="self-employed-switch">
-                  <span class="self-employed-thumb"></span>
-                </span>
-                <span class="self-employed-label">No</span>
-              </label>
-            </div>
-          </div>
-          
-          <!-- Card 2: Tiempos y Fechas (Expandido) -->
-          <div class="lead-info-card lead-info-card-wide">
-            <h3>Tiempos y Fechas</h3>
-            <div class="two-column-layout">
-              <!-- Columna Izquierda -->
-              <div class="info-column">
-                <div class="info-row">
-                  <span class="info-row-label">Fecha de Creación</span>
-                  <span class="info-row-value">${new Date(lead.created_at).toLocaleString('es-ES')}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-row-label">Assigned Date</span>
-                  <span class="info-row-value">${lead.assigned_to ? new Date(lead.created_at).toLocaleDateString('es-ES') : 'Sin asignar'}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-row-label">Close Date</span>
-                  <span class="info-row-value" id="closeDateValue">${lead.status === 'Sent to Debt Manager' ? new Date(lead.updated_at).toLocaleDateString('es-ES') : 'Pendiente'}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-row-label">Días en Status</span>
-                  <span class="info-row-value">${calculateDaysInStatus(lead.created_at)}</span>
-                </div>
-              </div>
-              
-              <!-- Columna Derecha -->
-              <div class="info-column">
-                <div class="info-row">
-                  <span class="info-row-label">Last Credit Pull</span>
-                  <span class="info-row-value">${new Date(lead.created_at).toLocaleDateString('es-ES')}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-row-label">Submitted Date</span>
-                  <span class="info-row-value">${lead.status === 'Submitted to UW' ? new Date(lead.updated_at).toLocaleDateString('es-ES') : 'N/A'}</span>
-                </div>
-                <div class="info-row callback-row">
-                  <span class="info-row-label">Callback</span>
-                  <div class="callback-wrapper">
-                    <button id="callbackCalendarBtn" class="calendar-trigger liquid-glass-btn">
-                      <span id="callbackDateDisplay">Seleccionar fecha</span>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                      </svg>
-                    </button>
-                    <button id="callbackMacBtn" class="callback-mac-btn hidden" title="Eliminar callback"></button>
-                    
-                    <!-- Calendario Custom Liquid Glass -->
-                    <div id="customCalendar" class="custom-calendar hidden">
-                      <div class="calendar-header">
-                      <button id="calendarPrev" class="calendar-nav">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="15 18 9 12 15 6"/>
-                        </svg>
-                      </button>
-                      <span id="calendarMonthYear" class="calendar-title"></span>
-                      <button id="calendarNext" class="calendar-nav">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="9 18 15 12 9 6"/>
-                        </svg>
-                      </button>
-                    </div>
-                    <div class="calendar-weekdays">
-                      <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
-                      <span>Jue</span><span>Vie</span><span>Sáb</span>
-                    </div>
-                    <div id="calendarDays" class="calendar-days"></div>
-                  </div>
-                </div>
-                <div class="info-row">
-                  <span class="info-row-label">FICO Score</span>
-                  <span class="info-row-value fico-score" id="ficoScore">Pendiente</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        
-        // Inicializar Callback Calendar después de renderizar
-        initCallbackCalendar(leadId, lead.full_name);
-        
-        // Inicializar campos editables
-        initEditableFields();
-        
-        // Inicializar calendario DOB
-        initDOBCalendar();
-        
-        // Inicializar toggle Self Employed
-        initSelfEmployedToggle();
-        
-        // Inicializar navegación de pestañas
-        initLeadTabs();
-        
-      } catch (error) {
-        console.error('Error cargando lead:', error);
-        document.getElementById('leadSection').innerHTML = `
-          <div class="error">
-            <h2>Error</h2>
-            <p>No se pudo cargar la información del cliente.</p>
-            <button class="toolbar-btn" onclick="window.location.href='index.html#leads'" style="margin-top: 20px;">
-              Volver a Leads
-            </button>
-          </div>
-        `;
-      }
-    }
-    
-    // Helpers
-    function escapeHtml(text) {
-      if (!text) return '';
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-    
-    function calculateDaysInStatus(createdAt) {
-      const created = new Date(createdAt);
-      const now = new Date();
-      const diffTime = Math.abs(now - created);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
-    }
-    
-    const STATE_NAMES = {
-      'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 
-      'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-      'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-      'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-      'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-      'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-      'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-      'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-      'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-      'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-      'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-      'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-      'WI': 'Wisconsin', 'WY': 'Wyoming'
-    };
-    
-    function getStateName(code) {
-      return STATE_NAMES[code?.toUpperCase()] || code;
-    }
-    
-    function getStatusBadge(status) {
-      const classes = {
-        'New Lead': 'status-badge new',
-        'Submitted to UW': 'status-badge submitted',
-        'Docs Back': 'status-badge docs',
-        'Sent to Debt Manager': 'status-badge manager',
-        'Callback Requested': 'status-badge callback',
-        'Test': 'status-badge test'
-      };
-      const className = classes[status] || 'status-badge new';
-      return `<span class="${className}">${escapeHtml(status)}</span>`;
-    }
-    
-    // Cargar datos
-    loadLead();
-  </script>
+  <script src="crm-helpers.js?v=20260216b"></script>
+  <script src="client.js?v=20260216q"></script>
+  <script src="quick-actions.js?v=20260216c"></script>
 </body>
 </html>
+
+

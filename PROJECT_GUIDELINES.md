@@ -1,4 +1,4 @@
-# PROJECT-GW - Guía de Producto y Estilo
+﻿# PROJECT-GW - Guía de Producto y Estilo
 
 ## Contexto del proyecto
 - Este proyecto evolucionará a un CRM masivo para equipos de ventas.
@@ -30,3 +30,4 @@
 
 ## Regla de layout flotante
 - No encerrar elementos en cajas o contenedores visuales cuando se pida un diseño suelto/flotante.
+

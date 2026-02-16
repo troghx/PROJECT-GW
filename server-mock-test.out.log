@@ -1,0 +1,6 @@
+[dotenv@17.3.1] injecting env (6) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+=================================
+Servidor activo en http://localhost:3000
+MODO MOCK: Datos almacenados en memoria
+(Para usar PostgreSQL, ejecuta: npm run db:init-local)
+=================================

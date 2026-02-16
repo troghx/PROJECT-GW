@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260216e" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -18,7 +18,9 @@
 
     <main id="authShell" class="auth-layout">
       <section class="login-panel glass" aria-label="Panel de inicio de sesion">
-        <img class="login-logo" src="reference/CD logo.png" alt="Cero Deuda" />
+        <button class="login-logo" type="button" aria-label="Ir al leaderboard" onclick="window.location.href='index.html'">
+          <img src="reference/CD logo.png" alt="Cero Deuda" />
+        </button>
         <h1>Iniciar Sesion</h1>
         <p class="login-subtitle">Accede para entrar al CRM comercial.</p>
 
@@ -47,7 +49,9 @@
 
     <section id="dashboardView" class="home-view hidden" aria-label="Home">
       <div class="home-floating">
-        <img class="home-logo" src="reference/CD logo.png" alt="Cero Deuda" />
+        <button class="home-logo" type="button" aria-label="Ir al leaderboard" onclick="window.location.href='index.html'">
+          <img src="reference/CD logo.png" alt="Cero Deuda" />
+        </button>
 
         <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
           <div id="toolbarShell" class="toolbar-shell">
@@ -238,7 +242,7 @@
         <!-- Top Vendedores - Podio -->
         <div class="leaderboard-section">
           <div class="leaderboard-header">
-            <h2>🏆 Top Vendedores</h2>
+            <h2>Top Vendedores</h2>
             <div class="month-selector">
               <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -325,14 +329,14 @@
                 <!-- Segundo Lugar (Izquierda) -->
                 <div class="podium-place second-place">
                   <div class="podium-card silver-card">
-                    <div class="podium-medal-top">🥈</div>
+                    <div class="podium-medal-top">#2</div>
                     <div class="podium-avatar">
                       <img src="https://ui-avatars.com/api/?name=Axel+V&background=C0C0C0&color=fff&size=80" alt="Axel Vazquez" />
                     </div>
                     <div class="podium-info">
                       <span class="podium-name">Axel Vazquez</span>
                       <span class="podium-amount">$203,823</span>
-                      <span class="podium-stats">15 deals • AVG 1.25</span>
+                      <span class="podium-stats">15 deals - AVG 1.25</span>
                     </div>
                   </div>
                   <div class="podium-base silver-base"></div>
@@ -341,14 +345,14 @@
                 <!-- Primer Lugar (Centro) -->
                 <div class="podium-place first-place">
                   <div class="podium-card gold-card">
-                    <div class="podium-medal-top">🥇</div>
+                    <div class="podium-medal-top">#1</div>
                     <div class="podium-avatar">
                       <img src="https://ui-avatars.com/api/?name=Daniel+L&background=FFD700&color=333&size=100" alt="Daniel Lecourtix" />
                     </div>
                     <div class="podium-info">
                       <span class="podium-name">Daniel Lecourtix</span>
                       <span class="podium-amount">$282,354</span>
-                      <span class="podium-stats">20 deals • AVG 2.00</span>
+                      <span class="podium-stats">20 deals - AVG 2.00</span>
                     </div>
                   </div>
                   <div class="podium-base gold-base"></div>
@@ -357,14 +361,14 @@
                 <!-- Tercer Lugar (Derecha) -->
                 <div class="podium-place third-place">
                   <div class="podium-card bronze-card">
-                    <div class="podium-medal-top">🥉</div>
+                    <div class="podium-medal-top">#3</div>
                     <div class="podium-avatar">
                       <img src="https://ui-avatars.com/api/?name=Estefani+G&background=CD7F32&color=fff&size=80" alt="Estefani Gomez" />
                     </div>
                     <div class="podium-info">
                       <span class="podium-name">Estefani Gomez</span>
                       <span class="podium-amount">$164,247</span>
-                      <span class="podium-stats">13 deals • AVG 1.18</span>
+                      <span class="podium-stats">13 deals - AVG 1.18</span>
                     </div>
                   </div>
                   <div class="podium-base bronze-base"></div>
@@ -547,6 +551,17 @@
               <input type="tel" id="leadPhone" name="phone" placeholder="Ej: 305-555-0123" required>
             </div>
 
+            <div id="duplicateAlert" class="duplicate-alert hidden" role="alert" aria-live="polite">
+              <div class="duplicate-alert-head">Posibles duplicados detectados</div>
+              <p id="duplicateSummary" class="duplicate-summary"></p>
+              <div id="duplicateList" class="duplicate-list"></div>
+              <div class="duplicate-actions">
+                <button type="button" id="openDuplicateBtn" class="duplicate-btn duplicate-btn-secondary">Abrir existente</button>
+                <button type="button" id="linkAndCreateBtn" class="duplicate-btn duplicate-btn-primary">Crear y marcar relación</button>
+                <button type="button" id="forceCreateBtn" class="duplicate-btn duplicate-btn-ghost">Crear de todos modos</button>
+              </div>
+            </div>
+
             <div class="form-group state-search-group">
               <label for="leadStateSearch">Estado (US)</label>
               <div class="state-search-wrapper">
@@ -566,6 +581,9 @@
       </div>
     </section>
 
-    <script src="app.js"></script>
+    <script src="crm-helpers.js?v=20260216b"></script>
+    <script src="app.js?v=20260216d"></script>
+    <script src="quick-actions.js?v=20260216c"></script>
   </body>
 </html>
+
