@@ -1246,6 +1246,365 @@ app.delete('/api/leads/:id', async (req, res) => {
   }
 });
 
+// ============================================
+// ENDPOINTS: BANKING INFORMATION
+// ============================================
+
+// GET /api/leads/:id/banking - Obtener información bancaria del lead
+app.get('/api/leads/:id/banking', async (req, res) => {
+  const leadId = req.params.id;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT 
+        id, lead_id, routing_number, account_number, account_type, bank_name, bank_phone,
+        bank_address, bank_address2, bank_city, bank_state, bank_zip,
+        name_on_account, mothers_maiden_name, ss_number, relationship_to_customer,
+        email, dob, address, address2,
+        initial_payment_amount, payment_day_of_month,
+        created_at, updated_at
+       FROM banking_info
+       WHERE lead_id = $1`,
+      [leadId]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ 
+        banking: null,
+        message: 'No hay información bancaria registrada para este lead.'
+      });
+    }
+
+    res.json({ banking: rows[0] });
+  } catch (error) {
+    console.error('Error al obtener información bancaria:', error);
+    res.status(500).json({ message: 'Error al obtener información bancaria.' });
+  }
+});
+
+// PUT /api/leads/:id/banking - Crear o reemplazar información bancaria
+app.put('/api/leads/:id/banking', async (req, res) => {
+  const leadId = req.params.id;
+  const body = req.body || {};
+
+  try {
+    // Verificar que el lead existe
+    const { rows: leadRows } = await pool.query(
+      'SELECT id FROM leads WHERE id = $1 LIMIT 1',
+      [leadId]
+    );
+
+    if (leadRows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    // Validar y limpiar datos
+    const routingNumber = toNullableText(body.routingNumber || body.routing_number, 20);
+    const accountNumber = toNullableText(body.accountNumber || body.account_number, 50);
+    const accountType = toNullableText(body.accountType || body.account_type, 20) || 'Checking';
+    const bankName = toNullableText(body.bankName || body.bank_name, 120);
+    const bankPhone = toNullableText(body.bankPhone || body.bank_phone, 40);
+    const bankAddress = toNullableText(body.bankAddress || body.bank_address, 180);
+    const bankAddress2 = toNullableText(body.bankAddress2 || body.bank_address2, 180);
+    const bankCity = toNullableText(body.bankCity || body.bank_city, 120);
+    const bankState = toNullableText(body.bankState || body.bank_state, 2);
+    const bankZip = toNullableText(body.bankZip || body.bank_zip, 10);
+    const nameOnAccount = toNullableText(body.nameOnAccount || body.name_on_account, 120);
+    const mothersMaidenName = toNullableText(body.mothersMaidenName || body.mothers_maiden_name, 120);
+    const ssNumber = toNullableText(body.ssNumber || body.ss_number, 11);
+    const relationshipToCustomer = toNullableText(body.relationshipToCustomer || body.relationship_to_customer, 60);
+    const email = toNullableText(body.email, 160);
+    const dob = isValidISODate(body.dob) ? body.dob : null;
+    const address = toNullableText(body.address, 180);
+    const address2 = toNullableText(body.address2, 180);
+    const initialPaymentAmount = parseFloat(body.initialPaymentAmount || body.initial_payment_amount) || 0;
+    const paymentDayOfMonth = Math.min(31, Math.max(1, parseInt(body.paymentDayOfMonth || body.payment_day_of_month, 10) || 1));
+
+    // Verificar si ya existe registro
+    const { rows: existingRows } = await pool.query(
+      'SELECT id FROM banking_info WHERE lead_id = $1 LIMIT 1',
+      [leadId]
+    );
+
+    let result;
+    if (existingRows.length > 0) {
+      // Actualizar
+      const { rows } = await pool.query(
+        `UPDATE banking_info SET
+          routing_number = $1, account_number = $2, account_type = $3, bank_name = $4, bank_phone = $5,
+          bank_address = $6, bank_address2 = $7, bank_city = $8, bank_state = $9, bank_zip = $10,
+          name_on_account = $11, mothers_maiden_name = $12, ss_number = $13, relationship_to_customer = $14,
+          email = $15, dob = $16, address = $17, address2 = $18,
+          initial_payment_amount = $19, payment_day_of_month = $20,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE lead_id = $21
+         RETURNING *`,
+        [
+          routingNumber, accountNumber, accountType, bankName, bankPhone,
+          bankAddress, bankAddress2, bankCity, bankState, bankZip,
+          nameOnAccount, mothersMaidenName, ssNumber, relationshipToCustomer,
+          email, dob, address, address2,
+          initialPaymentAmount, paymentDayOfMonth,
+          leadId
+        ]
+      );
+      result = rows[0];
+    } else {
+      // Crear nuevo
+      const { rows } = await pool.query(
+        `INSERT INTO banking_info (
+          lead_id, routing_number, account_number, account_type, bank_name, bank_phone,
+          bank_address, bank_address2, bank_city, bank_state, bank_zip,
+          name_on_account, mothers_maiden_name, ss_number, relationship_to_customer,
+          email, dob, address, address2,
+          initial_payment_amount, payment_day_of_month
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        RETURNING *`,
+        [
+          leadId, routingNumber, accountNumber, accountType, bankName, bankPhone,
+          bankAddress, bankAddress2, bankCity, bankState, bankZip,
+          nameOnAccount, mothersMaidenName, ssNumber, relationshipToCustomer,
+          email, dob, address, address2,
+          initialPaymentAmount, paymentDayOfMonth
+        ]
+      );
+      result = rows[0];
+    }
+
+    res.json({ 
+      banking: result, 
+      message: 'Información bancaria guardada correctamente.' 
+    });
+  } catch (error) {
+    console.error('Error al guardar información bancaria:', error);
+    res.status(500).json({ message: 'Error al guardar información bancaria.' });
+  }
+});
+
+// PATCH /api/leads/:id/banking - Actualizar parcialmente información bancaria
+app.patch('/api/leads/:id/banking', async (req, res) => {
+  const leadId = req.params.id;
+  const body = req.body || {};
+
+  try {
+    // Verificar que existe el registro
+    const { rows: existingRows } = await pool.query(
+      'SELECT id FROM banking_info WHERE lead_id = $1 LIMIT 1',
+      [leadId]
+    );
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({ message: 'No hay información bancaria para este lead.' });
+    }
+
+    // Construir campos a actualizar dinámicamente
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    const fieldMappings = {
+      'routingNumber': 'routing_number',
+      'routing_number': 'routing_number',
+      'accountNumber': 'account_number',
+      'account_number': 'account_number',
+      'accountType': 'account_type',
+      'account_type': 'account_type',
+      'bankName': 'bank_name',
+      'bank_name': 'bank_name',
+      'bankPhone': 'bank_phone',
+      'bank_phone': 'bank_phone',
+      'bankAddress': 'bank_address',
+      'bank_address': 'bank_address',
+      'bankAddress2': 'bank_address2',
+      'bank_address2': 'bank_address2',
+      'bankCity': 'bank_city',
+      'bank_city': 'bank_city',
+      'bankState': 'bank_state',
+      'bank_state': 'bank_state',
+      'bankZip': 'bank_zip',
+      'bank_zip': 'bank_zip',
+      'nameOnAccount': 'name_on_account',
+      'name_on_account': 'name_on_account',
+      'mothersMaidenName': 'mothers_maiden_name',
+      'mothers_maiden_name': 'mothers_maiden_name',
+      'ssNumber': 'ss_number',
+      'ss_number': 'ss_number',
+      'relationshipToCustomer': 'relationship_to_customer',
+      'relationship_to_customer': 'relationship_to_customer',
+      'email': 'email',
+      'address': 'address',
+      'address2': 'address2',
+      'initialPaymentAmount': 'initial_payment_amount',
+      'initial_payment_amount': 'initial_payment_amount',
+      'paymentDayOfMonth': 'payment_day_of_month',
+      'payment_day_of_month': 'payment_day_of_month'
+    };
+
+    for (const [clientKey, dbKey] of Object.entries(fieldMappings)) {
+      if (Object.prototype.hasOwnProperty.call(body, clientKey)) {
+        let value = body[clientKey];
+        
+        // Normalizar valores
+        if (['initialPaymentAmount', 'initial_payment_amount'].includes(clientKey)) {
+          value = parseFloat(value) || 0;
+        } else if (['paymentDayOfMonth', 'payment_day_of_month'].includes(clientKey)) {
+          value = Math.min(31, Math.max(1, parseInt(value, 10) || 1));
+        } else if (clientKey === 'dob') {
+          value = isValidISODate(value) ? value : null;
+        } else if (typeof value === 'string') {
+          value = value.trim() || null;
+        }
+
+        updates.push(`${dbKey} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(leadId);
+
+    const { rows } = await pool.query(
+      `UPDATE banking_info SET ${updates.join(', ')} WHERE lead_id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    res.json({ 
+      banking: rows[0], 
+      message: 'Información bancaria actualizada correctamente.' 
+    });
+  } catch (error) {
+    console.error('Error al actualizar información bancaria:', error);
+    res.status(500).json({ message: 'Error al actualizar información bancaria.' });
+  }
+});
+
+// ============================================
+// ENDPOINTS: Bank Routing Number Lookup (API Ninjas)
+// ============================================
+
+// Buscar banco por nombre (solo cache local - API Ninjas requiere premium para búsqueda)
+app.get('/api/bank-lookup/search', async (req, res) => {
+  const { name } = req.query;
+  
+  if (!name) {
+    return res.status(400).json({ message: 'Se requiere el parámetro name' });
+  }
+  
+  try {
+    // Buscar solo en cache local (API Ninjas búsqueda requiere premium)
+    const { rows } = await pool.query(
+      `SELECT routing_number, bank_name, city, state, zip_code, phone, address 
+       FROM bank_routing_numbers 
+       WHERE bank_name ILIKE $1 
+       ORDER BY bank_name 
+       LIMIT 20`,
+      [`%${name}%`]
+    );
+    
+    res.json({ 
+      banks: rows, 
+      source: 'local',
+      count: rows.length,
+      note: rows.length === 0 ? 'Banco no encontrado en base de datos local. Ingresa el routing number manualmente.' : null
+    });
+    
+  } catch (error) {
+    console.error('Error buscando banco:', error);
+    res.status(500).json({ message: 'Error buscando información del banco.' });
+  }
+});
+
+// Buscar banco por routing number (con cache local)
+app.get('/api/bank-lookup/:routingNumber', async (req, res) => {
+  const { routingNumber } = req.params;
+  
+  // Validar formato de routing number (9 dígitos)
+  if (!/^\d{9}$/.test(routingNumber)) {
+    return res.status(400).json({ message: 'Routing number inválido. Debe tener 9 dígitos.' });
+  }
+  
+  try {
+    // Primero buscar en cache local
+    const { rows } = await pool.query(
+      `SELECT routing_number, bank_name, city, state, zip_code, phone, address 
+       FROM bank_routing_numbers 
+       WHERE routing_number = $1 
+       LIMIT 1`,
+      [routingNumber]
+    );
+    
+    if (rows.length > 0) {
+      return res.json({ 
+        bank: rows[0], 
+        source: 'local' 
+      });
+    }
+    
+    // Si no está en cache, llamar a API Ninjas
+    const API_NINJAS_KEY = 'NEEIpoP244A9BzZsVGtjCfWh34fS1C8XpPkQcfF9';
+    const response = await fetch(`https://api.api-ninjas.com/v1/routingnumber?routing_number=${routingNumber}`, {
+      headers: { 'X-Api-Key': API_NINJAS_KEY }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ message: 'Routing number no encontrado.' });
+      }
+      throw new Error(`API Ninjas error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data || data.length === 0) {
+      return res.status(404).json({ message: 'Routing number no encontrado.' });
+    }
+    
+    const bank = data[0];
+    
+    // Guardar en cache local
+    try {
+      await pool.query(
+        `INSERT INTO bank_routing_numbers 
+         (routing_number, bank_name, city, state, zip_code, phone, address, source) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'api_ninjas')
+         ON CONFLICT (routing_number) DO UPDATE SET
+         bank_name = EXCLUDED.bank_name,
+         city = EXCLUDED.city,
+         state = EXCLUDED.state,
+         zip_code = EXCLUDED.zip_code,
+         phone = EXCLUDED.phone,
+         address = EXCLUDED.address,
+         updated_at = CURRENT_TIMESTAMP`,
+        [
+          bank.routing_number,
+          bank.bank_name || bank.customer_name || 'Unknown Bank',
+          bank.city,
+          bank.state,
+          bank.zip_code,
+          bank.phone_number,
+          bank.street_address
+        ]
+      );
+    } catch (cacheError) {
+      console.log('Error caching bank:', cacheError.message);
+    }
+    
+    res.json({ 
+      bank: bank, 
+      source: 'api_ninjas' 
+    });
+    
+  } catch (error) {
+    console.error('Error buscando routing number:', error);
+    res.status(500).json({ message: 'Error buscando información del banco.' });
+  }
+});
+
 app.get('/', (_req, res) => {
   res.sendFile(path.join(ROOT_DIR, 'index.html'));
 });

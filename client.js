@@ -3412,6 +3412,12 @@
         displayEl.textContent = 'Seleccionar fecha';
       }
 
+      // Fechas límite: hoy y 30 días después
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const maxDate = new Date(today);
+      maxDate.setDate(today.getDate() + 30);
+      
       calcPaymentDayCalendarController = createUnifiedCalendarController({
         triggerEl: trigger,
         calendarEl,
@@ -3428,11 +3434,35 @@
         closeOnSelect: true,
         rerenderAfterSelect: false,
         syncViewToSelectedOnOpen: true,
+        isDateDisabled: (dateObjParam, isoDateParam) => {
+          // Los argumentos vienen como (dateObj, isoDate) en ese orden
+          const dateObj = dateObjParam;
+          
+          // Bloquear último día de cada mes
+          const lastDayOfMonth = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate();
+          if (dateObj.getDate() === lastDayOfMonth) return true;
+          
+          // Bloquear fechas anteriores o iguales a hoy
+          if (dateObj <= today) return true;
+          
+          // Bloquear fechas más de 30 días desde hoy
+          if (dateObj > maxDate) return true;
+          
+          return false;
+        },
         onSelectDate: ({ isoDate }) => {
           selectedCalcPaymentDay = isoDate;
           hiddenInput.value = isoDate;
           persistCalcFirstDepositDate(isoDate, { saveToBackend: true });
           displayEl.textContent = formatCalcPaymentDayDisplay(isoDate);
+          
+          // Sincronizar con Banking: extraer día del mes
+          const dayOfMonth = parseInt(isoDate.split('-')[2], 10);
+          const bankPaymentDayInput = document.getElementById('bankPaymentDay');
+          if (bankPaymentDayInput) {
+            bankPaymentDayInput.value = dayOfMonth;
+          }
+          
           calculateAll();
           showToast(`Primer deposito: ${formatCalcPaymentDayDisplay(isoDate)}`, 'success');
           return true;
@@ -3484,6 +3514,12 @@
       document.getElementById('resultMonthlyPayment').textContent = formatCurrency(monthlyPayment);
       document.getElementById('resultTotalProgram').textContent = formatCurrency(totalProgram);
       document.getElementById('resultSavings').textContent = formatCurrency(totalSavings);
+      
+      // Sincronizar con Banking: Initial Payment Amount
+      const bankInitialPayment = document.getElementById('bankInitialPayment');
+      if (bankInitialPayment && monthlyPayment > 0) {
+        bankInitialPayment.value = monthlyPayment.toFixed(2);
+      }
       
       // Generar tabla de pagos
       generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings);
@@ -3642,6 +3678,11 @@
         // Inicializar calculadora si es la pestaña de calculator
         if (tabName === 'calculator') {
           initCalculator();
+        }
+        
+        // Inicializar banking si es la pestaña de banking
+        if (tabName === 'banking') {
+          initBankingSection();
         }
       }
       
@@ -4107,8 +4148,626 @@
       return diffDays;
     }
     
+    // ============================================
+    // FILES PANEL
+    // ============================================
+    
+    function initFilesPanel() {
+      const filesBtn = document.getElementById('filesBtn');
+      const filesPanel = document.getElementById('filesPanel');
+      const filesCloseBtn = document.getElementById('filesCloseBtn');
+      const filesUploadZone = document.getElementById('filesUploadZone');
+      const filesUploadInput = document.getElementById('filesUploadInput');
+      const filesList = document.getElementById('filesList');
+      
+      if (!filesBtn || !filesPanel) return;
+      
+      // Toggle panel
+      filesBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = filesPanel.classList.contains('hidden');
+        
+        // Cerrar otros paneles
+        document.querySelectorAll('.files-panel, .notes-panel').forEach(p => {
+          if (p !== filesPanel) p.classList.add('hidden');
+        });
+        
+        if (isHidden) {
+          filesPanel.classList.remove('hidden');
+          filesBtn.setAttribute('aria-expanded', 'true');
+          loadFilesList();
+        } else {
+          filesPanel.classList.add('hidden');
+          filesBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+      
+      // Close button
+      if (filesCloseBtn) {
+        filesCloseBtn.addEventListener('click', () => {
+          filesPanel.classList.add('hidden');
+          filesBtn.setAttribute('aria-expanded', 'false');
+        });
+      }
+      
+      // Click outside to close
+      document.addEventListener('click', (e) => {
+        if (!filesPanel.contains(e.target) && !filesBtn.contains(e.target)) {
+          filesPanel.classList.add('hidden');
+          filesBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+      
+      // File upload
+      if (filesUploadInput) {
+        filesUploadInput.addEventListener('change', handleFileUpload);
+      }
+      
+      // Drag and drop
+      if (filesUploadZone) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          filesUploadZone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+          filesUploadZone.addEventListener(eventName, () => {
+            filesUploadZone.classList.add('dragover');
+          }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+          filesUploadZone.addEventListener(eventName, () => {
+            filesUploadZone.classList.remove('dragover');
+          }, false);
+        });
+        
+        filesUploadZone.addEventListener('drop', handleDrop, false);
+      }
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+      }
+      
+      function handleFileUpload(e) {
+        const files = e.target.files;
+        handleFiles(files);
+      }
+      
+      function handleFiles(files) {
+        if (!currentLeadId) {
+          showToast('No hay lead seleccionado', 'error');
+          return;
+        }
+        
+        Array.from(files).forEach(file => {
+          uploadFile(file);
+        });
+      }
+      
+      async function uploadFile(file) {
+        // Validar tipo y tamaño
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 
+          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        
+        if (!allowedTypes.includes(file.type)) {
+          showToast(`Tipo de archivo no permitido: ${file.name}`, 'error');
+          return;
+        }
+        
+        if (file.size > maxSize) {
+          showToast(`Archivo muy grande: ${file.name} (máx 10MB)`, 'error');
+          return;
+        }
+        
+        // Guardar en localStorage como base64 (simulación)
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const fileData = {
+            id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            leadId: currentLeadId,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data: e.target.result,
+            uploadedAt: new Date().toISOString()
+          };
+          
+          // Guardar en localStorage
+          const filesKey = `lead_files_${currentLeadId}`;
+          const existingFiles = JSON.parse(localStorage.getItem(filesKey) || '[]');
+          existingFiles.push(fileData);
+          localStorage.setItem(filesKey, JSON.stringify(existingFiles));
+          
+          showToast(`Archivo subido: ${file.name}`, 'success');
+          loadFilesList();
+        };
+        reader.readAsDataURL(file);
+      }
+      
+      function loadFilesList() {
+        if (!filesList || !currentLeadId) return;
+        
+        const filesKey = `lead_files_${currentLeadId}`;
+        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
+        
+        if (files.length === 0) {
+          filesList.innerHTML = `
+            <div class="files-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+              </svg>
+              <p>No hay archivos aún</p>
+              <span>Los archivos subidos aparecerán aquí</span>
+            </div>
+          `;
+          return;
+        }
+        
+        filesList.innerHTML = files.map(file => {
+          const size = formatFileSize(file.size);
+          const date = new Date(file.uploadedAt).toLocaleDateString('es-ES');
+          const icon = getFileIcon(file.type);
+          
+          return `
+            <div class="file-item" data-file-id="${file.id}">
+              <div class="file-icon">
+                ${icon}
+              </div>
+              <div class="file-info">
+                <div class="file-name" title="${file.name}">${file.name}</div>
+                <div class="file-meta">${size} • ${date}</div>
+              </div>
+              <div class="file-actions">
+                <button class="file-btn" title="Descargar" onclick="downloadFile('${file.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
+                <button class="file-btn delete" title="Eliminar" onclick="deleteFile('${file.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+      
+      function getFileIcon(type) {
+        if (type.includes('pdf')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>`;
+        } else if (type.includes('image')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+        } else if (type.includes('word')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+        }
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+      }
+      
+      // Exponer funciones globales
+      window.downloadFile = function(fileId) {
+        const filesKey = `lead_files_${currentLeadId}`;
+        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
+        const file = files.find(f => f.id === fileId);
+        
+        if (file && file.data) {
+          const link = document.createElement('a');
+          link.href = file.data;
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      };
+      
+      window.deleteFile = function(fileId) {
+        if (!confirm('¿Eliminar este archivo?')) return;
+        
+        const filesKey = `lead_files_${currentLeadId}`;
+        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
+        const updatedFiles = files.filter(f => f.id !== fileId);
+        localStorage.setItem(filesKey, JSON.stringify(updatedFiles));
+        
+        showToast('Archivo eliminado', 'success');
+        loadFilesList();
+      };
+    }
+    
     // Cargar datos
     initNotesPanel();
+    initFilesPanel();
     loadLead();
 
 
+
+    // ============================================
+    // BANKING SECTION
+    // ============================================
+    
+    let bankingDataLoaded = false;
+    let currentBankingData = null;
+    
+    function initBankingSection() {
+      if (bankingDataLoaded) return;
+      
+      // FIX: Mover bankingSection fuera de calculatorSection si está dentro
+      const bankingSection = document.getElementById('bankingSection');
+      const calculatorSection = document.getElementById('calculatorSection');
+      const leadContentArea = document.querySelector('.lead-content-area');
+      
+      if (bankingSection && calculatorSection && leadContentArea) {
+        // Verificar si bankingSection está dentro de calculatorSection
+        if (calculatorSection.contains(bankingSection)) {
+          console.log('[Banking] Moving section outside calculatorSection');
+          // Mover bankingSection después de calculatorSection
+          leadContentArea.insertBefore(bankingSection, calculatorSection.nextSibling);
+        }
+      }
+      
+      loadBankingData();
+      setupBankingEventListeners();
+      bankingDataLoaded = true;
+    }
+    
+    async function loadBankingData() {
+      if (!currentLeadId) return;
+      
+      try {
+        const response = await fetch(`/api/leads/${currentLeadId}/banking`);
+        const data = await response.json();
+        
+        if (data.banking) {
+          currentBankingData = data.banking;
+          populateBankingForm(data.banking);
+        } else {
+          // Pre-popular con datos del lead si existe
+          const leadName = document.querySelector('.lead-name-text')?.textContent?.trim();
+          if (leadName && leadName !== 'Cargando...') {
+            const nameInput = document.getElementById('bankNameOnAccount');
+            if (nameInput) nameInput.value = leadName;
+          }
+          
+          // Sincronizar Day of Month desde Calculator
+          const calcFirstDepositDate = document.getElementById('calcFirstDepositDate')?.value;
+          if (calcFirstDepositDate) {
+            const dayOfMonth = parseInt(calcFirstDepositDate.split('-')[2], 10);
+            const bankPaymentDayInput = document.getElementById('bankPaymentDay');
+            if (bankPaymentDayInput && !bankPaymentDayInput.value) {
+              bankPaymentDayInput.value = dayOfMonth;
+            }
+          }
+          
+          // Sincronizar Initial Payment desde Calculator (Monthly Payment)
+          const monthlyPaymentText = document.getElementById('resultMonthlyPayment')?.textContent;
+          if (monthlyPaymentText) {
+            const monthlyPayment = parseCurrency(monthlyPaymentText);
+            const bankInitialPayment = document.getElementById('bankInitialPayment');
+            if (bankInitialPayment && monthlyPayment > 0 && !bankInitialPayment.value) {
+              bankInitialPayment.value = monthlyPayment.toFixed(2);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading banking data:', error);
+      }
+    }
+    
+    function populateBankingForm(data) {
+      // Campos principales de cuenta
+      setValue('bankRoutingNumber', data.routing_number);
+      setValue('bankAccountNumber', data.account_number);
+      setValue('bankAccountType', data.account_type || 'Checking');
+      setValue('bankName', data.bank_name);
+      setValue('bankPhone', data.bank_phone);
+      
+      // Dirección del banco
+      setValue('bankAddress', data.bank_address);
+      setValue('bankAddress2', data.bank_address2);
+      setValue('bankCity', data.bank_city);
+      setValue('bankState', data.bank_state);
+      setValue('bankZip', data.bank_zip);
+      
+      // Datos del titular
+      setValue('bankNameOnAccount', data.name_on_account);
+      setValue('bankMothersMaiden', data.mothers_maiden_name);
+      setValue('bankSSN', data.ss_number);
+      setValue('bankRelationship', data.relationship_to_customer);
+      
+      // Contacto adicional
+      setValue('bankEmail', data.email);
+      setValue('bankDOB', data.dob ? data.dob.split('T')[0] : '');
+      setValue('bankHolderAddress', data.address);
+      setValue('bankHolderAddress2', data.address2);
+      
+      // Configuración de pagos
+      setValue('bankInitialPayment', formatMoneyInput(data.initial_payment_amount));
+      setValue('bankPaymentDay', data.payment_day_of_month);
+      
+      // Si hay datos expandidos, mostrar indicadores
+      if (data.bank_address || data.bank_city || data.bank_state || data.bank_zip) {
+        expandSection('bankAddressFields');
+      }
+      if (data.mothers_maiden_name) {
+        expandSection('maidenNameField');
+      }
+      if (data.ss_number) {
+        expandSection('ssnField');
+      }
+      if (data.relationship_to_customer) {
+        expandSection('relationshipField');
+      }
+      if (data.email || data.dob || data.address) {
+        expandSection('additionalFields');
+      }
+    }
+    
+    function setValue(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.value = value || '';
+      }
+    }
+    
+    function formatMoneyInput(value) {
+      if (!value || value === 0) return '';
+      return parseFloat(value).toFixed(2);
+    }
+    
+    function expandSection(sectionId) {
+      const section = document.getElementById(sectionId);
+      const btn = document.querySelector(`[data-target="${sectionId}"]`);
+      if (section && btn) {
+        section.classList.remove('hidden');
+        btn.classList.add('expanded');
+      }
+    }
+    
+    function setupBankingEventListeners() {
+      // Botones expandibles
+      document.querySelectorAll('.banking-expand-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.dataset.target;
+          const target = document.getElementById(targetId);
+          if (target) {
+            target.classList.toggle('hidden');
+            btn.classList.toggle('expanded');
+          }
+        });
+      });
+      
+      // Botón Get Bank Details
+      const btnGetDetails = document.getElementById('btnGetBankDetails');
+      if (btnGetDetails) {
+        btnGetDetails.addEventListener('click', handleGetBankDetails);
+      }
+      
+      // Botón Guardar
+      const btnSave = document.getElementById('btnSaveBankingInfo');
+      if (btnSave) {
+        btnSave.addEventListener('click', handleSaveBankingInfo);
+      }
+      
+      // Formato automático para campos de dinero
+      const initialPaymentInput = document.getElementById('bankInitialPayment');
+      if (initialPaymentInput) {
+        initialPaymentInput.addEventListener('blur', () => {
+          const value = parseFloat(initialPaymentInput.value) || 0;
+          if (value > 0) {
+            initialPaymentInput.value = value.toFixed(2);
+          }
+        });
+      }
+      
+      // Formato para SSN
+      const ssnInput = document.getElementById('bankSSN');
+      if (ssnInput) {
+        ssnInput.addEventListener('input', (e) => {
+          let value = e.target.value.replace(/\D/g, '');
+          if (value.length > 9) value = value.slice(0, 9);
+          if (value.length >= 5) {
+            value = value.slice(0, 3) + '-' + value.slice(3, 5) + '-' + value.slice(5);
+          } else if (value.length >= 3) {
+            value = value.slice(0, 3) + '-' + value.slice(3);
+          }
+          e.target.value = value;
+        });
+      }
+      
+      // Limitar payment day a 1-31
+      const paymentDayInput = document.getElementById('bankPaymentDay');
+      if (paymentDayInput) {
+        paymentDayInput.addEventListener('input', (e) => {
+          let value = parseInt(e.target.value, 10);
+          if (value < 1) e.target.value = 1;
+          if (value > 31) e.target.value = 31;
+        });
+      }
+    }
+    
+    async function handleGetBankDetails() {
+      const routingNumber = document.getElementById('bankRoutingNumber').value.trim();
+      const bankNameInput = document.getElementById('bankName').value.trim();
+      
+      // Validar que al menos uno de los dos esté presente
+      if (!routingNumber && !bankNameInput) {
+        showBankingStatus('Please enter a routing number (9 digits) or bank name', 'error');
+        return;
+      }
+      
+      showBankingStatus('Looking up bank details...', '');
+      
+      try {
+        // OPCIÓN 1: Si tenemos routing number válido (9 dígitos) - API GRATUITA
+        if (routingNumber && /^\d{9}$/.test(routingNumber)) {
+          const response = await fetch(`/api/bank-lookup/${routingNumber}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            const bank = data.bank;
+            
+            document.getElementById('bankName').value = bank.bank_name || bank.customer_name || '';
+            document.getElementById('bankCity').value = bank.city || '';
+            document.getElementById('bankState').value = bank.state || '';
+            document.getElementById('bankZip').value = bank.zip_code || '';
+            document.getElementById('bankAddress').value = bank.address || bank.street_address || '';
+            if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
+            
+            expandSection('bankAddressFields');
+            showBankingStatus(`✓ Bank details found! (${data.source === 'local' ? 'from cache' : 'from API'})`, 'success');
+            return;
+          } else if (response.status === 404) {
+            showBankingStatus('Routing number not found in database. Please verify or enter details manually.', 'error');
+            return;
+          }
+        }
+        
+        // OPCIÓN 2: Si solo tenemos nombre de banco - BUSCAR EN CACHE LOCAL
+        if (bankNameInput && bankNameInput.length >= 3) {
+          const response = await fetch(`/api/bank-lookup/search?name=${encodeURIComponent(bankNameInput)}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.banks && data.banks.length > 0) {
+              const bank = data.banks[0]; // Tomar el primer resultado
+              
+              document.getElementById('bankRoutingNumber').value = bank.routing_number || '';
+              document.getElementById('bankName').value = bank.bank_name || '';
+              document.getElementById('bankCity').value = bank.city || '';
+              document.getElementById('bankState').value = bank.state || '';
+              document.getElementById('bankZip').value = bank.zip_code || '';
+              document.getElementById('bankAddress').value = bank.address || '';
+              if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
+              
+              expandSection('bankAddressFields');
+              showBankingStatus(`✓ Found in local database. Routing: ${bank.routing_number}`, 'success');
+              return;
+            } else {
+              showBankingStatus('Bank not found in local database. Please enter routing number (9 digits) to lookup.', 'error');
+              return;
+            }
+          }
+        }
+        
+        // Si el routing number no tiene 9 dígitos
+        if (routingNumber && !/^\d{9}$/.test(routingNumber)) {
+          showBankingStatus('Routing number must be exactly 9 digits', 'error');
+          return;
+        }
+        
+        showBankingStatus('Could not find bank details. Please enter manually.', '');
+        
+      } catch (error) {
+        console.error('Error getting bank details:', error);
+        showBankingStatus('Error looking up bank details. Please enter manually.', 'error');
+      }
+    }
+    
+    async function handleSaveBankingInfo() {
+      if (!currentLeadId) {
+        showBankingStatus('No lead selected', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('btnSaveBankingInfo');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="animation: spin 1s linear infinite;">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+        </svg>
+        Saving...
+      `;
+      
+      const bankingData = {
+        routingNumber: document.getElementById('bankRoutingNumber').value.trim(),
+        accountNumber: document.getElementById('bankAccountNumber').value.trim(),
+        accountType: document.getElementById('bankAccountType').value,
+        bankName: document.getElementById('bankName').value.trim(),
+        bankPhone: document.getElementById('bankPhone').value.trim(),
+        bankAddress: document.getElementById('bankAddress').value.trim(),
+        bankAddress2: document.getElementById('bankAddress2').value.trim(),
+        bankCity: document.getElementById('bankCity').value.trim(),
+        bankState: document.getElementById('bankState').value.trim().toUpperCase(),
+        bankZip: document.getElementById('bankZip').value.trim(),
+        nameOnAccount: document.getElementById('bankNameOnAccount').value.trim(),
+        mothersMaidenName: document.getElementById('bankMothersMaiden').value.trim(),
+        ssNumber: document.getElementById('bankSSN').value.trim(),
+        relationshipToCustomer: document.getElementById('bankRelationship').value.trim(),
+        email: document.getElementById('bankEmail').value.trim(),
+        dob: document.getElementById('bankDOB').value,
+        address: document.getElementById('bankHolderAddress').value.trim(),
+        address2: document.getElementById('bankHolderAddress2').value.trim(),
+        initialPaymentAmount: parseFloat(document.getElementById('bankInitialPayment').value) || 0,
+        paymentDayOfMonth: parseInt(document.getElementById('bankPaymentDay').value, 10) || 1
+      };
+      
+      try {
+        const response = await fetch(`/api/leads/${currentLeadId}/banking`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bankingData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          currentBankingData = result.banking;
+          showBankingStatus('Banking information saved successfully!', 'success');
+        } else {
+          showBankingStatus(result.message || 'Error saving banking information', 'error');
+        }
+      } catch (error) {
+        console.error('Error saving banking data:', error);
+        showBankingStatus('Error saving banking information', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+    
+    function showBankingStatus(message, type) {
+      const statusEl = document.getElementById('bankingSaveStatus');
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = 'banking-save-status' + (type ? ` ${type}` : '');
+        
+        if (type === 'success' || type === 'error') {
+          setTimeout(() => {
+            statusEl.textContent = '';
+            statusEl.className = 'banking-save-status';
+          }, 4000);
+        }
+      }
+    }
+    
+    // Agregar keyframes para el spinner
+    const bankingStyles = document.createElement('style');
+    bankingStyles.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(bankingStyles);

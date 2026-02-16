@@ -688,3 +688,277 @@ BEGIN
 END $$;
 
 
+
+-- ============================================
+-- TABLA: Información Bancaria del Cliente
+-- ============================================
+CREATE TABLE IF NOT EXISTS banking_info (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL UNIQUE REFERENCES leads(id) ON DELETE CASCADE,
+  
+  -- Datos principales de la cuenta
+  routing_number VARCHAR(20),
+  account_number VARCHAR(50),
+  account_type VARCHAR(20) DEFAULT 'Checking', -- Checking, Savings
+  bank_name VARCHAR(120),
+  bank_phone VARCHAR(40),
+  
+  -- Dirección del banco
+  bank_address VARCHAR(180),
+  bank_address2 VARCHAR(180),
+  bank_city VARCHAR(120),
+  bank_state VARCHAR(2),
+  bank_zip VARCHAR(10),
+  
+  -- Datos del titular
+  name_on_account VARCHAR(120),
+  mothers_maiden_name VARCHAR(120),
+  ss_number VARCHAR(11),
+  relationship_to_customer VARCHAR(60),
+  
+  -- Contacto adicional
+  email VARCHAR(160),
+  dob DATE,
+  address TEXT,
+  address2 TEXT,
+  
+  -- Configuración de pagos
+  initial_payment_amount NUMERIC(12,2) DEFAULT 0,
+  payment_day_of_month INTEGER DEFAULT 1 CHECK (payment_day_of_month >= 1 AND payment_day_of_month <= 31),
+  
+  -- Metadata
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Migraciones para campos opcionales (por si la tabla ya existe)
+DO $$
+BEGIN
+  -- routing_number
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'routing_number'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN routing_number VARCHAR(20);
+  END IF;
+
+  -- account_number
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'account_number'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN account_number VARCHAR(50);
+  END IF;
+
+  -- account_type
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'account_type'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN account_type VARCHAR(20) DEFAULT 'Checking';
+  END IF;
+
+  -- bank_name
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_name'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_name VARCHAR(120);
+  END IF;
+
+  -- bank_phone
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_phone'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_phone VARCHAR(40);
+  END IF;
+
+  -- bank_address
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_address'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_address VARCHAR(180);
+  END IF;
+
+  -- bank_address2
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_address2'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_address2 VARCHAR(180);
+  END IF;
+
+  -- bank_city
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_city'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_city VARCHAR(120);
+  END IF;
+
+  -- bank_state
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_state'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_state VARCHAR(2);
+  END IF;
+
+  -- bank_zip
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'bank_zip'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN bank_zip VARCHAR(10);
+  END IF;
+
+  -- name_on_account
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'name_on_account'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN name_on_account VARCHAR(120);
+  END IF;
+
+  -- mothers_maiden_name
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'mothers_maiden_name'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN mothers_maiden_name VARCHAR(120);
+  END IF;
+
+  -- ss_number
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'ss_number'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN ss_number VARCHAR(11);
+  END IF;
+
+  -- relationship_to_customer
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'relationship_to_customer'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN relationship_to_customer VARCHAR(60);
+  END IF;
+
+  -- email
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'email'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN email VARCHAR(160);
+  END IF;
+
+  -- dob
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'dob'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN dob DATE;
+  END IF;
+
+  -- address
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'address'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN address TEXT;
+  END IF;
+
+  -- address2
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'address2'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN address2 TEXT;
+  END IF;
+
+  -- initial_payment_amount
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'initial_payment_amount'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN initial_payment_amount NUMERIC(12,2) DEFAULT 0;
+  END IF;
+
+  -- payment_day_of_month
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'payment_day_of_month'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN payment_day_of_month INTEGER DEFAULT 1;
+  END IF;
+
+  -- created_at
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  -- updated_at
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'banking_info' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE banking_info ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+-- Índices para banking_info
+CREATE INDEX IF NOT EXISTS idx_banking_info_lead_id ON banking_info (lead_id);
+
+-- ============================================
+-- TABLA: Routing Numbers de Bancos (Cache local)
+-- ============================================
+CREATE TABLE IF NOT EXISTS bank_routing_numbers (
+  id BIGSERIAL PRIMARY KEY,
+  routing_number VARCHAR(9) NOT NULL UNIQUE,
+  bank_name VARCHAR(200) NOT NULL,
+  city VARCHAR(120),
+  state VARCHAR(2),
+  zip_code VARCHAR(10),
+  phone VARCHAR(40),
+  address VARCHAR(200),
+  source VARCHAR(50) DEFAULT 'api_ninjas',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índices para búsqueda rápida
+CREATE INDEX IF NOT EXISTS idx_bank_routing_number ON bank_routing_numbers (routing_number);
+CREATE INDEX IF NOT EXISTS idx_bank_name ON bank_routing_numbers (bank_name);
+CREATE INDEX IF NOT EXISTS idx_bank_city_state ON bank_routing_numbers (city, state);
+
+-- Datos iniciales de los bancos más comunes (para respaldo rápido)
+INSERT INTO bank_routing_numbers (routing_number, bank_name, city, state) VALUES
+('021000021', 'JPMorgan Chase Bank', 'Tampa', 'FL'),
+('322271627', 'JPMorgan Chase Bank', 'Phoenix', 'AZ'),
+('121000248', 'Wells Fargo Bank', 'San Francisco', 'CA'),
+('122000247', 'Wells Fargo Bank', 'Minneapolis', 'MN'),
+('026009593', 'Bank of America', 'Richmond', 'VA'),
+('111000025', 'Bank of America', 'Richardson', 'TX'),
+('021000322', 'Bank of America', 'Richmond', 'VA'),
+('021000089', 'Citibank', 'New York', 'NY'),
+('022000868', 'Citibank', 'New York', 'NY'),
+('084000026', 'US Bank', 'Cincinnati', 'OH'),
+('043000096', 'PNC Bank', 'Pittsburgh', 'PA'),
+('053000196', 'Truist Bank', 'Winston-Salem', 'NC'),
+('051000017', 'Truist Bank', 'Richmond', 'VA'),
+('061000104', 'Regions Bank', 'Birmingham', 'AL'),
+('121042882', 'Wells Fargo Bank NA', 'Minneapolis', 'MN'),
+('011000015', 'Bank of America NA', 'Richmond', 'VA'),
+('031000503', 'Bank of America', 'Richmond', 'VA'),
+('122105155', 'US Bank', 'St. Paul', 'MN'),
+('031000053', 'PNC Bank', 'Pittsburgh', 'PA'),
+('255071981', 'Truist Bank', 'Richmond', 'VA'),
+('067006432', 'Wells Fargo Bank', 'Minneapolis', 'MN'),
+('114000686', 'Wells Fargo Bank', 'Minneapolis', 'MN'),
+('113000023', 'Bank of America', 'Houston', 'TX')
+ON CONFLICT (routing_number) DO NOTHING;

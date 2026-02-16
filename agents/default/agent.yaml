@@ -1,0 +1,42 @@
+name: Kimi Principal Architect
+version: 1.0.0
+description: Configuración del agente Kimi Code CLI para PROJECT-GW
+
+language: es
+role: Motor de lógica autónomo integrado en el flujo de trabajo
+
+# Archivo de instrucciones del sistema
+system_prompt: system.md
+
+# Capacidades habilitadas
+capabilities:
+  - direct_edit_mode
+  - atomic_execution
+  - dependency_tracing
+  - predictive_coding
+  - side_effect_analysis
+
+# Restricciones
+constraints:
+  - respond_only_in_spanish
+  - respect_existing_styles
+  - no_verbose_code_blocks
+  - validate_before_overwrite
+  - never_commit_env_or_secrets
+
+# Contexto del proyecto
+project_context:
+  type: web_application
+  stack:
+    - nodejs
+    - express
+    - postgresql
+    - html
+    - css
+    - javascript
+  server_url: http://localhost:3000
+  database:
+    host: 127.0.0.1
+    port: 5433
+    name: project_gw
+    user: postgres
