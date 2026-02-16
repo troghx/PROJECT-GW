@@ -597,6 +597,204 @@
       color: #f87171;
     }
 
+    /* Miniatura de archivo en la lista */
+    .file-thumbnail {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: cover;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .file-thumbnail:hover {
+      border-color: rgba(126, 234, 252, 0.5);
+      transform: scale(1.05);
+    }
+
+    .file-item.clickable {
+      cursor: pointer;
+    }
+
+    .file-item.clickable:hover {
+      background: rgba(126, 234, 252, 0.1);
+    }
+
+    /* Modal de visualización de archivos */
+    .file-viewer-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .file-viewer-modal.hidden {
+      display: none;
+    }
+
+    .file-viewer-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+    }
+
+    .file-viewer-modal-content {
+      position: relative;
+      width: min(90vw, 900px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(155deg, rgba(21, 29, 44, 0.98) 0%, rgba(16, 23, 35, 0.96) 100%);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .file-viewer-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .file-viewer-modal-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 20px;
+    }
+
+    .file-viewer-modal-close {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .file-viewer-modal-close:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: white;
+    }
+
+    .file-viewer-modal-body {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .file-viewer-modal-body img {
+      max-width: 100%;
+      max-height: 70vh;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .file-viewer-modal-body iframe {
+      width: 100%;
+      height: 70vh;
+      border: none;
+      border-radius: 8px;
+    }
+
+    .file-viewer-modal-body .file-icon-large {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .file-viewer-modal-body .file-icon-large svg {
+      width: 80px;
+      height: 80px;
+    }
+
+    .file-viewer-modal-body .file-icon-large p {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .file-viewer-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .file-viewer-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .file-viewer-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: white;
+    }
+
+    .file-viewer-btn.primary {
+      background: linear-gradient(135deg, rgba(126, 234, 252, 0.9), rgba(59, 130, 246, 0.9));
+      border-color: transparent;
+      color: white;
+    }
+
+    .file-viewer-btn.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    /* Vista previa en upload zone */
+    .files-upload-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .files-upload-preview-item {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 2px solid rgba(126, 234, 252, 0.3);
+    }
+
     .notes-panel {
       position: absolute;
       top: calc(100% + 12px);
@@ -3492,6 +3690,58 @@
       color: rgba(15, 23, 42, 0.8);
     }
 
+    body.home-active.theme-light .file-viewer-modal-content {
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.96) 100%);
+      border-color: rgba(15, 23, 42, 0.15);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-header,
+    body.home-active.theme-light .file-viewer-modal-footer {
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-title {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-close {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: rgba(15, 23, 42, 0.5);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-close:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: rgba(15, 23, 42, 0.8);
+    }
+
+    body.home-active.theme-light .file-viewer-btn {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    body.home-active.theme-light .file-viewer-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-body .file-icon-large {
+      color: rgba(15, 23, 42, 0.4);
+    }
+
+    body.home-active.theme-light .file-viewer-modal-body .file-icon-large p {
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    body.home-active.theme-light .file-thumbnail {
+      border-color: transparent;
+    }
+
+    body.home-active.theme-light .file-thumbnail:hover {
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
     body.home-active.theme-light .notes-panel-title,
     body.home-active.theme-light .notes-composer-label,
     body.home-active.theme-light .notes-templates-title {
@@ -5771,6 +6021,35 @@
             <button id="notesTemplatesManagerDeleteBtn" class="notes-btn danger" type="button">Eliminar</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para visualizar archivos -->
+  <div id="fileViewerModal" class="file-viewer-modal hidden" aria-hidden="true">
+    <div class="file-viewer-modal-backdrop" onclick="closeFileViewer()"></div>
+    <div class="file-viewer-modal-content">
+      <div class="file-viewer-modal-header">
+        <span id="fileViewerTitle" class="file-viewer-modal-title">Vista previa</span>
+        <button class="file-viewer-modal-close" onclick="closeFileViewer()" title="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="file-viewer-modal-body" id="fileViewerBody">
+        <!-- El contenido se carga dinámicamente -->
+      </div>
+      <div class="file-viewer-modal-footer">
+        <button id="fileViewerDownloadBtn" class="file-viewer-btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar
+        </button>
       </div>
     </div>
   </div>

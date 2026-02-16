@@ -4251,6 +4251,61 @@
         });
       }
       
+      // Contenedor para vistas previas
+      let uploadPreviewContainer = null;
+      
+      function getUploadPreviewContainer() {
+        if (!uploadPreviewContainer) {
+          const uploadZone = document.getElementById('filesUploadZone');
+          uploadPreviewContainer = document.createElement('div');
+          uploadPreviewContainer.className = 'files-upload-preview';
+          uploadPreviewContainer.style.cssText = 'display:none;';
+          uploadZone.appendChild(uploadPreviewContainer);
+        }
+        return uploadPreviewContainer;
+      }
+      
+      function showUploadPreview(file, dataUrl) {
+        const container = getUploadPreviewContainer();
+        const isImage = file.type && file.type.includes('image');
+        
+        const previewItem = document.createElement('div');
+        previewItem.style.cssText = 'position:relative;width:60px;height:60px;';
+        
+        if (isImage && dataUrl) {
+          previewItem.innerHTML = `
+            <img src="${dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid rgba(126,234,252,0.5);" title="${file.name}">
+            <div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#4ade80;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="10" height="10">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+          `;
+        } else {
+          previewItem.innerHTML = `
+            <div style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(126,234,252,0.1);border-radius:8px;border:2px solid rgba(126,234,252,0.3);">
+              ${getFileIcon(file.type)}
+            </div>
+            <div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#4ade80;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="10" height="10">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+          `;
+        }
+        
+        container.appendChild(previewItem);
+        container.style.display = 'flex';
+        
+        // Ocultar después de 3 segundos
+        setTimeout(() => {
+          previewItem.remove();
+          if (container.children.length === 0) {
+            container.style.display = 'none';
+          }
+        }, 3000);
+      }
+      
       async function uploadFile(file) {
         // Validar tipo y tamaño
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 
@@ -4270,15 +4325,20 @@
         // Guardar en localStorage como base64 (simulación)
         const reader = new FileReader();
         reader.onload = async (e) => {
+          const dataUrl = e.target.result;
+          
           const fileData = {
             id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             leadId: currentLeadId,
             name: file.name,
             type: file.type,
             size: file.size,
-            data: e.target.result,
+            data: dataUrl,
             uploadedAt: new Date().toISOString()
           };
+          
+          // Mostrar vista previa
+          showUploadPreview(file, dataUrl);
           
           // Guardar en localStorage
           const filesKey = `lead_files_${currentLeadId}`;
@@ -4315,18 +4375,26 @@
         filesList.innerHTML = files.map(file => {
           const size = formatFileSize(file.size);
           const date = new Date(file.uploadedAt).toLocaleDateString('es-ES');
-          const icon = getFileIcon(file.type);
+          const isImage = file.type && file.type.includes('image');
+          const clickableClass = isImage || file.type === 'application/pdf' ? 'clickable' : '';
+          const thumbnail = isImage && file.data 
+            ? `<img src="${file.data}" class="file-thumbnail" alt="${file.name}" onclick="openFile('${file.id}')">`
+            : `<div class="file-icon" onclick="openFile('${file.id}')">${getFileIcon(file.type)}</div>`;
           
           return `
-            <div class="file-item" data-file-id="${file.id}">
-              <div class="file-icon">
-                ${icon}
-              </div>
-              <div class="file-info">
+            <div class="file-item ${clickableClass}" data-file-id="${file.id}">
+              ${thumbnail}
+              <div class="file-info" onclick="${isImage || file.type === 'application/pdf' ? `openFile('${file.id}')` : ''}">
                 <div class="file-name" title="${file.name}">${file.name}</div>
                 <div class="file-meta">${size} • ${date}</div>
               </div>
               <div class="file-actions">
+                <button class="file-btn" title="Ver" onclick="openFile('${file.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
                 <button class="file-btn" title="Descargar" onclick="downloadFile('${file.id}')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -4391,6 +4459,66 @@
         
         showToast('Archivo eliminado', 'success');
         loadFilesList();
+      };
+      
+      window.openFile = function(fileId) {
+        const filesKey = `lead_files_${currentLeadId}`;
+        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
+        const file = files.find(f => f.id === fileId);
+        
+        if (!file || !file.data) {
+          showToast('Archivo no encontrado', 'error');
+          return;
+        }
+        
+        const modal = document.getElementById('fileViewerModal');
+        const title = document.getElementById('fileViewerTitle');
+        const body = document.getElementById('fileViewerBody');
+        const downloadBtn = document.getElementById('fileViewerDownloadBtn');
+        
+        title.textContent = file.name;
+        body.innerHTML = '';
+        
+        // Configurar botón de descarga
+        downloadBtn.onclick = () => downloadFile(fileId);
+        
+        // Mostrar contenido según el tipo
+        const isImage = file.type && file.type.includes('image');
+        const isPDF = file.type === 'application/pdf';
+        
+        if (isImage) {
+          const img = document.createElement('img');
+          img.src = file.data;
+          img.alt = file.name;
+          body.appendChild(img);
+        } else if (isPDF) {
+          const iframe = document.createElement('iframe');
+          iframe.src = file.data;
+          body.appendChild(iframe);
+        } else {
+          // Para otros tipos de archivo, mostrar icono grande
+          body.innerHTML = `
+            <div class="file-icon-large">
+              ${getFileIcon(file.type)}
+              <p>Este tipo de archivo no se puede previsualizar</p>
+              <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">${file.name}</p>
+            </div>
+          `;
+        }
+        
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      };
+      
+      window.closeFileViewer = function() {
+        const modal = document.getElementById('fileViewerModal');
+        const body = document.getElementById('fileViewerBody');
+        
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        body.innerHTML = ''; // Limpiar contenido
       };
     }
     
