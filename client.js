@@ -1372,8 +1372,39 @@
       return dedupeParsedCreditors(parsedEntries);
     }
 
-    async function extractTextFromPdfFile(file) {
+    async function renderPdfPageToImage(page, scale = 2) {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+      return canvas.toDataURL('image/png');
+    }
+
+    async function extractTextWithOCR(imageDataUrl, statusCallback) {
+      const Tesseract = window.Tesseract;
+      if (!Tesseract) {
+        throw new Error('OCR no disponible: Tesseract.js no cargado.');
+      }
+
+      if (statusCallback) statusCallback('Inicializando OCR...');
+      
+      const worker = await Tesseract.createWorker('eng');
+      
+      if (statusCallback) statusCallback('Reconociendo texto...');
+      const result = await worker.recognize(imageDataUrl);
+      
+      await worker.terminate();
+      
+      return result?.data?.text || '';
+    }
+
+    async function extractTextFromPdfFile(file, options = {}) {
       const pdfjs = window.pdfjsLib;
+      const useOCR = options.useOCR !== false; // Por defecto true
+      const onStatus = options.onStatus || null;
+      
       if (!pdfjs) {
         throw new Error('No se pudo cargar el motor PDF en el navegador.');
       }
@@ -1385,6 +1416,7 @@
       const loadingTask = pdfjs.getDocument({ data: buffer });
       const pdf = await loadingTask.promise;
       const rows = [];
+      let usedOCR = false;
 
       for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
         const page = await pdf.getPage(pageNo);
@@ -1401,6 +1433,7 @@
         });
 
         const orderedY = Array.from(byY.keys()).sort((a, b) => b - a);
+        const pageRows = [];
         orderedY.forEach((y) => {
           const line = byY.get(y)
             .sort((a, b) => a.x - b.x)
@@ -1408,12 +1441,36 @@
             .join(' ')
             .replace(/\s+/g, ' ')
             .trim();
-          if (line) rows.push(line);
+          if (line) pageRows.push(line);
         });
-        rows.push('');
+
+        const pageText = pageRows.join('\n');
+        const minTextLength = 50; // Mínimo caracteres para considerar que hay texto útil
+
+        // Si hay poco texto y OCR está habilitado, usar OCR
+        if (useOCR && pageText.length < minTextLength) {
+          if (onStatus) onStatus(`Página ${pageNo}/${pdf.numPages}: Usando OCR...`);
+          try {
+            const imageDataUrl = await renderPdfPageToImage(page, 2);
+            const ocrText = await extractTextWithOCR(imageDataUrl, onStatus);
+            if (ocrText.trim()) {
+              rows.push(...ocrText.split('\n').filter(line => line.trim()));
+              usedOCR = true;
+            }
+          } catch (ocrError) {
+            console.warn(`OCR falló en página ${pageNo}:`, ocrError);
+            // Fallback al texto extraído normalmente (puede estar vacío)
+            rows.push(...pageRows);
+          }
+        } else {
+          rows.push(...pageRows);
+        }
+        
+        rows.push(''); // Separador entre páginas
       }
 
-      return rows.join('\n');
+      const finalText = rows.join('\n');
+      return { text: finalText, usedOCR };
     }
 
     function buildCreditorPayload(entry = {}) {
@@ -1577,6 +1634,7 @@
           }
 
           currentCreditors = Array.isArray(data.creditors) ? data.creditors.map(mapSavedCreditorForUi) : [];
+          window.currentCreditors = currentCreditors; // Exponer para botones masivos
           renderSavedCreditorsTable();
           renderCreditorsSummary(data.summary || null);
           if (currentCreditors.length > 0) {
@@ -1651,10 +1709,15 @@
         const fileName = String(file.name || `Reporte ${index + 1}`);
         try {
           let reportText = '';
+          let usedOCR = false;
           if (/\.txt$/i.test(fileName)) {
             reportText = await file.text();
           } else if (/\.pdf$/i.test(fileName)) {
-            reportText = await extractTextFromPdfFile(file);
+            const extraction = await extractTextFromPdfFile(file, {
+              onStatus: (msg) => setCreditorsStatus(`${fileName}: ${msg}`, 'neutral')
+            });
+            reportText = extraction.text;
+            usedOCR = extraction.usedOCR;
           } else {
             diagnostics.push(`${fileName}: formato no soportado`);
             continue;
@@ -1877,6 +1940,70 @@
       if (applyTotalBtn) {
         applyTotalBtn.addEventListener('click', () => {
           applyCreditorsTotalToCalculator({ persist: true, toast: true });
+        });
+      }
+
+      // Botón Seleccionar Todos
+      const selectAllBtn = document.getElementById('creditorsSelectAllBtn');
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', async () => {
+          console.log('DEBUG: Click Select All, currentCreditors:', currentCreditors.length, 'window:', window.currentCreditors?.length);
+          if (!currentCreditors.length) {
+            setCreditorsStatus('No hay creditors cargados.', 'error');
+            return;
+          }
+          
+          const allSelected = currentCreditors.every(c => c.isIncluded);
+          const newState = !allSelected;
+          
+          try {
+            setCreditorsStatus(newState ? 'Seleccionando todos...' : 'Deseleccionando todos...', 'neutral');
+            
+            // Actualizar todos los creditors en el backend
+            for (const creditor of currentCreditors) {
+              if (creditor.isIncluded !== newState) {
+                await patchSavedCreditor(creditor.id, { isIncluded: newState });
+              }
+            }
+            
+            await loadCreditorsData({ silent: true });
+            applyCreditorsTotalToCalculator({ persist: true, toast: false });
+            setCreditorsStatus(newState ? 'Todos seleccionados.' : 'Todos deseleccionados.', 'success');
+          } catch (error) {
+            setCreditorsStatus(error.message || 'No se pudo actualizar selección.', 'error');
+          }
+        });
+      }
+
+      // Botón Eliminar Todos
+      const deleteAllBtn = document.getElementById('creditorsDeleteAllBtn');
+      if (deleteAllBtn) {
+        deleteAllBtn.addEventListener('click', async () => {
+          if (!currentCreditors.length) {
+            setCreditorsStatus('No hay deudas para eliminar.', 'error');
+            return;
+          }
+          
+          const count = currentCreditors.length;
+          if (!confirm(`¿Eliminar todas las ${count} deudas? Esta acción no se puede deshacer.`)) {
+            return;
+          }
+          
+          try {
+            setCreditorsStatus(`Eliminando ${count} deudas...`, 'neutral');
+            
+            // Eliminar todos los creditors uno por uno
+            for (const creditor of currentCreditors) {
+              await deleteSavedCreditor(creditor.id);
+            }
+            
+            await loadCreditorsData({ silent: true });
+            renderCreditorsSummary(null);
+            applyCreditorsTotalToCalculator({ persist: true, toast: false });
+            setCreditorsStatus(`${count} deudas eliminadas.`, 'success');
+          } catch (error) {
+            setCreditorsStatus(error.message || 'No se pudieron eliminar todas las deudas.', 'error');
+          }
         });
       }
 

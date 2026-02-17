@@ -889,3 +889,95 @@ body.theme-light .empty-state {
 body.theme-light .empty-state p {
   color: rgba(15, 23, 42, 0.6);
 }
+
+/* BADGES - Light Mode Contraste */
+body.theme-light .badge-status-open {
+  background: rgba(34, 197, 94, 0.2);
+  color: #15803d;
+}
+
+body.theme-light .badge-status-closed {
+  background: rgba(148, 163, 184, 0.25);
+  color: #475569;
+}
+
+body.theme-light .badge-status-chargeoff {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+body.theme-light .badge-status-collection {
+  background: rgba(249, 115, 22, 0.15);
+  color: #ea580c;
+}
+
+body.theme-light .badge-type {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+body.theme-light .badge-responsibility {
+  background: rgba(168, 85, 247, 0.15);
+  color: #9333ea;
+}
+
+body.theme-light .badge-months {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+/* Amounts section - Light Mode */
+body.theme-light .creditor-amounts {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+body.theme-light .amount-value {
+  color: rgba(15, 23, 42, 0.95);
+}
+
+body.theme-light .amount-value.debt {
+  color: #0284c7;
+}
+
+body.theme-light .amount-value.past-due {
+  color: #dc2626;
+}
+
+/* Card toggle switch - Light Mode */
+body.theme-light .toggle-switch {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+body.theme-light .toggle-switch.active {
+  background: rgba(34, 197, 94, 0.7);
+}
+
+/* Button card - Light Mode */
+body.theme-light .btn-card {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.7);
+}
+
+body.theme-light .btn-card:hover {
+  background: rgba(15, 23, 42, 0.1);
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+body.theme-light .btn-card.delete {
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+/* Status text - Light Mode */
+body.theme-light .status-text.success {
+  color: #15803d;
+}
+
+body.theme-light .status-text.error {
+  color: #dc2626;
+}
+
+body.theme-light .status-text.loading {
+  color: #0284c7;
+}

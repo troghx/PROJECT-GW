@@ -4,7 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-dotenv.config();
+// Cargar .env desde el directorio padre (raíz del proyecto)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const { pool } = require('./db');
 
@@ -38,7 +39,7 @@ const ZIP_LOOKUP_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 const zipLookupCache = new Map();
 const CREDIT_REPORT_AI_TIMEOUT_MS = 25000;
 const CREDIT_REPORT_AI_MAX_TEXT_CHARS = 120000;
-const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
+const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
 
 const LEAD_SELECT_COLUMNS = `
   id, case_id, full_name, co_applicant_name, co_applicant_email, co_applicant_home_phone, co_applicant_cell_phone, co_applicant_dob, co_applicant_ssn,
@@ -766,8 +767,7 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0,
-          responseMimeType: 'application/json'
+          temperature: 0
         }
       }),
       signal: controller.signal

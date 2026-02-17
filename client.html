@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260216e">
-  <link rel="stylesheet" href="creditors-compact.css?v=20260217f">
+  <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
+  <link rel="stylesheet" href="creditors-final.css?v=20260217m">
   <style>
     :root {
       --lead-viewport-height: 100vh;
@@ -6571,66 +6572,36 @@
         <div id="creditorsSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <div class="creditors-glass-container">
             
-            <!-- Header con tï¿½tulo y resumen -->
-            <div class="creditors-header-glass">
-              <div class="creditors-summary-cards">
-                <div class="creditor-summary-card debt-total">
-                  <span class="summary-label">Total Debt</span>
-                  <strong class="summary-value" id="creditorsTotalDebt">$0.00</strong>
-                </div>
-                <div class="creditor-summary-card applicant-debt" id="creditorsApplicantCard" hidden>
-                  <span class="summary-label">Applicant</span>
-                  <strong class="summary-value" id="creditorsApplicantDebt">$0.00</strong>
-                </div>
-                <div class="creditor-summary-card coapp-debt" id="creditorsCoappCard" hidden>
-                  <span class="summary-label">Co-Applicant</span>
-                  <strong class="summary-value" id="creditorsCoappDebt">$0.00</strong>
-                </div>
-                <div class="creditor-summary-card accounts-count">
-                  <span class="summary-label">Cuentas</span>
-                  <strong class="summary-value" id="creditorsAccountsCount">0</strong>
-                </div>
-                <div class="creditor-summary-card included-amount">
-                  <span class="summary-label">Incluidas</span>
-                  <strong class="summary-value" id="creditorsIncludedAmount">$0.00</strong>
-                </div>
-                <div class="creditor-summary-card past-due">
-                  <span class="summary-label">Vencido</span>
-                  <strong class="summary-value" id="creditorsPastDueTotal">$0.00</strong>
-                </div>
+            <!-- Resumen compacto + Botón -->
+            <div class="creditors-summary-inline">
+              <div class="summary-badges">
+                <span class="summary-badge total">
+                  <small>TOTAL</small> <strong id="creditorsTotalDebt">$0.00</strong>
+                </span>
+                <span class="summary-badge count">
+                  <small>CUENTAS</small> <strong id="creditorsAccountsCount">0</strong>
+                </span>
+                <span class="summary-badge included">
+                  <small>INCLUIDAS</small> <strong id="creditorsIncludedAmount">$0.00</strong>
+                </span>
+                <span class="summary-badge pastdue">
+                  <small>VENCIDO</small> <strong id="creditorsPastDueTotal">$0.00</strong>
+                </span>
               </div>
+              <button class="btn-apply-calc" id="creditorsApplyTotalBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M12 2v20M2 12h20"/>
+                </svg>
+                Aplicar
+              </button>
             </div>
 
             <!-- Lista de creditors guardados -->
             <div class="creditors-saved-section" id="creditorsSavedSection">
-              <div class="saved-header">
-                <h4>Creditors guardados</h4>
-                <div class="saved-actions">
-                  <button class="btn-ghost" id="creditorsApplyTotalBtn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M12 2v20M2 12h20"/>
-                    </svg>
-                    Aplicar a Calculadora
-                  </button>
-                </div>
-              </div>
               <div class="creditors-table-container">
                 <table class="creditors-table" id="creditorsSavedTable">
-                  <thead>
-                    <tr>
-                      <th class="col-checkbox"></th>
-                      <th class="col-num">#</th>
-                      <th class="col-name">ACREEDOR</th>
-                      <th class="col-debt">DEUDA</th>
-                      <th class="col-party">PARTE</th>
-                      <th class="col-account">CUENTA</th>
-                      <th class="col-resp">RESP.</th>
-                      <th class="col-status">STATUS</th>
-                      <th class="col-type">TIPO</th>
-                      <th class="col-months">MESES</th>
-                      <th class="col-past-due">VENCIDO</th>
-                      <th class="col-actions"></th>
-                    </tr>
+                  <thead id="creditorsTableHead">
+                    <!-- Se genera dinámicamente desde JS para permitir reordenar -->
                   </thead>
                   <tbody id="creditorsSavedBody">
                     <tr>
@@ -6747,12 +6718,14 @@
 
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/tesseract.min.js"></script>
+  <script src="credit-report-auto-extract.js?v=20260217b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260217a"></script>
+  <script src="client.js?v=20260217k"></script>
   <script src="quick-actions.js?v=20260216c"></script>
   <script src="creditors-redesign.js?v=20260217k"></script>
 </body>
 </html>
+
 
 
 

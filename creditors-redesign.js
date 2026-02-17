@@ -13,6 +13,9 @@
   let currentCreditors = [];
   let creditorsParseRunId = 0;
   let aiAnalyzerUnavailable = false;
+  let columnOrder = JSON.parse(localStorage.getItem('creditorsColumnOrder') || 'null') || [
+    'checkbox', 'num', 'name', 'debt', 'party', 'account', 'resp', 'status', 'type', 'months', 'pastDue', 'actions'
+  ];
 
   const KNOWN_CREDITORS = [
     'CAPITAL ONE', 'CHASE', 'BANK OF AMERICA', 'WELLS FARGO', 'CITIBANK', 'CITI',
@@ -114,6 +117,13 @@
     const party = parseDebtorParty(value);
     if (party === 'coapp') return 'Co-Applicant';
     if (party === 'applicant') return 'Applicant';
+    return '';
+  }
+
+  function getPartyClass(value) {
+    const party = parseDebtorParty(value);
+    if (party === 'coapp') return 'badge-party-coapp';
+    if (party === 'applicant') return 'badge-party-applicant';
     return '';
   }
 
@@ -738,7 +748,17 @@
         </td>
         <td class="col-debt">${formatCurrency(entry.debt_amount || entry.debtAmount || 0)}</td>
         <td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>
-        <td class="col-account">${escapeHtml(entry.account_number || entry.accountNumber || '-')}</td>
+        <td class="col-account">
+          ${entry.account_number || entry.accountNumber ? `
+            <span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span>
+            <button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar número">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          ` : '-'}
+        </td>
         <td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>
         <td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>
         <td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 12))}</span>` : '-'}</td>
@@ -798,9 +818,207 @@
     }
   }
 
+  // Definición de columnas para reordenamiento
+  const columnDefs = {
+    checkbox: { class: 'col-checkbox', label: '', html: '<button class="btn-header-icon" id="creditorsSelectAllBtn" title="Seleccionar todos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 12l2 2 4-4"/></svg></button>' },
+    num: { class: 'col-num', label: '#' },
+    name: { class: 'col-name', label: 'ACREEDOR' },
+    debt: { class: 'col-debt', label: 'DEUDA' },
+    party: { class: 'col-party', label: 'PARTE' },
+    account: { class: 'col-account', label: 'CUENTA' },
+    resp: { class: 'col-resp', label: 'RESP.' },
+    status: { class: 'col-status', label: 'STATUS' },
+    type: { class: 'col-type', label: 'TIPO' },
+    months: { class: 'col-months', label: 'MESES' },
+    pastDue: { class: 'col-past-due', label: 'VENCIDO' },
+    actions: { class: 'col-actions', label: '', html: '<button class="btn-header-icon btn-delete-icon" id="creditorsDeleteAllBtn" title="Eliminar todas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' }
+  };
+
+  function renderTableHeader() {
+    const thead = document.getElementById('creditorsTableHead');
+    if (!thead) return;
+    
+    const tr = document.createElement('tr');
+    tr.id = 'creditorsHeaderRow';
+    
+    columnOrder.forEach((colKey, index) => {
+      const col = columnDefs[colKey];
+      const th = document.createElement('th');
+      th.className = col.class;
+      th.draggable = true;
+      th.dataset.column = colKey;
+      th.dataset.index = index;
+      th.innerHTML = col.html || col.label;
+      
+      // Eventos drag & drop premium
+      th.addEventListener('dragstart', handleDragStart);
+      th.addEventListener('dragover', handleDragOver);
+      th.addEventListener('drop', handleDrop);
+      th.addEventListener('dragenter', handleDragEnter);
+      th.addEventListener('dragleave', handleDragLeave);
+      th.addEventListener('dragend', handleDragEnd);
+      
+      // Tooltip de arrastre
+      th.title = `Arrastra para reordenar: ${col.label || colKey}`;
+      
+      tr.appendChild(th);
+    });
+    
+    thead.innerHTML = '';
+    thead.appendChild(tr);
+  }
+
+  let draggedCol = null;
+  let dragSourceEl = null;
+  let dragGhost = null;
+
+  function handleDragStart(e) {
+    draggedCol = this.dataset.column;
+    dragSourceEl = this;
+    
+    // Efecto de elevación suave
+    requestAnimationFrame(() => {
+      this.classList.add('dragging');
+    });
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedCol);
+    
+    // Feedback táctil (si está disponible)
+    if (navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const targetTh = e.currentTarget;
+    if (targetTh === dragSourceEl) return;
+    
+    // Indicador de posición suave
+    const rect = targetTh.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const isAfter = e.clientX > midX;
+    
+    // Guardar dirección para el drop
+    targetTh.dataset.dropPosition = isAfter ? 'after' : 'before';
+  }
+
+  function handleDragEnter(e) {
+    e.preventDefault();
+    const targetTh = e.currentTarget;
+    if (targetTh !== dragSourceEl) {
+      targetTh.classList.add('drag-over');
+      
+      // Sonido suave de hover (opcional, muy sutil)
+      // Solo si el usuario ha interactuado previamente
+    }
+  }
+
+  function handleDragLeave(e) {
+    const targetTh = e.currentTarget;
+    // Verificar que realmente salió del elemento (no entró a un hijo)
+    if (!targetTh.contains(e.relatedTarget)) {
+      targetTh.classList.remove('drag-over');
+      delete targetTh.dataset.dropPosition;
+    }
+  }
+
+  function handleDragEnd(e) {
+    // Limpiar todos los estados
+    document.querySelectorAll('#creditorsHeaderRow th').forEach(th => {
+      th.classList.remove('dragging', 'drag-over');
+      delete th.dataset.dropPosition;
+    });
+    draggedCol = null;
+    dragSourceEl = null;
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    const targetTh = e.currentTarget;
+    targetTh.classList.remove('drag-over');
+    
+    const targetCol = targetTh.dataset.column;
+    if (!draggedCol || draggedCol === targetCol) {
+      handleDragEnd(e);
+      return;
+    }
+    
+    // Calcular índices
+    const fromIndex = columnOrder.indexOf(draggedCol);
+    let toIndex = columnOrder.indexOf(targetCol);
+    
+    // Ajustar según posición del cursor (antes o después del target)
+    const dropPosition = targetTh.dataset.dropPosition;
+    if (dropPosition === 'after' && fromIndex < toIndex) {
+      toIndex++;
+    } else if (dropPosition === 'before' && fromIndex > toIndex) {
+      toIndex--;
+    }
+    
+    // Reordenar array
+    columnOrder.splice(fromIndex, 1);
+    columnOrder.splice(toIndex, 0, draggedCol);
+    
+    // Guardar preferencia
+    localStorage.setItem('creditorsColumnOrder', JSON.stringify(columnOrder));
+    
+    // Feedback de éxito
+    if (navigator.vibrate) {
+      navigator.vibrate([20, 30, 20]);
+    }
+    
+    // Animar el cambio
+    animateColumnReorder(fromIndex, toIndex, () => {
+      renderTableHeader();
+      renderSaved();
+      
+      // Animación de entrada suave
+      requestAnimationFrame(() => {
+        const headers = document.querySelectorAll('#creditorsHeaderRow th');
+        headers.forEach((th, i) => {
+          th.style.opacity = '0';
+          th.style.transform = 'translateY(-5px)';
+          setTimeout(() => {
+            th.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            th.style.opacity = '1';
+            th.style.transform = 'translateY(0)';
+          }, i * 30);
+        });
+      });
+    });
+  }
+
+  function animateColumnReorder(fromIndex, toIndex, callback) {
+    // Animación fluida del reordenamiento
+    const tbody = document.getElementById('creditorsSavedBody');
+    if (!tbody || !tbody.children.length) {
+      callback();
+      return;
+    }
+    
+    // Aplicar transición a todas las celdas
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td');
+      cells.forEach(cell => {
+        cell.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease';
+      });
+    });
+    
+    // Ejecutar callback después de la transición
+    setTimeout(callback, 50);
+  }
+
   function renderSaved() {
     const tbody = document.getElementById('creditorsSavedBody');
     if (!tbody) return;
+
+    // Asegurar que el header esté renderizado
+    renderTableHeader();
 
     if (!currentCreditors.length) {
       tbody.innerHTML = `
@@ -816,7 +1034,7 @@
       return;
     }
 
-    tbody.innerHTML = currentCreditors.map((entry, index) => renderRow(entry, index)).join('');
+    tbody.innerHTML = currentCreditors.map((entry, index) => renderRowOrdered(entry, index)).join('');
     updateSummary();
 
     tbody.querySelectorAll('.row-checkbox').forEach((checkbox) => {
@@ -826,6 +1044,32 @@
     tbody.querySelectorAll('.btn-delete').forEach((button) => {
       button.addEventListener('click', handleDelete);
     });
+  }
+
+  function renderRowOrdered(entry, index) {
+    const isIncluded = entry.is_included !== false;
+    const checkbox = `<input type="checkbox" class="row-checkbox" data-id="${entry.id}" ${isIncluded ? 'checked' : ''}>`;
+    const deleteBtn = `<button class="btn-delete" data-id="${entry.id}">×</button>`;
+    
+    const partyLabel = getPartyLabel(entry.debtor_party || entry.debtorParty);
+    const partyClass = getPartyClass(entry.debtor_party || entry.debtorParty);
+    
+    const cells = {
+      checkbox: `<td class="col-checkbox">${checkbox}</td>`,
+      num: `<td class="col-num">${index + 1}</td>`,
+      name: `<td class="col-name" title="${escapeHtml(entry.creditor_name || entry.creditorName || '')}"><span class="creditor-name">${escapeHtml(truncate(entry.creditor_name || entry.creditorName || '-', 28))}</span></td>`,
+      debt: `<td class="col-debt">${formatCurrency(entry.debt_amount || entry.debtAmount || 0)}</td>`,
+      party: `<td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>`,
+      account: `<td class="col-account">${entry.account_number || entry.accountNumber ? `<span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
+      resp: `<td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>`,
+      status: `<td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>`,
+      type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 12))}</span>` : '-'}</td>`,
+      months: `<td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>`,
+      pastDue: `<td class="col-past-due">${normalizeMoney(entry.past_due || entry.pastDue) > 0 ? formatCurrency(entry.past_due || entry.pastDue) : '-'}</td>`,
+      actions: `<td class="col-actions">${deleteBtn}</td>`
+    };
+    
+    return `<tr class="${isIncluded ? 'included' : 'excluded'}">${columnOrder.map(key => cells[key]).join('')}</tr>`;
   }
 
   async function loadSaved(options = {}) {
@@ -1145,6 +1389,101 @@
     const applyTotalBtn = document.getElementById('creditorsApplyTotalBtn');
     if (applyTotalBtn) {
       applyTotalBtn.addEventListener('click', applyTotalToCalculator);
+    }
+
+    // Botones Copiar Cuenta (delegación de eventos)
+    const savedBody = document.getElementById('creditorsSavedBody');
+    if (savedBody) {
+      savedBody.addEventListener('click', async (e) => {
+        const copyBtn = e.target.closest('.btn-copy-account');
+        if (!copyBtn) return;
+        
+        const account = copyBtn.dataset.account;
+        if (!account) return;
+        
+        try {
+          await navigator.clipboard.writeText(account);
+          copyBtn.classList.add('copied');
+          copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>';
+          setStatus('Número de cuenta copiado', 'success');
+          
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+            copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+          }, 1500);
+        } catch (err) {
+          setStatus('No se pudo copiar', 'error');
+        }
+      });
+    }
+
+    // Botón Seleccionar Todos
+    const selectAllBtn = document.getElementById('creditorsSelectAllBtn');
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', async () => {
+        console.log('DEBUG: Click Select All');
+        if (!currentCreditors.length) {
+          setStatus('No hay deudas para seleccionar.', 'error');
+          return;
+        }
+        
+        const allSelected = currentCreditors.every(c => c.is_included);
+        const newState = !allSelected;
+        const leadId = window.currentLeadId;
+        
+        try {
+          setStatus(newState ? 'Seleccionando todos...' : 'Deseleccionando todos...', 'neutral');
+          
+          for (const creditor of currentCreditors) {
+            if (creditor.is_included !== newState) {
+              await fetch(`/api/leads/${leadId}/creditors/${creditor.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isIncluded: newState })
+              });
+            }
+          }
+          
+          await loadSaved({ silent: true });
+          setStatus(newState ? 'Todos seleccionados.' : 'Todos deseleccionados.', 'success');
+        } catch (error) {
+          console.error('Error seleccionando todos:', error);
+          setStatus('No se pudo actualizar selección.', 'error');
+        }
+      });
+    }
+
+    // Botón Eliminar Todos
+    const deleteAllBtn = document.getElementById('creditorsDeleteAllBtn');
+    if (deleteAllBtn) {
+      deleteAllBtn.addEventListener('click', async () => {
+        console.log('DEBUG: Click Delete All');
+        if (!currentCreditors.length) {
+          setStatus('No hay deudas para eliminar.', 'error');
+          return;
+        }
+        
+        const count = currentCreditors.length;
+        if (!confirm(`¿Eliminar todas las ${count} deudas? Esta acción no se puede deshacer.`)) {
+          return;
+        }
+        
+        const leadId = window.currentLeadId;
+        
+        try {
+          setStatus(`Eliminando ${count} deudas...`, 'neutral');
+          
+          for (const creditor of currentCreditors) {
+            await fetch(`/api/leads/${leadId}/creditors/${creditor.id}`, { method: 'DELETE' });
+          }
+          
+          await loadSaved({ silent: true });
+          setStatus(`${count} deudas eliminadas.`, 'success');
+        } catch (error) {
+          console.error('Error eliminando todos:', error);
+          setStatus('No se pudieron eliminar todas las deudas.', 'error');
+        }
+      });
     }
 
     loadSaved({ silent: true });

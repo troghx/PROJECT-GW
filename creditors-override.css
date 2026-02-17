@@ -1,0 +1,149 @@
+/* ============================================
+   CREDITORS - ESTILOS DEFINITIVOS COMPACTOS
+   ============================================ */
+
+/* Forzar tabla compacta */
+.creditors-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.creditors-table th,
+.creditors-table td {
+  padding: 4px 3px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+}
+
+/* Columnas con anchos fijos */
+.creditors-table .col-checkbox { 
+  width: 28px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-num { 
+  width: 16px !important; 
+  text-align: center !important; 
+  font-size: 0.65rem !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.creditors-table .col-name { 
+  width: auto !important; 
+  text-align: left !important; 
+}
+
+.creditors-table .col-debt { 
+  width: 60px !important; 
+  text-align: right !important; 
+  font-weight: 700 !important;
+  color: rgba(126, 234, 252, 0.95) !important;
+}
+
+.creditors-table .col-party { 
+  width: 45px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-account { 
+  width: 65px !important; 
+  text-align: center !important; 
+  font-size: 0.65rem !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.creditors-table .col-resp { 
+  width: 40px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-status { 
+  width: 50px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-type { 
+  width: 60px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-months { 
+  width: 35px !important; 
+  text-align: center !important; 
+}
+
+.creditors-table .col-past-due { 
+  width: 50px !important; 
+  text-align: right !important; 
+}
+
+.creditors-table .col-actions { 
+  width: 28px !important; 
+  text-align: center !important; 
+}
+
+/* Header compacto */
+.creditors-table thead th {
+  font-size: 0.6rem !important;
+  letter-spacing: 0.3px !important;
+  padding: 6px 3px !important;
+}
+
+/* Botones en header */
+.btn-header-icon {
+  width: 22px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 4px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+}
+
+.btn-header-icon:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.btn-delete-icon:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: rgba(248, 113, 113, 0.9) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Light Mode */
+body.theme-light .creditors-table th,
+body.theme-light .creditors-table td {
+  color: rgba(15, 23, 42, 0.85) !important;
+}
+
+body.theme-light .creditors-table .col-num {
+  color: rgba(15, 23, 42, 0.4) !important;
+}
+
+body.theme-light .creditors-table .col-debt {
+  color: #0284c7 !important;
+}
+
+body.theme-light .creditors-table .col-account {
+  color: rgba(15, 23, 42, 0.5) !important;
+}
+
+body.theme-light .btn-header-icon {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  background: rgba(15, 23, 42, 0.03) !important;
+  color: rgba(15, 23, 42, 0.4) !important;
+}
+
+body.theme-light .btn-header-icon:hover {
+  background: rgba(15, 23, 42, 0.08) !important;
+  color: rgba(15, 23, 42, 0.7) !important;
+}

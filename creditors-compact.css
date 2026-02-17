@@ -310,6 +310,35 @@
 
 .btn-ghost svg { width: 12px; height: 12px; }
 
+/* Botones pequeños para acciones masivas */
+.btn-small {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  gap: 4px;
+}
+
+.btn-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-small:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Botón eliminar en rojo */
+#creditorsDeleteAllBtn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: rgba(248, 113, 113, 0.9);
+}
+
+/* Botón seleccionar en verde */
+#creditorsSelectAllBtn:hover {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgba(74, 222, 128, 0.9);
+}
+
 /* Preview/Saved sections */
 .creditors-preview-section,
 .creditors-saved-section {
@@ -396,96 +425,153 @@
   opacity: 0.4;
 }
 
-/* ===== COLUMNAS - NUEVO ORDEN ===== */
+/* ===== COLUMNAS - COMPACTAS ===== */
+/* Reducir padding general de celdas */
+.creditors-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.creditors-table th,
+.creditors-table td {
+  padding: 5px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Botones en el header de la tabla */
+.btn-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-header-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-delete-icon:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: rgba(248, 113, 113, 0.95);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
 /* 1. Checkbox */
 .col-checkbox {
-  width: 32px;
+  width: 30px;
   text-align: center;
-  padding-left: 12px !important;
+  padding-left: 4px !important;
+  padding-right: 0 !important;
 }
 
-/* 2. NÃºmero */
+/* 2. Numero */
 .col-num {
-  width: 28px;
+  width: 18px;
   text-align: center;
   color: rgba(255, 255, 255, 0.35);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  padding: 0 !important;
 }
 
-/* 3. Nombre del acreedor - PRIMERA IMPORTANTE */
+/* 3. Nombre del acreedor - ocupa el espacio disponible */
 .col-name {
-  min-width: 180px;
-  max-width: 280px;
+  width: auto;
+  text-align: left;
 }
 
 .creditor-name {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.95);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 
-/* 4. Deuda - SEGUNDA IMPORTANTE */
+/* 4. Deuda */
 .col-debt {
-  width: 90px;
+  width: 65px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: rgba(126, 234, 252, 0.95);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  padding-right: 4px !important;
 }
 
-/* 5. Cuenta - TERCERA IMPORTANTE */
-.col-account {
-  width: 110px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
+/* 5. Parte */
 .col-party {
-  width: 95px;
+  width: 50px;
   text-align: center;
+  padding: 0 2px !important;
 }
 
-/* 6. Responsibility */
-.col-resp {
+/* 6. Cuenta */
+.col-account {
   width: 70px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.5);
   text-align: center;
+  padding: 0 2px !important;
 }
 
-/* 7. Status */
+/* 7. Responsibility */
+.col-resp {
+  width: 45px;
+  text-align: center;
+  padding: 0 2px !important;
+}
+
+/* 8. Status */
 .col-status {
-  width: 75px;
-  text-align: center;
-}
-
-/* 8. Tipo */
-.col-type {
-  width: 100px;
-}
-
-/* 9. Meses */
-.col-months {
   width: 55px;
   text-align: center;
+  padding: 0 2px !important;
 }
 
-/* 10. Vencido */
+/* 9. Tipo */
+.col-type {
+  width: 65px;
+  text-align: center;
+  padding: 0 2px !important;
+}
+
+/* 10. Meses */
+.col-months {
+  width: 38px;
+  text-align: center;
+  padding: 0 2px !important;
+}
+
+/* 11. Vencido */
 .col-past-due {
-  width: 75px;
+  width: 55px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: rgba(248, 113, 113, 0.8);
   font-size: 0.75rem;
+  padding-right: 4px !important;
 }
 
-/* 11. Acciones */
+/* 12. Acciones */
 .col-actions {
-  width: 40px;
+  width: 30px;
   text-align: center;
-  padding-right: 12px !important;
+  padding-right: 4px !important;
+  padding-left: 0 !important;
 }
 
+/* Checkbox custom ELIMINADO - NÃºmero */
 /* Checkbox custom */
 .row-checkbox {
   width: 16px;
@@ -698,6 +784,164 @@ body.theme-light .btn-ghost {
 
 body.theme-light .status-text {
   color: rgba(15, 23, 42, 0.62);
+}
+
+/* ===== BADGES - Light Mode Contraste ===== */
+body.theme-light .badge-status-open {
+  background: rgba(34, 197, 94, 0.2);
+  color: #15803d;
+}
+
+body.theme-light .badge-status-closed {
+  background: rgba(148, 163, 184, 0.25);
+  color: #475569;
+}
+
+body.theme-light .badge-status-chargeoff {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+body.theme-light .badge-status-collection {
+  background: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+}
+
+body.theme-light .badge-type {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+body.theme-light .badge-resp {
+  background: rgba(168, 85, 247, 0.15);
+  color: #9333ea;
+}
+
+body.theme-light .badge-months {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+body.theme-light .badge-party-applicant {
+  background: rgba(14, 165, 233, 0.2);
+  color: #0369a1;
+}
+
+body.theme-light .badge-party-coapp {
+  background: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+}
+
+body.theme-light .btn-delete {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+/* ===== BOTONES NUEVOS - Light Mode ===== */
+body.theme-light #creditorsDeleteAllBtn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+body.theme-light #creditorsSelectAllBtn:hover {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+body.theme-light .btn-small {
+  color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .btn-small:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.theme-light .btn-delete:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* ===== SUMMARY CARDS - Light Mode Contraste ===== */
+body.theme-light .summary-label {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .summary-value {
+  color: rgba(15, 23, 42, 0.95);
+}
+
+body.theme-light .creditor-summary-card.debt-total .summary-value {
+  color: #0284c7;
+}
+
+body.theme-light .creditor-summary-card.included-amount .summary-value {
+  color: #15803d;
+}
+
+body.theme-light .creditor-summary-card.applicant-debt .summary-value {
+  color: #0ea5e9;
+}
+
+body.theme-light .creditor-summary-card.coapp-debt .summary-value {
+  color: #ca8a04;
+}
+
+body.theme-light .creditor-summary-card.past-due .summary-value {
+  color: #dc2626;
+}
+
+body.theme-light .creditor-summary-card.debt-total {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(2, 132, 199, 0.05));
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+body.theme-light .creditor-summary-card.included-amount {
+  background: linear-gradient(135deg, rgba(21, 128, 61, 0.1), rgba(21, 128, 61, 0.04));
+  border-color: rgba(21, 128, 61, 0.15);
+}
+
+body.theme-light .creditor-summary-card.applicant-debt {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.11), rgba(14, 165, 233, 0.04));
+  border-color: rgba(14, 165, 233, 0.2);
+}
+
+body.theme-light .creditor-summary-card.coapp-debt {
+  background: linear-gradient(135deg, rgba(202, 138, 4, 0.11), rgba(202, 138, 4, 0.04));
+  border-color: rgba(202, 138, 4, 0.2);
+}
+
+body.theme-light .creditor-summary-card.past-due {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(220, 38, 38, 0.03));
+  border-color: rgba(220, 38, 38, 0.15);
+}
+
+/* Botones header - light mode */
+body.theme-light .btn-header-icon {
+  border-color: rgba(15, 23, 42, 0.15);
+  background: rgba(15, 23, 42, 0.05);
+  color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .btn-header-icon:hover {
+  background: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.8);
+  border-color: rgba(15, 23, 42, 0.25);
+}
+
+body.theme-light .btn-delete-icon:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Preview/Saved headers en light mode */
+body.theme-light .preview-header h4,
+body.theme-light .saved-header h4 {
+  color: rgba(15, 23, 42, 0.8);
+}
+
+body.theme-light .select-all-toggle {
+  color: rgba(15, 23, 42, 0.6);
 }
 
 
