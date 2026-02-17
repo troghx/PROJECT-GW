@@ -1,0 +1,5102 @@
+﻿<!DOCTYPE html>
+<html lang="es"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalle del Cliente | Cero Deuda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Tenor+Sans&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260216e">
+  <style>
+    :root {
+      --lead-viewport-height: 100vh;
+    }
+
+    @supports (height: 100dvh) {
+      :root {
+        --lead-viewport-height: 100dvh;
+      }
+    }
+
+    /* Wrapper principal - Scroll interno si es necesario */
+    .lead-view-wrapper {
+      width: 100%;
+      min-height: var(--lead-viewport-height);
+      height: var(--lead-viewport-height);
+      position: relative;
+      z-index: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .lead-floating {
+      width: calc(100% - clamp(12px, 2vw, 28px));
+      margin: clamp(8px, 1.2vh, 16px) auto;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px clamp(12px, 2vw, 24px);
+      align-items: start;
+      flex: 1;
+      min-height: 0;
+    }
+    
+    /* Logo igual que dashboard */
+    .lead-logo {
+      grid-column: 1;
+      grid-row: 1;
+      width: clamp(70px, 5vw, 100px);
+      display: block;
+      justify-self: start;
+      align-self: center;
+      position: relative;
+      z-index: 5;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .lead-logo img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .lead-logo:focus-visible {
+      outline: 2px solid var(--accent, #7eeafc);
+      outline-offset: 4px;
+      border-radius: 8px;
+    }
+    
+    /* Toolbar en misma posición que dashboard */
+    .lead-floating .toolbar-wrap {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: center;
+    }
+    
+    /* Home actions en misma posición */
+    .lead-floating .home-actions {
+      grid-column: 3;
+      grid-row: 1;
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    /* Contenido del lead debajo del toolbar */
+    .lead-content-area {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      padding: clamp(10px, 1.8vh, 18px) clamp(12px, 2vw, 24px) clamp(18px, 2.5vh, 24px);
+      position: relative;
+      z-index: 2;
+      min-height: 0;
+    }
+    
+    /* Header del Lead */
+    .lead-header {
+      padding-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      z-index: 3;
+      flex-shrink: 0;
+    }
+    
+    /* Sección del nombre */
+    .lead-title-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    
+    /* Nombre del cliente editable */
+    .lead-name-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .lead-name-text {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 600;
+      color: white;
+      background: transparent;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      padding: 4px 12px;
+      margin: 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 150px;
+      display: inline-block;
+      position: relative;
+      z-index: 4;
+    }
+    
+    .lead-name-text:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .lead-name-text.editing {
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.1);
+      cursor: text;
+    }
+    
+    .lead-name-text:focus {
+      outline: none;
+      border-color: var(--accent, #7eeafc);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Botón de cambio Applicant/Co-Applicant */
+    .applicant-toggle-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    
+    .applicant-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+    
+    .applicant-toggle-btn svg {
+      width: 16px;
+      height: 16px;
+      transition: transform 0.3s ease;
+    }
+    
+    .applicant-toggle-btn.rotated svg {
+      transform: rotate(180deg);
+    }
+    
+    .applicant-type-label {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+    
+    .applicant-type-label.co-applicant {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+    }
+    
+    /* Botón de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 0;
+      margin-left: 4px;
+    }
+    
+    .copy-btn:hover {
+      color: white;
+      transform: scale(1.1);
+    }
+    
+    .copy-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    .copy-btn.copied {
+      color: #4ade80;
+    }
+    
+    /* Badge de State Type (Green/Red) */
+    .lead-state-badge {
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      position: relative;
+      z-index: 4;
+    }
+    
+    .lead-state-badge.green {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    
+    .lead-state-badge.red {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    /* Badge de Test */
+    .lead-test-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      text-transform: uppercase;
+      display: inline-block;
+      position: relative;
+      z-index: 4;
+    }
+
+    .lead-related-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.35);
+      background: rgba(56, 189, 248, 0.14);
+      color: #7dd3fc;
+      text-decoration: none;
+      position: relative;
+      z-index: 4;
+      transition: background 0.2s ease;
+    }
+
+    .lead-related-badge:hover {
+      background: rgba(56, 189, 248, 0.24);
+    }
+
+    .lead-related-badge svg {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+    }
+    
+    /* Case ID debajo del nombre */
+    .lead-case-id {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 12px;
+    }
+    
+    .case-id-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .lead-case-id .case-label {
+      font-weight: 500;
+    }
+    
+    .lead-case-id .case-number {
+      font-family: 'Inter', monospace;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+    }
+    
+    /* Botones de acción al lado del Case ID */
+    .case-id-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .action-icon-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    
+    .action-icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: white;
+      transform: translateY(-1px);
+    }
+    
+    .action-icon-btn:active {
+      transform: translateY(0);
+    }
+    
+    .action-icon-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .notes-anchor {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .notes-panel {
+      position: absolute;
+      top: calc(100% + 12px);
+      right: 0;
+      width: min(420px, calc(100vw - 28px));
+      max-height: min(72vh, 620px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background:
+        linear-gradient(155deg, rgba(21, 29, 44, 0.9) 0%, rgba(16, 23, 35, 0.88) 55%, rgba(10, 16, 26, 0.92) 100%),
+        rgba(10, 16, 26, 0.9);
+      backdrop-filter: blur(20px) saturate(130%);
+      box-shadow:
+        0 20px 42px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      z-index: 5000;
+      overflow: visible;
+    }
+
+    .notes-panel::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      right: 12px;
+      width: 14px;
+      height: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      border-left: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(16, 23, 35, 0.93);
+      transform: rotate(45deg);
+      backdrop-filter: blur(20px) saturate(130%);
+    }
+
+    .notes-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notes-panel-title {
+      font-size: 0.86rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .notes-panel-close.modal-close-mac {
+      position: static;
+      width: 12px;
+      height: 12px;
+      margin-left: auto;
+      flex-shrink: 0;
+      transform: none;
+    }
+
+    .notes-panel-close.modal-close-mac:hover {
+      transform: scale(1.12);
+    }
+
+    .notes-panel-body {
+      padding: 12px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: visible;
+    }
+
+    .notes-composer-label {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.68);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-composer {
+      width: 100%;
+      min-height: 82px;
+      max-height: 140px;
+      resize: vertical;
+      padding: 10px 11px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(3, 8, 18, 0.48);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.88rem;
+      line-height: 1.32;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .notes-composer:focus {
+      border-color: rgba(126, 234, 252, 0.62);
+      background: rgba(10, 18, 30, 0.68);
+    }
+
+    .notes-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .notes-save-status {
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .notes-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: none;
+      overflow: visible;
+      padding-right: 2px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .notes-feed-empty {
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: center;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .note-card {
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .note-card.note-card-menu-open {
+      z-index: 12000;
+    }
+
+    .note-card.note-color-yellow {
+      border-color: rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(165deg, rgba(255, 239, 176, 0.17) 0%, rgba(255, 225, 138, 0.12) 100%),
+        rgba(255, 255, 255, 0.05);
+    }
+
+    .note-card.note-color-red {
+      border-color: rgba(248, 113, 113, 0.32);
+      background:
+        linear-gradient(165deg, rgba(248, 113, 113, 0.2) 0%, rgba(239, 68, 68, 0.14) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-green {
+      border-color: rgba(74, 222, 128, 0.3);
+      background:
+        linear-gradient(165deg, rgba(74, 222, 128, 0.19) 0%, rgba(34, 197, 94, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-blue {
+      border-color: rgba(96, 165, 250, 0.3);
+      background:
+        linear-gradient(165deg, rgba(96, 165, 250, 0.19) 0%, rgba(59, 130, 246, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card.note-color-gray {
+      border-color: rgba(148, 163, 184, 0.28);
+      background:
+        linear-gradient(165deg, rgba(148, 163, 184, 0.2) 0%, rgba(100, 116, 139, 0.12) 100%),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .note-card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.72rem;
+      line-height: 1.1;
+    }
+
+    .note-card-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+
+    .note-card-author {
+      color: rgba(255, 255, 255, 0.88);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .note-card-time {
+      color: rgba(255, 255, 255, 0.64);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .note-card-menu-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.82);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .note-card-menu-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    .note-card-menu-btn svg {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+    }
+
+    .note-card-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 176px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background:
+        linear-gradient(160deg, rgba(19, 28, 42, 0.95) 0%, rgba(12, 18, 30, 0.95) 100%),
+        rgba(12, 18, 30, 0.95);
+      box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      z-index: 12001;
+    }
+
+    .note-card-menu.note-card-menu-up {
+      top: auto;
+      bottom: calc(100% + 6px);
+    }
+
+    .note-card-menu-item {
+      width: 100%;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.88);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .note-card-menu-item:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .note-card-menu-item.danger {
+      color: #fecaca;
+    }
+
+    .note-card-menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.36);
+    }
+
+    .note-card-menu-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.14);
+      margin: 4px 2px;
+    }
+
+    .note-card-menu-color-option.active {
+      border-color: rgba(125, 211, 252, 0.48);
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    .note-color-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      flex-shrink: 0;
+    }
+
+    .note-color-swatch-yellow {
+      background: #facc15;
+    }
+
+    .note-color-swatch-red {
+      background: #ef4444;
+    }
+
+    .note-color-swatch-green {
+      background: #22c55e;
+    }
+
+    .note-color-swatch-blue {
+      background: #3b82f6;
+    }
+
+    .note-color-swatch-gray {
+      background: #94a3b8;
+    }
+
+    .note-card-content {
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.84rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .notes-templates-block {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .notes-templates-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .notes-templates-title {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.68);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-template-select {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(6, 12, 22, 0.5);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.84rem;
+      padding: 9px 10px;
+      outline: none;
+    }
+
+    .notes-template-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .notes-template-actions-clean {
+      grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+    }
+
+    .notes-templates-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 5600;
+    }
+
+    .notes-templates-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 14, 0.56);
+      backdrop-filter: blur(2px);
+    }
+
+    .notes-templates-modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(760px, calc(100vw - 26px));
+      max-height: min(82vh, 720px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background:
+        linear-gradient(155deg, rgba(20, 27, 40, 0.93) 0%, rgba(11, 17, 29, 0.95) 100%),
+        rgba(10, 16, 28, 0.94);
+      backdrop-filter: blur(20px) saturate(125%);
+      box-shadow: 0 28px 52px rgba(0, 0, 0, 0.42);
+      overflow: hidden;
+    }
+
+    .notes-templates-modal-close.modal-close-mac {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+    }
+
+    .notes-templates-modal-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notes-templates-modal-header h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .notes-templates-modal-body {
+      display: grid;
+      grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+      gap: 14px;
+      padding: 14px 16px 16px;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .notes-templates-manager-list,
+    .notes-templates-manager-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .notes-templates-manager-label {
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.72);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .notes-templates-manager-select {
+      min-height: 230px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(4, 9, 18, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.85rem;
+      padding: 8px;
+      outline: none;
+    }
+
+    .notes-templates-manager-input,
+    .notes-templates-manager-textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(4, 9, 18, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.84rem;
+      padding: 9px 10px;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .notes-templates-manager-input:focus,
+    .notes-templates-manager-textarea:focus {
+      border-color: rgba(126, 234, 252, 0.6);
+      background: rgba(8, 14, 24, 0.66);
+    }
+
+    .notes-templates-manager-textarea {
+      min-height: 210px;
+      resize: vertical;
+    }
+
+    .notes-templates-manager-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 760px) {
+      .notes-templates-modal-body {
+        grid-template-columns: 1fr;
+      }
+
+      .notes-templates-manager-select {
+        min-height: 160px;
+      }
+    }
+
+    .notes-btn {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .notes-btn:hover {
+      background: rgba(126, 234, 252, 0.16);
+      border-color: rgba(126, 234, 252, 0.34);
+    }
+
+    .notes-btn:active {
+      transform: translateY(1px);
+    }
+
+    .notes-btn.primary {
+      background: rgba(59, 130, 246, 0.24);
+      border-color: rgba(96, 165, 250, 0.45);
+      color: rgba(239, 246, 255, 0.96);
+    }
+
+    .notes-btn.primary:hover {
+      background: rgba(59, 130, 246, 0.34);
+      border-color: rgba(125, 211, 252, 0.62);
+    }
+
+    .notes-btn.danger {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(248, 113, 113, 0.38);
+      color: rgba(254, 226, 226, 0.95);
+    }
+
+    .notes-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.28);
+      border-color: rgba(248, 113, 113, 0.56);
+    }
+    
+    /* Botón de copiar para Case ID - solo icono, sin box */
+    .copy-icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 0;
+      margin-left: 4px;
+    }
+    
+    .copy-icon-btn:hover {
+      color: white;
+      transform: scale(1.1);
+    }
+    
+    .copy-icon-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    .copy-icon-btn.copied {
+      color: #4ade80;
+    }
+    
+    /* Navegación de pestañas */
+    .lead-tabs-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .lead-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex: 1;
+      justify-content: center;
+      min-width: 100px;
+    }
+    
+    .lead-tab:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .lead-tab.active {
+      background: rgba(126, 234, 252, 0.15);
+      color: var(--accent, #7eeafc);
+      box-shadow: 0 2px 8px rgba(126, 234, 252, 0.2);
+    }
+    
+    .lead-tab svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    body.home-active.theme-light .lead-tabs-nav {
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .lead-tab {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .lead-tab:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.8);
+    }
+    
+    body.home-active.theme-light .lead-tab.active {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+    }
+    
+    /* ============================================
+       CALCULATOR SECTION - Glassmorphism Design
+       ============================================ */
+    
+    .calculator-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 20px 0;
+    }
+    
+    .calculator-inputs,
+    .calculator-results {
+      background: linear-gradient(135deg, 
+        rgba(40, 45, 60, 0.6) 0%, 
+        rgba(25, 30, 45, 0.7) 100%
+      );
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 24px;
+    }
+    
+    .calculator-section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: white;
+      margin: 0 0 20px 0;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .calc-field {
+      margin-bottom: 16px;
+    }
+    
+    .calc-field label {
+      display: block;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    
+    .calc-input-wrapper {
+      position: relative;
+    }
+    
+    .calc-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: white;
+      font-size: 1rem;
+      font-family: 'Inter', monospace;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+    
+    .calc-input:focus {
+      outline: none;
+      border-color: var(--accent, #7eeafc);
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 0 3px rgba(126, 234, 252, 0.1);
+    }
+    
+    .calc-input.currency {
+      padding-left: 32px;
+    }
+    
+    .calc-input.percent {
+      padding-right: 32px;
+    }
+    
+    .input-prefix {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.9rem;
+    }
+    
+    .input-suffix {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.9rem;
+    }
+    
+    /* Toggle para Legal Plan */
+    .calc-toggle-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .calc-toggle-wrapper:hover {
+      background: rgba(0, 0, 0, 0.25);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    .calc-toggle-label {
+      font-size: 0.9rem;
+      color: white;
+    }
+    
+    .calc-toggle {
+      width: 44px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      position: relative;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .calc-toggle.active {
+      background: rgba(34, 197, 94, 0.5);
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+    
+    .calc-toggle-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+    }
+    
+    .calc-toggle.active .calc-toggle-thumb {
+      transform: translateX(20px);
+    }
+    
+    /* Resultados */
+    .calc-result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .calc-result-row:last-child {
+      border-bottom: none;
+    }
+    
+    .calc-result-row.highlight {
+      background: rgba(126, 234, 252, 0.08);
+      margin: 0 -16px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(126, 234, 252, 0.15);
+    }
+    
+    .calc-result-row.savings {
+      background: rgba(34, 197, 94, 0.08);
+      margin: 12px -16px 0;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(34, 197, 94, 0.15);
+    }
+    
+    .calc-result-label {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .calc-result-value {
+      font-family: 'Inter', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      color: white;
+    }
+    
+    .calc-result-row.savings .calc-result-value {
+      color: #4ade80;
+    }
+    
+    .calc-result-row.highlight .calc-result-value {
+      color: var(--accent, #7eeafc);
+      font-size: 1.2rem;
+    }
+    
+    /* Tabla de Payment Schedule */
+    .payment-schedule-section {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, 
+        rgba(40, 45, 60, 0.6) 0%, 
+        rgba(25, 30, 45, 0.7) 100%
+      );
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 24px;
+      margin-top: 8px;
+    }
+    
+    .schedule-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    
+    .schedule-table-container {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .schedule-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    
+    .schedule-table th {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .schedule-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+    
+    .schedule-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .schedule-table .mono {
+      font-family: 'Inter', monospace;
+    }
+    
+    .schedule-table .savings {
+      color: #4ade80;
+      font-weight: 600;
+    }
+    
+    /* Responsive Calculator */
+    @media (max-width: 1100px) {
+      .calculator-container {
+        grid-template-columns: 1fr;
+      }
+      
+      .payment-schedule-section {
+        grid-column: 1;
+      }
+    }
+    
+    /* Light mode calculator */
+    body.home-active.theme-light .calculator-inputs,
+    body.home-active.theme-light .calculator-results,
+    body.home-active.theme-light .payment-schedule-section {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.7) 0%, 
+        rgba(245, 245, 250, 0.8) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calculator-section-title {
+      color: #1a1a1a;
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calc-field label {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .calc-input {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .calc-input:focus {
+      border-color: #3b82f6;
+      background: rgba(255, 255, 255, 0.8);
+    }
+    
+    body.home-active.theme-light .input-prefix,
+    body.home-active.theme-light .input-suffix {
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .calc-toggle-wrapper {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calc-toggle-label {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .calc-result-label {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .calc-result-value {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .schedule-table th {
+      background: rgba(0, 0, 0, 0.08);
+      color: rgba(0, 0, 0, 0.6);
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .schedule-table td {
+      color: #1a1a1a;
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+    }
+    
+    /* ============================================
+       CALCULATOR REDESIGN - Glass Box Style
+       ============================================ */
+    
+    .calculator-main-card {
+      background: linear-gradient(135deg, 
+        rgba(35, 40, 55, 0.8) 0%, 
+        rgba(25, 30, 45, 0.9) 100%
+      ) !important;
+    }
+
+    .calc-months-payment-card {
+      margin-top: -4px;
+      background: linear-gradient(135deg, 
+        rgba(35, 40, 55, 0.8) 0%, 
+        rgba(25, 30, 45, 0.9) 100%
+      ) !important;
+    }
+
+    /* Program Duration + Monthly Payment - Integrado en la card */
+    .calc-duration-payment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 16px 0 0 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 16px;
+    }
+    
+    .calc-duration-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+    
+    .calc-duration-wheel-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .calc-duration-label-compact {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    
+    .calc-months-payment-card .calc-months-section {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+    
+    .calculator-main-card h3 {
+      display: flex;
+      align-items: center;
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+    }
+    
+    .calc-layout {
+      gap: 40px;
+    }
+    
+    .calc-column-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Inputs de calculadora - Totalmente libres/invisibles */
+    .calc-input-row {
+      min-height: 32px;
+    }
+    
+    .calc-input-minimal {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 100px;
+      justify-content: flex-end;
+    }
+    
+    .calc-input-minimal.protected {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .calc-input-minimal.protected:hover {
+      opacity: 0.8;
+    }
+    
+    .calc-input-minimal.protected.editing {
+      opacity: 1;
+    }
+    
+    /* Click para copiar - Total Debt */
+    .calc-input-minimal.copy-on-click {
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    
+    .calc-input-minimal.copy-on-click:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .calc-input-minimal.copy-on-click.copied {
+      background: rgba(34, 197, 94, 0.15);
+    }
+    
+    .calc-input-field {
+      background: transparent;
+      border: none;
+      color: white;
+      font-family: 'Inter', monospace;
+      font-size: 0.95rem;
+      width: auto;
+      min-width: 40px;
+      text-align: right;
+      padding: 0;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    
+    .calc-input-field:focus {
+      border-bottom: 1px solid var(--accent, #7eeafc);
+      padding-bottom: 2px;
+    }
+    
+    .calc-input-field.percent {
+      width: 30px;
+      min-width: 30px;
+    }
+    
+    .calc-input-field:read-only {
+      cursor: pointer;
+    }
+    
+    .calc-input-field:read-only:focus {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
+    }
+    
+    .calc-input-prefix,
+    .calc-input-suffix {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.9rem;
+      font-family: 'Inter', monospace;
+    }
+    
+    /* Botón de candado toggle */
+    .lock-toggle-btn {
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      padding: 4px;
+      margin-right: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    
+    .lock-toggle-btn:hover {
+      color: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .lock-toggle-btn.unlocked {
+      color: var(--accent, #7eeafc);
+    }
+    
+    .lock-toggle-btn.unlocked:hover {
+      color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+    }
+    
+    .lock-icon-svg {
+      display: block;
+    }
+    
+    .lock-icon-svg.hidden {
+      display: none;
+    }
+    
+    /* Monthly Payment - Minimalista sin fondo/borde */
+    .calc-monthly-payment-minimal {
+      min-width: clamp(150px, 22vw, 220px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .monthly-payment-content {
+      text-align: center;
+      cursor: pointer;
+      padding: 12px 20px;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .monthly-payment-content:hover {
+      background: rgba(126, 234, 252, 0.08);
+    }
+    
+    .monthly-payment-content.copied {
+      background: rgba(34, 197, 94, 0.15);
+    }
+    
+    .monthly-payment-label-minimal {
+      display: block;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    
+    .monthly-payment-value-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .monthly-payment-amount-minimal {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent, #7eeafc);
+      font-family: 'Inter', monospace;
+    }
+    
+    .copy-icon-small {
+      color: rgba(255, 255, 255, 0.4);
+      transition: all 0.2s ease;
+    }
+    
+    .monthly-payment-content:hover .copy-icon-small {
+      color: var(--accent, #7eeafc);
+    }
+    
+    /* Toggle inline */
+    .calc-toggle-wrapper-inline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    
+    .calc-toggle-label-small {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .calc-legal-state-hint {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.72);
+      white-space: nowrap;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
+    }
+
+    .calc-legal-state-word {
+      font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .calc-legal-state-word.red {
+      color: #ef4444;
+    }
+
+    .calc-legal-state-word.green {
+      color: #22c55e;
+    }
+    
+    .calc-payment-day-row {
+      position: relative;
+    }
+    
+    .calc-payment-day-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      position: relative;
+    }
+    
+    .calc-payment-day-trigger {
+      min-width: clamp(150px, 24vw, 220px);
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+    }
+    
+    .calc-payment-day-display {
+      font-weight: 500;
+    }
+    
+    .calc-payment-day-calendar {
+      right: 0;
+      bottom: calc(100% + 6px);
+      left: auto;
+    }
+    
+    /* Resultados column */
+    .calc-results-column .info-row-value {
+      font-weight: 500;
+    }
+    
+    .highlight-row {
+      background: rgba(126, 234, 252, 0.1);
+      margin: 8px -8px;
+      padding: 12px 8px !important;
+      border-radius: 8px;
+      border: 1px solid rgba(126, 234, 252, 0.2);
+    }
+    
+    .highlight-row .info-row-value {
+      color: var(--accent, #7eeafc) !important;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    
+    .savings-row .info-row-value {
+      color: #4ade80 !important;
+      font-weight: 600;
+    }
+    
+    /* Sección de Meses y Monthly Payment - Minimalista */
+    .calc-months-section {
+      display: flex;
+      align-items: stretch;
+      gap: 24px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .calc-months-control {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .calc-months-label {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+    
+    /* Wheel Picker Inline - Integrado en el layout */
+    .months-inline-wheel-wrapper {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      width: 100%;
+      height: 86px;
+      position: relative;
+    }
+    
+    .months-inline-wheel {
+      position: relative;
+      width: min(100%, 360px);
+      max-width: 100%;
+      height: 100%;
+      overflow: hidden;
+      cursor: ew-resize;
+      touch-action: none;
+      user-select: none;
+      perspective: 900px;
+      border-radius: 12px;
+      mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 14%,
+        black 86%,
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 14%,
+        black 86%,
+        transparent 100%
+      );
+    }
+    
+    .months-inline-wheel:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(126, 234, 252, 0.35);
+    }
+    
+    .months-inline-wheel.dragging {
+      cursor: grabbing;
+    }
+    
+    .months-inline-wheel::before,
+    .months-inline-wheel::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 48px;
+      pointer-events: none;
+      z-index: 3;
+    }
+    
+    .months-inline-wheel::before {
+      left: 0;
+      background: linear-gradient(90deg, rgba(20, 25, 35, 0.55) 0%, rgba(20, 25, 35, 0) 100%);
+    }
+    
+    .months-inline-wheel::after {
+      right: 0;
+      background: linear-gradient(270deg, rgba(20, 25, 35, 0.55) 0%, rgba(20, 25, 35, 0) 100%);
+    }
+    
+    .months-wheel-track-inline {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      align-items: center;
+      transform: translateX(0);
+      will-change: transform;
+      transition: transform 0.18s cubic-bezier(0.22, 0.75, 0.28, 1);
+    }
+    
+    .months-wheel-item-inline {
+      width: 58px;
+      height: 100%;
+      flex: 0 0 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.24);
+      font-weight: 600;
+      transition: transform 0.14s linear, color 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
+      user-select: none;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      pointer-events: auto;
+    }
+    
+    .months-wheel-item-inline.active {
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 0 14px rgba(126, 234, 252, 0.25);
+    }
+    
+    .months-wheel-item-inline.near {
+      color: rgba(255, 255, 255, 0.65);
+    }
+    
+    .months-wheel-indicator-inline {
+      display: none;
+      z-index: 2;
+    }
+    
+    .months-unit-inline {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 500;
+      margin-left: 4px;
+    }
+    
+    /* Botones rápidos debajo de la ruleta */
+    .months-quick-buttons.minimal.under-wheel {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      padding-left: 0;
+    }
+    
+    /* Badge del plan en Payment Schedule header */
+    .plan-duration-badge {
+      font-size: 0.85rem;
+      color: var(--accent, #7eeafc);
+      font-weight: 600;
+      padding: 4px 12px;
+      background: rgba(126, 234, 252, 0.1);
+      border-radius: 20px;
+      border: 1px solid rgba(126, 234, 252, 0.2);
+    }
+    
+    /* Botones rápidos - sin cajas */
+    .months-quick-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .months-quick-buttons.minimal {
+      gap: 4px;
+    }
+    
+    .months-quick-btn.minimal {
+      padding: 6px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+    
+    .months-quick-btn.minimal:hover {
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .months-quick-btn.minimal.active {
+      color: var(--accent, #7eeafc);
+      background: rgba(126, 234, 252, 0.1);
+      font-weight: 600;
+    }
+    
+    /* Wheel Picker Interactivo Directo */
+    .months-wheel-container {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .months-wheel-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 140px;
+      height: 220px;
+      background: linear-gradient(180deg, 
+        rgba(30, 35, 50, 0.98) 0%, 
+        rgba(20, 25, 35, 0.99) 100%
+      );
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+      pointer-events: none;
+    }
+    
+    .months-wheel-overlay.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: all;
+    }
+    
+    .months-wheel-track {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translateY(-50%);
+      transition: transform 0.1s ease-out;
+    }
+    
+    .months-wheel-item {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      color: rgba(255, 255, 255, 0.35);
+      font-weight: 500;
+      transition: all 0.15s ease;
+      user-select: none;
+      cursor: grab;
+    }
+    
+    .months-wheel-item.active {
+      color: var(--accent, #7eeafc);
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-shadow: 0 0 20px rgba(126, 234, 252, 0.4);
+    }
+    
+    .months-wheel-item.near {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 1.2rem;
+    }
+    
+    .months-wheel-center-indicator {
+      position: absolute;
+      top: 50%;
+      left: 10px;
+      right: 10px;
+      height: 44px;
+      transform: translateY(-50%);
+      border-top: 1px solid rgba(126, 234, 252, 0.3);
+      border-bottom: 1px solid rgba(126, 234, 252, 0.3);
+      background: rgba(126, 234, 252, 0.05);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    
+    /* Hover effect en el valor para indicar interactividad */
+    .months-value {
+      cursor: grab;
+      transition: all 0.2s ease;
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 8px;
+    }
+    
+    .months-value:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .months-value:active {
+      cursor: grabbing;
+    }
+    
+    /* Monthly Payment Box */
+    .calc-monthly-payment-box {
+      min-width: clamp(190px, 24vw, 280px);
+      background: linear-gradient(135deg, 
+        rgba(126, 234, 252, 0.15) 0%, 
+        rgba(126, 234, 252, 0.05) 100%
+      );
+      border: 2px solid rgba(126, 234, 252, 0.3);
+      border-radius: 16px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .monthly-payment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .monthly-payment-label {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .copy-monthly-btn {
+      width: 28px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 6px;
+      color: var(--accent, #7eeafc);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    
+    .copy-monthly-btn:hover {
+      background: rgba(126, 234, 252, 0.2);
+      transform: scale(1.1);
+    }
+    
+    .monthly-payment-amount {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent, #7eeafc);
+      font-family: 'Inter', monospace;
+      line-height: 1.2;
+    }
+    
+    .monthly-payment-note {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 4px;
+    }
+    
+    /* Payment Schedule Card - Solo visible en Calculator */
+    .payment-schedule-card {
+      margin-top: 16px;
+      display: none;
+    }
+    
+    #calculatorSection:not(.hidden) .payment-schedule-card {
+      display: block;
+    }
+    
+    /* Responsive Calculator */
+    @media (max-width: 900px) {
+      .calc-duration-payment-wrapper {
+        flex-direction: column;
+        gap: 24px;
+      }
+      
+      .calc-months-section {
+        flex-direction: column;
+      }
+      
+      .calc-monthly-payment-box {
+        min-width: auto;
+        width: 100%;
+      }
+      
+      .months-number {
+        font-size: 2rem;
+      }
+    }
+    
+    /* Light mode calculator */
+    body.home-active.theme-light .calculator-main-card {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.8) 0%, 
+        rgba(245, 245, 250, 0.9) 100%
+      ) !important;
+    }
+
+    body.home-active.theme-light .calc-duration-payment-row {
+      border-top-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calc-duration-label-compact {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .plan-duration-badge {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    
+    body.home-active.theme-light .calc-column-title {
+      color: rgba(0, 0, 0, 0.5);
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calc-input-minimal.protected:hover {
+      opacity: 0.8;
+    }
+    
+    body.home-active.theme-light .calc-input-field {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .calc-input-field:focus {
+      border-bottom-color: #3b82f6;
+    }
+    
+    body.home-active.theme-light .calc-input-prefix,
+    body.home-active.theme-light .calc-input-suffix {
+      color: rgba(0, 0, 0, 0.4);
+    }
+
+    body.home-active.theme-light .calc-legal-state-hint {
+      color: rgba(0, 0, 0, 0.6);
+    }
+    
+    body.home-active.theme-light .lock-toggle-btn {
+      color: rgba(0, 0, 0, 0.3);
+    }
+    
+    body.home-active.theme-light .lock-toggle-btn:hover {
+      color: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.05);
+    }
+    
+    body.home-active.theme-light .lock-toggle-btn.unlocked {
+      color: #3b82f6;
+    }
+    
+    body.home-active.theme-light .lock-toggle-btn.unlocked:hover {
+      color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+    }
+    
+    body.home-active.theme-light .months-btn {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .months-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .months-number {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .months-quick-btn.minimal {
+      color: rgba(0, 0, 0, 0.4);
+      background: transparent;
+    }
+    
+    body.home-active.theme-light .months-quick-btn.minimal:hover {
+      color: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.05);
+    }
+    
+    body.home-active.theme-light .months-quick-btn.minimal.active {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+    
+    /* Light mode wheel picker */
+    body.home-active.theme-light .months-wheel-item-inline {
+      color: rgba(0, 0, 0, 0.25);
+    }
+    
+    body.home-active.theme-light .months-wheel-item-inline.near {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .months-wheel-item-inline.active {
+      color: #3b82f6;
+      text-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+    }
+    
+    body.home-active.theme-light .months-wheel-indicator-inline {
+      display: none;
+    }
+    
+    body.home-active.theme-light .months-inline-wheel::before {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
+    }
+    
+    body.home-active.theme-light .months-inline-wheel::after {
+      background: linear-gradient(270deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
+    }
+    
+    body.home-active.theme-light .months-unit-inline {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .plan-duration-badge {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+
+    body.home-active.theme-light .monthly-payment-content:hover {
+      background: rgba(59, 130, 246, 0.08);
+    }
+    
+    body.home-active.theme-light .monthly-payment-content.copied {
+      background: rgba(34, 197, 94, 0.15);
+    }
+    
+    body.home-active.theme-light .monthly-payment-amount-minimal {
+      color: #3b82f6;
+    }
+    
+    body.home-active.theme-light .monthly-payment-label-minimal {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .copy-icon-small {
+      color: rgba(0, 0, 0, 0.3);
+    }
+    
+    body.home-active.theme-light .monthly-payment-content:hover .copy-icon-small {
+      color: #3b82f6;
+    }
+    
+    
+    /* Barra de herramientas del lead */
+    .lead-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    
+    .toolbar-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    
+    .toolbar-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+    
+    .toolbar-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    .toolbar-btn.back-btn {
+      margin-right: auto;
+    }
+    
+    /* Grid de contenido - Responsivo y Compacto */
+    /* Global hidden class - must override other display properties */
+    .hidden {
+      display: none !important;
+    }
+    
+    .lead-content-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-content: start;
+    }
+    
+    @media (max-width: 1200px) {
+      .lead-content-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .calc-months-section {
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      .calc-monthly-payment-minimal,
+      .calc-monthly-payment-box {
+        width: 100%;
+      }
+    }
+    
+    @media (max-width: 900px) {
+      .lead-view-wrapper {
+        height: auto;
+        min-height: var(--lead-viewport-height);
+      }
+
+      .lead-content-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      
+      .lead-floating {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+      }
+      
+      .lead-logo {
+        display: block;
+        width: clamp(56px, 12vw, 76px);
+      }
+      
+      .lead-floating .toolbar-wrap {
+        grid-column: 2;
+      }
+      
+      .lead-floating .home-actions {
+        grid-column: 3;
+      }
+      
+      .lead-content-area {
+        padding: 8px 16px;
+      }
+
+      .calc-payment-day-wrapper {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .calc-payment-day-trigger {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+    
+    @media (max-width: 600px) {
+      .lead-title-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      
+      .lead-name-text {
+        font-size: 1.3rem;
+        padding: 2px 8px;
+      }
+      
+      .lead-case-id {
+        margin-left: 8px;
+      }
+      
+      .toolbar-btn span {
+        display: none;
+      }
+      
+      .toolbar-btn {
+        padding: 8px;
+      }
+      
+      .custom-calendar {
+        width: min(260px, calc(100vw - 24px));
+        left: 50% !important;
+        transform: translateX(-50%);
+      }
+
+      .info-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      .info-row-value,
+      .info-row-value.editable {
+        width: 100%;
+        max-width: 100%;
+        text-align: left;
+        justify-content: flex-start;
+      }
+
+      .calc-input-minimal {
+        min-width: 0;
+      }
+
+      .calc-months-section {
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+      }
+
+      .calc-monthly-payment-minimal,
+      .calc-monthly-payment-box {
+        min-width: 0;
+      }
+      
+      .include-toggle-wrapper {
+        margin-left: 8px;
+        padding-left: 8px;
+        gap: 6px;
+      }
+      
+      .include-toggle-status {
+        font-size: 0.65rem;
+        min-width: 24px;
+      }
+      
+      .include-toggle {
+        width: 32px;
+        height: 16px;
+      }
+      
+      .include-toggle-thumb {
+        width: 12px;
+        height: 12px;
+      }
+      
+      .include-toggle input:checked + .include-toggle-track .include-toggle-thumb {
+        transform: translateX(16px);
+      }
+    }
+    
+    .lead-info-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px 20px;
+      min-width: 0;
+    }
+    
+    .lead-info-card h3 {
+      margin: 0 0 12px 0;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .lead-info-card-wide {
+      grid-column: 1 / -1;
+    }
+    
+    .two-column-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(14px, 2vw, 24px);
+      align-items: start;
+    }
+    
+    .info-column {
+      min-width: 0;
+    }
+    
+    @media (max-width: 900px) {
+      .two-column-layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+    }
+    
+    /* Input de fecha para Callback - Liquid Glass */
+    .callback-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .date-input {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 6px 12px;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    
+    .date-input:hover, .date-input:focus {
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.12);
+    }
+    
+    /* Liquid Glass Input */
+    .liquid-glass-input {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.15) 0%, 
+        rgba(255, 255, 255, 0.05) 100%
+      );
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 
+        0 4px 24px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    
+    .liquid-glass-input:hover {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.2) 0%, 
+        rgba(255, 255, 255, 0.08) 100%
+      );
+      border-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 
+        0 6px 32px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+    
+    .liquid-glass-input:focus {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.25) 0%, 
+        rgba(255, 255, 255, 0.1) 100%
+      );
+      border-color: var(--accent, #7eeafc);
+      box-shadow: 
+        0 0 20px rgba(126, 234, 252, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Liquid Glass Button */
+    .liquid-glass-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.15) 0%, 
+        rgba(255, 255, 255, 0.05) 100%
+      );
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 
+        0 4px 24px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      white-space: nowrap;
+    }
+    
+    .liquid-glass-btn:hover {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.25) 0%, 
+        rgba(255, 255, 255, 0.1) 100%
+      );
+      border-color: rgba(255, 255, 255, 0.4);
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+    
+    .liquid-glass-btn svg {
+      width: 18px;
+      height: 18px;
+      opacity: 0.7;
+    }
+    
+    /* Body setup - Sin scroll */
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: var(--lead-viewport-height);
+      width: 100%;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      position: relative;
+    }
+    
+    /* Callback Row - Contenedor relativo */
+    .callback-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    /* Callback Wrapper */
+    .callback-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+    
+    /* Custom Calendar - Liquid Glass Dropdown */
+    .custom-calendar {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      right: 0;
+      width: 260px;
+      max-width: min(260px, calc(100vw - 32px));
+      background: linear-gradient(135deg, 
+        rgba(40, 40, 55, 0.98) 0%, 
+        rgba(25, 25, 35, 0.99) 100%
+      );
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 
+        0 -12px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      z-index: 1000;
+      animation: calendarAppear 0.2s ease;
+      min-height: 322px;
+    }
+    
+    @keyframes calendarAppear {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .custom-calendar.hidden {
+      display: none;
+    }
+    
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .calendar-title {
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-transform: capitalize;
+    }
+    
+    .calendar-nav {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    
+    .calendar-nav:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .calendar-nav svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 4px;
+    }
+    
+    .calendar-weekdays span {
+      text-align: center;
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 500;
+      padding: 4px 0;
+    }
+    
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(6, 32px);
+      gap: 2px;
+      min-height: calc((32px * 6) + (2px * 5));
+    }
+    
+    .calendar-day {
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      padding: 0;
+    }
+    
+    .calendar-day:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .calendar-day.other-month {
+      color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .calendar-day.today {
+      background: rgba(126, 234, 252, 0.15);
+      border-color: rgba(126, 234, 252, 0.3);
+      color: var(--accent, #7eeafc);
+      font-weight: 600;
+    }
+    
+    .calendar-day.selected {
+      background: linear-gradient(135deg, 
+        rgba(34, 197, 94, 0.3) 0%, 
+        rgba(34, 197, 94, 0.15) 100%
+      );
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #4ade80;
+      font-weight: 600;
+    }
+    
+    .calendar-day.selected::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      width: 4px;
+      height: 4px;
+      background: #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #4ade80;
+    }
+    
+    .calendar-day.has-pin::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 8px;
+      height: 8px;
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      animation: pinPulse 2s infinite;
+    }
+    
+    @keyframes pinPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+    }
+
+    .calendar-jump-popover {
+      position: absolute;
+      top: 52px;
+      left: 12px;
+      right: 12px;
+      z-index: 4;
+      background: rgba(15, 20, 30, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 9px;
+      padding: 8px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .calendar-jump-popover.hidden {
+      display: none;
+    }
+
+    .calendar-jump-popover-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .calendar-jump-input {
+      flex: 1;
+      height: 30px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.78rem;
+      padding: 0 9px;
+      outline: none;
+    }
+
+    .calendar-jump-input:focus {
+      border-color: rgba(126, 234, 252, 0.55);
+      box-shadow: 0 0 0 2px rgba(126, 234, 252, 0.16);
+    }
+
+    .calendar-jump-apply {
+      height: 30px;
+      min-width: 40px;
+      border-radius: 7px;
+      border: 1px solid rgba(126, 234, 252, 0.45);
+      background: rgba(126, 234, 252, 0.12);
+      color: rgba(220, 248, 255, 0.95);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+
+    .calendar-jump-apply:hover {
+      background: rgba(126, 234, 252, 0.2);
+    }
+
+    .calendar-jump-error {
+      margin-top: 6px;
+      min-height: 14px;
+      font-size: 0.68rem;
+      color: rgba(251, 146, 60, 0.95);
+    }
+    
+    /* Callback Button - Estilo Mac simple (Verde) */
+    .callback-mac-btn {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #22c55e;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+      padding: 0;
+      margin: 0;
+      display: block;
+      flex-shrink: 0;
+    }
+    
+    .callback-mac-btn:hover {
+      background: #16a34a;
+      transform: scale(1.15);
+    }
+    
+    .callback-mac-btn:active {
+      transform: scale(0.9);
+    }
+    
+    .callback-mac-btn.hidden {
+      display: none;
+    }
+    
+    /* FICO Score */
+    .fico-score {
+      font-weight: 600;
+      color: var(--accent, #7eeafc);
+    }
+    
+    .fico-score.pendiente {
+      color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      gap: 12px;
+    }
+    
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    
+    .info-row-label {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+    
+    .info-row-value {
+      color: white;
+      font-weight: 500;
+      font-size: 0.85rem;
+      text-align: right;
+      word-break: break-word;
+    }
+    
+    .info-row-value.mono {
+      font-family: 'Inter', monospace;
+    }
+    
+    /* Editable fields */
+    .info-row-value.editable {
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 200px;
+    }
+    
+    .info-row-value.editable:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .info-row-value.editable:focus {
+      outline: none;
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--accent, #7eeafc);
+    }
+    
+    .info-row-value.editable input {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font: inherit;
+      width: 100%;
+      text-align: right;
+      outline: none;
+    }
+    
+    /* Copy icon */
+    .copy-icon {
+      width: 14px;
+      height: 14px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.6);
+      flex-shrink: 0;
+    }
+    
+    .info-row-value.editable:hover .copy-icon {
+      opacity: 1;
+    }
+    
+    .copy-icon:hover {
+      color: var(--accent, #7eeafc);
+    }
+    
+    /* Self Employed Toggle */
+    .self-employed-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    
+    .self-employed-toggle input {
+      display: none;
+    }
+    
+    .self-employed-switch {
+      width: 40px;
+      height: 22px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 11px;
+      position: relative;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .self-employed-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+    }
+    
+    .self-employed-toggle input:checked + .self-employed-switch {
+      background: rgba(34, 197, 94, 0.5);
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+    
+    .self-employed-toggle input:checked + .self-employed-switch .self-employed-thumb {
+      transform: translateX(18px);
+      background: #22c55e;
+    }
+    
+    .self-employed-label {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      transition: color 0.3s ease;
+    }
+    
+    .self-employed-toggle input:checked ~ .self-employed-label {
+      color: #22c55e;
+    }
+    
+    /* DOB Calendar trigger */
+    .dob-calendar-trigger {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+    
+    .dob-calendar-trigger:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .dob-calendar-trigger svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.6;
+    }
+    
+    /* Calendar for DOB */
+    .dob-calendar-wrapper {
+      position: relative;
+    }
+    
+    .dob-calendar {
+      position: absolute;
+      right: 0;
+      width: 260px;
+      max-width: min(260px, calc(100vw - 32px));
+      z-index: 1001;
+    }
+    
+    body.home-active.theme-light .info-row-value.editable:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+    
+    body.home-active.theme-light .info-row-value.editable:focus {
+      background: rgba(255, 255, 255, 0.8);
+      border-color: #3b82f6;
+    }
+    
+    body.home-active.theme-light .copy-icon {
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .copy-icon:hover {
+      color: #3b82f6;
+    }
+    
+    body.home-active.theme-light .self-employed-switch {
+      background: rgba(0, 0, 0, 0.1);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .self-employed-label {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(255, 255, 255, 0.6);
+      grid-column: 1 / -1;
+    }
+    
+    .loading svg {
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .error {
+      text-align: center;
+      padding: 60px 20px;
+      color: #f87171;
+      grid-column: 1 / -1;
+    }
+    
+    /* Tema claro */
+    body.home-active.theme-light .lead-name-text {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .lead-name-text:hover {
+      border-color: rgba(0, 0, 0, 0.15);
+      background: rgba(0, 0, 0, 0.03);
+    }
+    
+    body.home-active.theme-light .lead-name-text:focus {
+      background: rgba(255, 255, 255, 0.8);
+    }
+    
+    body.home-active.theme-light .lead-case-id {
+      color: rgba(0, 0, 0, 0.6);
+    }
+    
+    body.home-active.theme-light .lead-case-id .case-number {
+      color: rgba(0, 0, 0, 0.8);
+    }
+    
+    body.home-active.theme-light .action-icon-btn {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .action-icon-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+      border-color: rgba(0, 0, 0, 0.15);
+      color: #1a1a1a;
+    }
+
+    body.home-active.theme-light .notes-panel {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 251, 255, 0.94) 100%),
+        rgba(255, 255, 255, 0.96);
+      box-shadow:
+        0 20px 42px rgba(15, 23, 42, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    body.home-active.theme-light .notes-panel::before {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    body.home-active.theme-light .notes-panel-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-panel-title,
+    body.home-active.theme-light .notes-composer-label,
+    body.home-active.theme-light .notes-templates-title {
+      color: rgba(15, 23, 42, 0.78);
+    }
+
+    body.home-active.theme-light .notes-save-status {
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    body.home-active.theme-light .notes-composer {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.95);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-composer:focus {
+      border-color: rgba(59, 130, 246, 0.58);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    body.home-active.theme-light .notes-feed-empty {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(15, 23, 42, 0.03);
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .note-card {
+      border-color: rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.75);
+    }
+
+    body.home-active.theme-light .note-card.note-color-yellow {
+      border-color: rgba(15, 23, 42, 0.12);
+      background:
+        linear-gradient(165deg, rgba(255, 235, 170, 0.45) 0%, rgba(255, 220, 120, 0.28) 100%),
+        rgba(255, 255, 255, 0.75);
+    }
+
+    body.home-active.theme-light .note-card.note-color-red {
+      border-color: rgba(239, 68, 68, 0.32);
+      background:
+        linear-gradient(165deg, rgba(248, 113, 113, 0.26) 0%, rgba(239, 68, 68, 0.17) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-green {
+      border-color: rgba(34, 197, 94, 0.3);
+      background:
+        linear-gradient(165deg, rgba(74, 222, 128, 0.25) 0%, rgba(34, 197, 94, 0.16) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-blue {
+      border-color: rgba(59, 130, 246, 0.3);
+      background:
+        linear-gradient(165deg, rgba(96, 165, 250, 0.26) 0%, rgba(59, 130, 246, 0.16) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card.note-color-gray {
+      border-color: rgba(100, 116, 139, 0.28);
+      background:
+        linear-gradient(165deg, rgba(148, 163, 184, 0.26) 0%, rgba(100, 116, 139, 0.15) 100%),
+        rgba(255, 255, 255, 0.82);
+    }
+
+    body.home-active.theme-light .note-card-author {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .note-card-time {
+      color: rgba(15, 23, 42, 0.58);
+    }
+
+    body.home-active.theme-light .note-card-content {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .note-card-menu-btn {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(15, 23, 42, 0.08);
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .note-card-menu-btn:hover {
+      border-color: rgba(15, 23, 42, 0.3);
+      background: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .note-card-menu {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.98) 100%),
+        rgba(255, 255, 255, 0.98);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .note-card-menu-item {
+      background: rgba(15, 23, 42, 0.04);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .note-card-menu-item:hover {
+      background: rgba(15, 23, 42, 0.1);
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+
+    body.home-active.theme-light .note-card-menu-item.danger {
+      color: #b91c1c;
+    }
+
+    body.home-active.theme-light .note-card-menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    body.home-active.theme-light .note-card-menu-divider {
+      background: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .note-card-menu-color-option.active {
+      border-color: rgba(59, 130, 246, 0.38);
+      background: rgba(59, 130, 246, 0.16);
+    }
+
+    body.home-active.theme-light .note-color-swatch {
+      border-color: rgba(15, 23, 42, 0.28);
+    }
+
+    body.home-active.theme-light .notes-templates-block {
+      border-top-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-template-select {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.96);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notes-btn {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.88);
+    }
+
+    body.home-active.theme-light .notes-btn:hover {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: rgba(59, 130, 246, 0.32);
+    }
+
+    body.home-active.theme-light .notes-btn.primary {
+      background: rgba(37, 99, 235, 0.18);
+      border-color: rgba(37, 99, 235, 0.36);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-btn.primary:hover {
+      background: rgba(37, 99, 235, 0.24);
+      border-color: rgba(37, 99, 235, 0.44);
+    }
+
+    body.home-active.theme-light .notes-btn.danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.32);
+      color: rgba(127, 29, 29, 0.92);
+    }
+
+    body.home-active.theme-light .notes-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.44);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-backdrop {
+      background: rgba(15, 23, 42, 0.32);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-content {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.96) 100%),
+        rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 46px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .notes-templates-modal-header h3,
+    body.home-active.theme-light .notes-templates-manager-label {
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .notes-templates-manager-select,
+    body.home-active.theme-light .notes-templates-manager-input,
+    body.home-active.theme-light .notes-templates-manager-textarea {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.95);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .notes-templates-manager-input:focus,
+    body.home-active.theme-light .notes-templates-manager-textarea:focus {
+      border-color: rgba(59, 130, 246, 0.54);
+      background: rgba(255, 255, 255, 1);
+    }
+    
+    body.home-active.theme-light .copy-icon-btn {
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .copy-icon-btn:hover {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .copy-btn {
+      background: transparent;
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .copy-btn:hover {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .copy-btn.copied {
+      color: #16a34a;
+    }
+    
+    body.home-active.theme-light .applicant-toggle-btn {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.12);
+      color: rgba(0, 0, 0, 0.6);
+    }
+    
+    body.home-active.theme-light .applicant-toggle-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .applicant-type-label {
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .applicant-type-label.co-applicant {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.25);
+      color: #2563eb;
+    }
+    
+    /* ============ INCLUDE CO-APPLICANT TOGGLE STYLES ============ */
+    .include-toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 12px;
+      padding-left: 12px;
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      transition: all 0.3s ease;
+    }
+    
+    .include-toggle-wrapper.hidden {
+      display: none;
+    }
+    
+    .include-toggle-status {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      min-width: 28px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    
+    .include-toggle-wrapper.active .include-toggle-status {
+      color: #2ecc71;
+      text-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
+    }
+    
+    .include-toggle {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .include-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .include-toggle-track {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .include-toggle input:checked + .include-toggle-track {
+      background: rgba(46, 204, 113, 0.25);
+      box-shadow: 0 0 10px rgba(46, 204, 113, 0.25), inset 0 0 4px rgba(46, 204, 113, 0.15);
+    }
+    
+    .include-toggle-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    .include-toggle input:checked + .include-toggle-track .include-toggle-thumb {
+      transform: translateX(18px);
+      background: #2ecc71;
+      box-shadow: 0 2px 6px rgba(46, 204, 113, 0.4);
+    }
+    
+    /* Light theme styles for toggle */
+    body.home-active.theme-light .include-toggle-wrapper {
+      border-left-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .include-toggle-status {
+      color: rgba(0, 0, 0, 0.3);
+    }
+    
+    body.home-active.theme-light .include-toggle-wrapper.active .include-toggle-status {
+      color: #27ae60;
+      text-shadow: 0 0 6px rgba(39, 174, 96, 0.3);
+    }
+    
+    body.home-active.theme-light .include-toggle-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .include-toggle input:checked + .include-toggle-track {
+      background: rgba(39, 174, 96, 0.2);
+      box-shadow: 0 0 8px rgba(39, 174, 96, 0.2), inset 0 0 3px rgba(39, 174, 96, 0.1);
+    }
+    
+    body.home-active.theme-light .include-toggle-thumb {
+      background: rgba(0, 0, 0, 0.25);
+    }
+    
+    body.home-active.theme-light .include-toggle input:checked + .include-toggle-track .include-toggle-thumb {
+      background: #27ae60;
+      box-shadow: 0 2px 5px rgba(39, 174, 96, 0.35);
+    }
+    
+    /* Badges en modo claro - Mejor contraste */
+    body.home-active.theme-light .lead-state-badge.green {
+      background: rgba(34, 197, 94, 0.15);
+      color: #15803d;
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+    
+    body.home-active.theme-light .lead-state-badge.red {
+      background: rgba(239, 68, 68, 0.15);
+      color: #b91c1c;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    
+    body.home-active.theme-light .lead-test-badge {
+      background: rgba(168, 85, 247, 0.15);
+      color: #7c3aed;
+      border-color: rgba(168, 85, 247, 0.4);
+    }
+
+    body.home-active.theme-light .lead-related-badge {
+      background: rgba(59, 130, 246, 0.14);
+      color: #1d4ed8;
+      border-color: rgba(59, 130, 246, 0.35);
+    }
+
+    body.home-active.theme-light .lead-related-badge:hover {
+      background: rgba(59, 130, 246, 0.22);
+    }
+    
+    body.home-active.theme-light .lead-toolbar {
+      border-top-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .toolbar-btn {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .toolbar-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .lead-info-card {
+      background: rgba(255, 255, 255, 0.5);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .lead-info-card h3 {
+      color: rgba(0, 0, 0, 0.5);
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .info-row {
+      border-bottom-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    body.home-active.theme-light .info-row-label {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .info-row-value {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .date-input {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.15);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .date-input:hover, 
+    body.home-active.theme-light .date-input:focus {
+      border-color: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .fico-score {
+      color: #2563eb;
+    }
+    
+    body.home-active.theme-light .fico-score.pendiente {
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .liquid-glass-input {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.8) 0%, 
+        rgba(255, 255, 255, 0.6) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.15);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .liquid-glass-input:hover {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.9) 0%, 
+        rgba(255, 255, 255, 0.7) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.25);
+    }
+    
+    body.home-active.theme-light .liquid-glass-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+    }
+    
+    /* Toast notifications fix for light mode */
+    body.home-active.theme-light .toast {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.95) 0%, 
+        rgba(255, 255, 255, 0.85) 100%
+      );
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .toast span {
+      color: #1a1a1a;
+    }
+    
+    /* Notification Modal */
+    .notif-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    
+    .notif-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+    }
+    
+    .notif-modal-content {
+      position: relative;
+      width: 90%;
+      max-width: 420px;
+      max-height: min(86vh, 760px);
+      background: linear-gradient(135deg, 
+        rgba(30, 30, 40, 0.95) 0%, 
+        rgba(20, 20, 30, 0.98) 100%
+      );
+      backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+      animation: modalSlideIn 0.3s ease;
+      overflow-y: auto;
+    }
+    
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    
+    .notif-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .notif-modal-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .notif-modal-close {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .notif-modal-close:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+    
+    .notif-modal-close svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    .notif-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .notif-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .notif-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateX(4px);
+    }
+    
+    .notif-item.today {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+    
+    .notif-item-pin {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, 
+        rgba(34, 197, 94, 0.3) 0%, 
+        rgba(34, 197, 94, 0.15) 100%
+      );
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      border-radius: 50%;
+      color: #4ade80;
+      flex-shrink: 0;
+    }
+    
+    .notif-item-pin svg {
+      width: 18px;
+      height: 18px;
+    }
+    
+    .notif-item-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .notif-item-name {
+      color: white;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    
+    .notif-item-date {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.8rem;
+    }
+    
+    .notif-item-date.today-badge {
+      color: #4ade80;
+      font-weight: 600;
+    }
+    
+    .notif-item-link {
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    
+    .notif-item-link:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Light mode for notification modal */
+    body.home-active.theme-light .notif-modal-content {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.98) 0%, 
+        rgba(245, 245, 250, 0.99) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .notif-modal-header h3 {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .notif-modal-close {
+      background: rgba(0, 0, 0, 0.08);
+      color: rgba(0, 0, 0, 0.6);
+    }
+    
+    body.home-active.theme-light .notif-modal-close:hover {
+      background: rgba(0, 0, 0, 0.12);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .notif-item {
+      background: rgba(0, 0, 0, 0.03);
+      border-color: rgba(0, 0, 0, 0.08);
+    }
+    
+    body.home-active.theme-light .notif-item:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    
+    body.home-active.theme-light .notif-item.today {
+      background: rgba(34, 197, 94, 0.08);
+      border-color: rgba(34, 197, 94, 0.25);
+    }
+    
+    body.home-active.theme-light .notif-item-name {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .notif-item-date {
+      color: rgba(0, 0, 0, 0.5);
+    }
+    
+    body.home-active.theme-light .notif-item-link {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.12);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .notif-item-link:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Light mode for custom calendar */
+    body.home-active.theme-light .custom-calendar {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.98) 0%, 
+        rgba(245, 245, 250, 0.99) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.12);
+      box-shadow: 
+        0 24px 64px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+    
+    body.home-active.theme-light .calendar-title {
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .calendar-nav {
+      background: rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #1a1a1a;
+    }
+    
+    body.home-active.theme-light .calendar-nav:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calendar-weekdays span {
+      color: rgba(0, 0, 0, 0.4);
+    }
+    
+    body.home-active.theme-light .calendar-day {
+      color: rgba(0, 0, 0, 0.8);
+    }
+    
+    body.home-active.theme-light .calendar-day.other-month {
+      color: rgba(0, 0, 0, 0.3);
+    }
+    
+    body.home-active.theme-light .calendar-day:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    body.home-active.theme-light .calendar-day.today {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #2563eb;
+    }
+    
+    body.home-active.theme-light .calendar-day.selected {
+      background: linear-gradient(135deg, 
+        rgba(34, 197, 94, 0.2) 0%, 
+        rgba(34, 197, 94, 0.1) 100%
+      );
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #16a34a;
+    }
+    
+    body.home-active.theme-light .calendar-day.selected::after {
+      background: #22c55e;
+    }
+
+    body.home-active.theme-light .calendar-jump-popover {
+      background: rgba(255, 255, 255, 0.98);
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+    }
+
+    body.home-active.theme-light .calendar-jump-input {
+      border-color: rgba(15, 23, 42, 0.18);
+      background: rgba(148, 163, 184, 0.12);
+      color: rgba(15, 23, 42, 0.95);
+    }
+
+    body.home-active.theme-light .calendar-jump-input:focus {
+      border-color: rgba(59, 130, 246, 0.55);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+    }
+
+    body.home-active.theme-light .calendar-jump-apply {
+      border-color: rgba(59, 130, 246, 0.35);
+      background: rgba(59, 130, 246, 0.12);
+      color: rgba(30, 64, 175, 0.95);
+    }
+
+    body.home-active.theme-light .calendar-jump-apply:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+
+    body.home-active.theme-light .calendar-jump-error {
+      color: rgba(217, 119, 6, 0.95);
+    }
+    
+    body.home-active.theme-light .liquid-glass-btn {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.9) 0%, 
+        rgba(255, 255, 255, 0.7) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.12);
+      color: #1a1a1a;
+      box-shadow: 
+        0 4px 24px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+    
+    body.home-active.theme-light .liquid-glass-btn:hover {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 1) 0%, 
+        rgba(255, 255, 255, 0.85) 100%
+      );
+      border-color: rgba(0, 0, 0, 0.2);
+    }
+    
+    body.home-active.theme-light .callback-mac-btn {
+      background: #22c55e;
+    }
+    
+    body.home-active.theme-light .callback-mac-btn:hover {
+      background: #16a34a;
+    }
+
+    /* Pass de contraste global para tema claro */
+    body.home-active.theme-light .loading {
+      color: rgba(15, 23, 42, 0.66);
+    }
+
+    body.home-active.theme-light .loading svg {
+      color: #2563eb;
+      stroke: #2563eb;
+    }
+
+    body.home-active.theme-light .lead-state-badge,
+    body.home-active.theme-light .lead-test-badge,
+    body.home-active.theme-light .lead-related-badge,
+    body.home-active.theme-light .plan-duration-badge {
+      font-weight: 700;
+    }
+
+    body.home-active.theme-light .notif-item-date.today-badge {
+      color: #15803d;
+    }
+
+    body.home-active.theme-light #bankingSection,
+    body.home-active.theme-light #budgetSection,
+    body.home-active.theme-light #creditorsSection {
+      color: rgba(15, 23, 42, 0.62) !important;
+    }
+
+    body.home-active.theme-light #bankingSection h2,
+    body.home-active.theme-light #budgetSection h2,
+    body.home-active.theme-light #creditorsSection h2 {
+      color: rgba(15, 23, 42, 0.9) !important;
+    }
+
+    body.home-active.theme-light #bankingSection p,
+    body.home-active.theme-light #budgetSection p,
+    body.home-active.theme-light #creditorsSection p {
+      color: rgba(15, 23, 42, 0.62) !important;
+    }
+
+    body.home-active.theme-light #bankingSection svg,
+    body.home-active.theme-light #budgetSection svg,
+    body.home-active.theme-light #creditorsSection svg {
+      stroke: rgba(15, 23, 42, 0.5) !important;
+      opacity: 0.72 !important;
+    }
+
+    /* Pass de contraste v2 por pantalla (detalle de lead) */
+    body.home-active.theme-light .lead-tabs-nav {
+      background: rgba(255, 255, 255, 0.76);
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+
+    body.home-active.theme-light .lead-tab {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .lead-tab:hover {
+      color: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.08);
+    }
+
+    body.home-active.theme-light .lead-tab.active {
+      color: #1d4ed8;
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    body.home-active.theme-light .lead-info-card {
+      background: rgba(255, 255, 255, 0.7);
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    body.home-active.theme-light .lead-info-card h3 {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .info-row-label {
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    body.home-active.theme-light .info-row-value {
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .calc-column-title {
+      color: rgba(15, 23, 42, 0.74);
+    }
+
+    body.home-active.theme-light .calc-result-label,
+    body.home-active.theme-light .monthly-payment-label-minimal,
+    body.home-active.theme-light .months-unit-inline {
+      color: rgba(15, 23, 42, 0.68);
+    }
+
+    body.home-active.theme-light .calc-result-value,
+    body.home-active.theme-light .monthly-payment-amount-minimal,
+    body.home-active.theme-light .months-number,
+    body.home-active.theme-light .calc-input-field {
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .schedule-table th {
+      color: rgba(15, 23, 42, 0.78);
+    }
+
+    body.home-active.theme-light .schedule-table td {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notif-item-name {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .notif-item-date {
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .notif-item-link {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .calendar-weekdays span {
+      color: rgba(15, 23, 42, 0.56);
+    }
+
+    body.home-active.theme-light .calendar-day {
+      color: rgba(15, 23, 42, 0.84);
+    }
+
+    body.home-active.theme-light .calendar-day.other-month {
+      color: rgba(15, 23, 42, 0.36);
+    }
+
+    body.home-active.theme-light .liquid-glass-btn {
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .calc-toggle-label-small {
+      color: rgba(15, 23, 42, 0.84);
+    }
+
+    body.home-active.theme-light .calc-legal-state-hint {
+      color: rgba(15, 23, 42, 0.72);
+    }
+
+    body.home-active.theme-light .calc-toggle {
+      background: rgba(15, 23, 42, 0.18);
+      border-color: rgba(15, 23, 42, 0.24);
+    }
+
+    body.home-active.theme-light .calc-toggle-thumb {
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+    }
+
+    body.home-active.theme-light .calc-toggle.active {
+      background: rgba(22, 163, 74, 0.72);
+      border-color: rgba(22, 163, 74, 0.66);
+    }
+    
+    body.home-active.theme-light {
+      background: #f5f5f7;
+    }
+  </style>
+</head>
+<body class="home-active theme-dark">
+  <div class="page-bg"></div>
+  <div class="page-overlay"></div>
+  
+  <main class="lead-view-wrapper">
+    <div class="lead-floating">
+      <!-- Logo -->
+      <button class="lead-logo" type="button" aria-label="Ir al leaderboard" onclick="window.location.href='index.html'">
+        <img src="reference/CD logo.png" alt="Cero Deuda">
+      </button>
+      
+      <!-- TOOLBAR - Copiado idéntico del dashboard -->
+      <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
+        <div id="toolbarShell" class="toolbar-shell">
+          <div class="toolbar-glass-container">
+            <div class="toolbar-glass-bg"></div>
+            
+            <div class="toolbar-content">
+              <div class="toolbar-group toolbar-left" aria-label="Accesos izquierda">
+                <button id="leadsBtn" class="tool-btn" type="button" aria-label="Leads" onclick="window.location.href='index.html#leads'">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="6" cy="7" r="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></circle>
+                    <path d="M2 18C2 15.2386 4.23858 13 7 13H7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <circle cx="18" cy="7" r="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></circle>
+                    <path d="M22 18C22 15.2386 19.7614 13 17 13H16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <circle cx="12" cy="9" r="3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></circle>
+                    <path d="M5 21C5 17.134 8.13401 14 12 14C15.866 14 19 17.134 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                  <span>Leads</span>
+                </button>
+
+                <button class="tool-btn" type="button" aria-label="Calendario">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+                    <path d="M3 9h18M8 3v4M16 3v4"></path>
+                  </svg>
+                  <span>Calendario</span>
+                </button>
+              </div>
+
+              <div class="search-central-unit">
+                <label class="home-search-shell search" for="homeSearch">
+                  <svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M10.5 3.5a7 7 0 1 0 4.49 12.37l4.32 4.31 1.41-1.41-4.31-4.32A7 7 0 0 0 10.5 3.5Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"></path>
+                  </svg>
+                  <input id="homeSearch" class="home-search-input" type="search" placeholder="Buscar cliente..." aria-label="Buscar">
+                </label>
+
+                <button id="toolbarToggle" class="toolbar-toggle" type="button" aria-label="Mostrar accesos" aria-expanded="false">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 12H21M3 6H21M3 18H21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
+                <button class="tool-btn" type="button" aria-label="Notificaciones">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z"></path>
+                    <path d="M10 18a2 2 0 0 0 4 0"></path>
+                  </svg>
+                  <span>Notifs</span>
+                </button>
+
+                <button class="tool-btn" type="button" aria-label="Correos">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                    <path d="m4 7 8 6 8-6"></path>
+                  </svg>
+                  <span>Correos</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account Actions -->
+      <div class="home-actions" aria-label="Cuenta y ajustes">
+        <button id="accountBtn" class="account-icon-btn" type="button" aria-label="Cuenta" aria-haspopup="true" aria-expanded="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="8" r="4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></circle>
+            <path d="M4 20C4 16.6863 6.68629 14 10 14H14C17.3137 14 20 16.6863 20 20" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+
+        <div id="accountMenu" class="account-menu hidden" role="menu" aria-label="Ajustes de cuenta">
+          <p class="account-menu-title">Ajustes rapidos</p>
+
+          <label class="theme-inline-toggle" for="themeSwitch" aria-label="Cambiar tema">
+            <input id="themeSwitch" class="theme-switch-input" type="checkbox" aria-label="Toggle de tema">
+            
+            <svg class="icon icon-moon-side" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3c.49 0 .74.59.38.93A7 7 0 0 0 20.07 11.4c.34-.36.93-.11.93.39Z"></path>
+            </svg>
+
+            <span class="theme-switch-track" aria-hidden="true">
+              <span class="theme-switch-thumb"></span>
+            </span>
+
+            <svg class="icon icon-sun-side" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M19.07 4.93l-1.56 1.56M6.49 17.51l-1.56 1.56M19.07 19.07l-1.56-1.56M6.49 6.49 4.93 4.93"></path>
+            </svg>
+          </label>
+
+          <div class="account-menu-divider" role="separator"></div>
+
+          <button id="logoutBtn" class="logout-btn" type="button" role="menuitem">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Cerrar sesión</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CONTENIDO DEL LEAD -->
+      <div class="lead-content-area">
+        <header class="lead-header">
+          <div class="lead-title-section">
+            <!-- Nombre editable -->
+            <div class="lead-name-wrapper">
+              <!-- Botón de cambio Applicant/Co-Applicant -->
+              <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 10h14l-4-4"></path>
+                  <path d="M17 14H3l4 4"></path>
+                </svg>
+              </button>
+              <span id="applicantTypeLabel" class="applicant-type-label">Applicant</span>
+              
+              <h1 id="leadName" class="lead-name-text" contenteditable="false" title="Click para editar">Fernando Costales</h1>
+              
+              <!-- Botón de copiar nombre - solo icono, sin box -->
+              <button id="copyNameBtn" class="copy-btn" title="Copiar nombre">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <!-- Badge de State Type (Green/Red) -->
+            <span id="stateBadge" class="lead-state-badge green" title="California (CA) - Green State">Green</span>
+            
+            <!-- Badge de Test (si aplica) -->
+            <span id="testBadge" class="lead-test-badge">Test</span>
+
+            <!-- Badge de relación -->
+            <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"></path>
+                <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"></path>
+              </svg>
+              <span id="relatedLeadBadgeText">Relacionado con #</span>
+            </a>
+          </div>
+          
+          <!-- Case ID y botones de acción -->
+          <div class="lead-case-id">
+            <div class="case-id-left">
+              <span class="case-label">Case ID:</span>
+              <span id="caseNumber" class="case-number">10005</span>
+              <button id="copyCaseBtn" class="copy-icon-btn" title="Copiar Case ID">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+              
+              <!-- Toggle Include Co-Applicant (solo visible en modo Co-Applicant) -->
+              <div id="includeCoAppToggleWrapper" class="include-toggle-wrapper hidden">
+                <span id="includeToggleStatus" class="include-toggle-status">OFF</span>
+                <label class="include-toggle">
+                  <input type="checkbox" id="includeCoAppToggle">
+                  <span class="include-toggle-track">
+                    <span class="include-toggle-thumb"></span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- Botones de acción al lado del Case ID -->
+            <div class="case-id-actions">
+              <button class="action-icon-btn" id="callBtn" title="Llamar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+              </button>
+              <button class="action-icon-btn" id="emailBtn" title="Enviar Email">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+              </button>
+              <div class="notes-anchor">
+                <button class="action-icon-btn" id="notesBtn" title="Notas" aria-controls="notesPanel" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <section id="notesPanel" class="notes-panel hidden" aria-label="Notas del lead">
+                  <div class="notes-panel-header">
+                    <span class="notes-panel-title">Notas</span>
+                    <button class="notes-panel-close modal-close-mac" id="notesCloseBtn" type="button" title="Cerrar notas"></button>
+                  </div>
+                  <div class="notes-panel-body">
+                    <div id="notesComposerWrap" class="hidden">
+                      <label class="notes-composer-label" for="notesComposerTextarea">Nueva nota</label>
+                      <textarea id="notesComposerTextarea" class="notes-composer" placeholder="Escribe una nota y presiona Agregar..."></textarea>
+                    </div>
+                    <div class="notes-actions-row">
+                      <button id="notesAddBtn" class="notes-btn primary" type="button">Agregar nota</button>
+                      <span id="notesStatus" class="notes-save-status" style="">Sin notas</span>
+                    </div>
+                    <div id="notesList" class="notes-feed" aria-live="polite"><div class="notes-feed-empty">Aun no hay notas en este lead.</div></div>
+                    <div class="notes-templates-block">
+                      <div class="notes-templates-header">
+                        <span class="notes-templates-title">Templates</span>
+                      </div>
+                      <select id="notesTemplateSelect" class="notes-template-select" aria-label="Seleccionar template">
+                        <option value="">Seleccionar template...</option>
+                      </select>
+                      <div class="notes-template-actions notes-template-actions-clean">
+                        <button id="notesTemplateUseBtn" class="notes-btn" type="button">Usar</button>
+                        <button id="notesTemplateManageBtn" class="notes-btn" type="button">Editar mis templates</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Navegación de pestañas -->
+          <div class="lead-tabs-nav">
+            <button class="lead-tab" data-tab="lead">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              Lead
+            </button>
+            <button class="lead-tab active" data-tab="banking">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                <line x1="2" y1="10" x2="22" y2="10"></line>
+              </svg>
+              Banking
+            </button>
+            <button class="lead-tab" data-tab="calculator">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="2" width="16" height="20" rx="2"></rect>
+                <line x1="8" y1="6" x2="16" y2="6"></line>
+                <line x1="16" y1="14" x2="16" y2="14"></line>
+                <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path>
+              </svg>
+              Calculator
+            </button>
+            <button class="lead-tab" data-tab="budget">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- Cartera -->
+                <path d="M19 7H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" fill="rgba(59, 130, 246, 0.15)"></path>
+                <path d="M19 7H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"></path>
+                <path d="M16 11h4v4h-4z"></path>
+                <circle cx="18" cy="13" r="0.8" fill="currentColor"></circle>
+                <!-- Planta/rama saliendo -->
+                <path d="M12 7V4c0-1.5 1-2 2-2s2 0.5 2 2" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"></path>
+                <path d="M14 4c0-2 1.5-3 3-3s3 1 3 3-1.5 3-3 3" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"></path>
+                <ellipse cx="17" cy="2.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.9"></ellipse>
+                <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.9"></ellipse>
+                <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.9"></ellipse>
+              </svg>
+              Budget
+            </button>
+            <button class="lead-tab" data-tab="creditors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              Creditors
+            </button>
+          </div>
+          
+
+        </header>
+        
+        <!-- Contenido dinámico -->
+        <!-- Sección Lead (Detalles) - Visible por defecto -->
+        <div id="leadSection" class="lead-content-grid hidden">
+          <!-- Card 1: Información de Contacto -->
+          <div class="lead-info-card">
+            <h3>Información de Contacto</h3>
+            <div class="info-row">
+              <span class="info-row-label">Home Phone</span>
+              <span class="info-row-value editable mono" data-field="home_phone" data-copy="true" tabindex="0">098-765-4321<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Cell Phone</span>
+              <span class="info-row-value editable mono" data-field="cell_phone" data-copy="true" tabindex="0">786-222-1002<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">DOB</span>
+              <div class="dob-calendar-wrapper">
+                <span class="info-row-value editable dob-calendar-trigger" data-field="dob" id="dobTrigger" tabindex="0">
+                  <span id="dobValue">No especificado</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </span>
+                <div id="dobCalendar" class="custom-calendar dob-calendar hidden" data-year-navigation-ready="true">
+                  <div class="calendar-header">
+                    <button type="button" class="calendar-nav" data-calendar-nav="year-prev" title="Anio anterior">&lt;&lt;</button><button id="dobCalendarPrev" class="calendar-nav">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                    </button>
+                    <span id="dobCalendarMonthYear" class="calendar-title" title="Click para saltar a YYYY-MM" style="cursor: pointer;"></span>
+                    <button id="dobCalendarNext" class="calendar-nav">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </button><button type="button" class="calendar-nav" data-calendar-nav="year-next" title="Anio siguiente">&gt;&gt;</button>
+                  </div>
+                  <div class="calendar-weekdays">
+                    <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
+                    <span>Jue</span><span>Vie</span><span>Sáb</span>
+                  </div>
+                  <div id="dobCalendarDays" class="calendar-days"></div>
+                <div class="calendar-jump-popover hidden">
+        <div class="calendar-jump-popover-row">
+          <input type="text" class="calendar-jump-input" placeholder="YYYY-MM" maxlength="7">
+          <button type="button" class="calendar-jump-apply">Ir</button>
+        </div>
+        <div class="calendar-jump-error" aria-live="polite"></div>
+      </div></div>
+              </div>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Email</span>
+              <span class="info-row-value editable" data-field="email" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">SSN / ITIN</span>
+              <span class="info-row-value editable mono" data-field="ssn" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+          </div>
+          
+          <!-- Card 2: Dirección & WC -->
+          <div class="lead-info-card">
+            <h3>DIRECCIÓN &amp; WC</h3>
+            <div class="info-row">
+              <span class="info-row-label">Address Street</span>
+              <span class="info-row-value editable" data-field="address_street" data-copy="true" tabindex="0">calle 14 apt 50<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">City</span>
+              <span class="info-row-value editable" data-field="city" data-copy="true" tabindex="0">Compton<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">ZIP Code</span>
+              <span class="info-row-value editable mono" data-field="zip_code" data-copy="true" tabindex="0">77509<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">State</span>
+              <span class="info-row-value editable" data-field="state" data-copy="true" tabindex="0">California (CA)<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Best time to call</span>
+              <span class="info-row-value editable" data-field="best_time" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+            </div>
+          </div>
+          
+          <!-- Card 3: Employment Details -->
+          <div class="lead-info-card">
+            <h3>EMPLOYMENT DETAILS</h3>
+            <div class="info-row">
+              <span class="info-row-label">Currently employed</span>
+              <span class="info-row-value editable" data-field="currently_employed" tabindex="0">No especificado</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Employer name</span>
+              <span class="info-row-value editable" data-field="employer_name" tabindex="0">No especificado</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Occupation</span>
+              <span class="info-row-value editable" data-field="occupation" tabindex="0">No especificado</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Self Employed</span>
+              <label class="self-employed-toggle">
+                <input type="checkbox" id="selfEmployedToggle" data-field="self_employed" checked="">
+                <span class="self-employed-switch">
+                  <span class="self-employed-thumb"></span>
+                </span>
+                <span class="self-employed-label">Si</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Card 2: Tiempos y Fechas (Expandido) -->
+          <div class="lead-info-card lead-info-card-wide">
+            <h3>Tiempos y Fechas</h3>
+            <div class="two-column-layout">
+              <!-- Columna Izquierda -->
+              <div class="info-column">
+                <div class="info-row">
+                  <span class="info-row-label">Fecha de Creación</span>
+                  <span class="info-row-value">13/2/2026, 3:34:37</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Assigned Date</span>
+                  <span class="info-row-value">13/2/2026</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Close Date</span>
+                  <span class="info-row-value" id="closeDateValue">Pendiente</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Días en Status</span>
+                  <span class="info-row-value">3</span>
+                </div>
+              </div>
+              
+              <!-- Columna Derecha -->
+              <div class="info-column">
+                <div class="info-row">
+                  <span class="info-row-label">Last Credit Pull</span>
+                  <span class="info-row-value">13/2/2026</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Submitted Date</span>
+                  <span class="info-row-value">N/A</span>
+                </div>
+                <div class="info-row callback-row">
+                  <span class="info-row-label">Callback</span>
+                  <div class="callback-wrapper">
+                    <button id="callbackCalendarBtn" class="calendar-trigger liquid-glass-btn">
+                      <span id="callbackDateDisplay">Seleccionar fecha</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                      </svg>
+                    </button>
+                    <button id="callbackMacBtn" class="callback-mac-btn hidden" title="Eliminar callback"></button>
+                    
+                    <!-- Calendario Custom Liquid Glass -->
+                    <div id="customCalendar" class="custom-calendar hidden" data-year-navigation-ready="true">
+                      <div class="calendar-header">
+                      <button type="button" class="calendar-nav" data-calendar-nav="year-prev" title="Anio anterior">&lt;&lt;</button><button id="calendarPrev" class="calendar-nav">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                      </button>
+                      <span id="calendarMonthYear" class="calendar-title" title="Click para saltar a YYYY-MM" style="cursor: pointer;"></span>
+                      <button id="calendarNext" class="calendar-nav">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </button><button type="button" class="calendar-nav" data-calendar-nav="year-next" title="Anio siguiente">&gt;&gt;</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                      <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
+                      <span>Jue</span><span>Vie</span><span>Sáb</span>
+                    </div>
+                    <div id="calendarDays" class="calendar-days"></div>
+                  <div class="calendar-jump-popover hidden">
+        <div class="calendar-jump-popover-row">
+          <input type="text" class="calendar-jump-input" placeholder="YYYY-MM" maxlength="7">
+          <button type="button" class="calendar-jump-apply">Ir</button>
+        </div>
+        <div class="calendar-jump-error" aria-live="polite"></div>
+      </div></div>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">FICO Score</span>
+                  <span class="info-row-value fico-score" id="ficoScore">Pendiente</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+        
+        <!-- Sección Calculator -->
+        <div id="calculatorSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
+          <!-- Calculator Box - Estilo Tiempos y Fechas -->
+          <div class="lead-info-card lead-info-card-wide calculator-main-card">
+            <div class="two-column-layout calc-layout">
+              <!-- Columna Izquierda: Configuración -->
+              <div class="info-column calc-config-column">
+                <h4 class="calc-column-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
+                    <!-- Cartera -->
+                    <path d="M19 7H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" fill="rgba(59, 130, 246, 0.2)"></path>
+                    <path d="M19 7H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"></path>
+                    <path d="M16 11h4v4h-4z"></path>
+                    <circle cx="18" cy="13" r="0.8" fill="currentColor"></circle>
+                    <!-- Planta/rama saliendo -->
+                    <path d="M12 7V4c0-1.5 1-2 2-2s2 0.5 2 2" stroke="#4ade80" stroke-linecap="round"></path>
+                    <path d="M14 4c0-2 1.5-3 3-3s3 1 3 3-1.5 3-3 3" stroke="#4ade80" stroke-linecap="round"></path>
+                    <ellipse cx="17" cy="2.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"></ellipse>
+                    <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"></ellipse>
+                    <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.8"></ellipse>
+                  </svg>
+                  Configuración
+                </h4>
+                
+                <div class="info-row calc-input-row">
+                  <span class="info-row-label">Total Debt</span>
+                  <div class="calc-input-minimal copy-on-click" id="copyTotalDebt" title="Click para copiar">
+                    <span class="calc-input-prefix">$</span>
+                    <input type="text" class="calc-input-field" id="calcTotalDebt" value="0.00" readonly="">
+                  </div>
+                </div>
+                
+                <div class="info-row calc-input-row">
+                  <span class="info-row-label">Estimated Settlement</span>
+                  <div class="calc-input-minimal protected" data-field="settlementPercent">
+                    <button class="lock-toggle-btn" data-target="calcSettlementPercent" title="Click para desbloquear">
+                      <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      <svg class="lock-icon-svg unlocked hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                      </svg>
+                    </button>
+                    <input type="text" class="calc-input-field percent" id="calcSettlementPercent" value="0" readonly="">
+                    <span class="calc-input-suffix">%</span>
+                  </div>
+                </div>
+                
+                <div class="info-row calc-input-row">
+                  <span class="info-row-label">Program Fee</span>
+                  <div class="calc-input-minimal protected" data-field="programFeePercent">
+                    <button class="lock-toggle-btn" data-target="calcProgramFeePercent" title="Click para desbloquear">
+                      <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      <svg class="lock-icon-svg unlocked hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                      </svg>
+                    </button>
+                    <input type="text" class="calc-input-field percent" id="calcProgramFeePercent" value="0" readonly="">
+                    <span class="calc-input-suffix">%</span>
+                  </div>
+                </div>
+                
+                <div class="info-row calc-input-row">
+                  <span class="info-row-label">Monthly Bank Fee</span>
+                  <div class="calc-input-minimal protected" data-field="bankFee">
+                    <button class="lock-toggle-btn" data-target="calcBankFee" title="Click para desbloquear">
+                      <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      <svg class="lock-icon-svg unlocked hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                      </svg>
+                    </button>
+                    <span class="calc-input-prefix">$</span>
+                    <input type="text" class="calc-input-field" id="calcBankFee" value="0.00" readonly="">
+                  </div>
+                </div>
+                
+                <div class="info-row">
+                  <span class="info-row-label">Legal Plan</span>
+                  <div class="calc-toggle-wrapper-inline" id="calcLegalPlanToggle">
+                    <span id="calcLegalPlanStateHint" class="calc-legal-state-hint" aria-live="polite">Desactivando Legal Plan en <span class="calc-legal-state-word green">GreenState</span>.</span>
+                    <span class="calc-toggle-label-small">Incluir ($24.99/mes)</span>
+                    <div class="calc-toggle" id="calcLegalPlanSwitch">
+                      <div class="calc-toggle-thumb"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="info-row calc-payment-day-row">
+                  <span class="info-row-label">Monthly Payment Day</span>
+                  <div class="calc-payment-day-wrapper">
+                    <button id="calcPaymentDayTrigger" class="liquid-glass-btn calc-payment-day-trigger" type="button">
+                      <span id="calcPaymentDayDisplay" class="calc-payment-day-display">17/3/2026</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                      </svg>
+                    </button>
+                    <div id="calcPaymentDayCalendar" class="custom-calendar calc-payment-day-calendar hidden">
+                      <div class="calendar-header">
+                        <button id="calcPaymentDayPrev" class="calendar-nav" type="button">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                          </svg>
+                        </button>
+                        <span id="calcPaymentDayMonthYear" class="calendar-title"></span>
+                        <button id="calcPaymentDayNext" class="calendar-nav" type="button">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                          </svg>
+                        </button>
+                      </div>
+                      <div class="calendar-weekdays">
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
+                        <span>Jue</span><span>Vie</span><span>Sáb</span>
+                      </div>
+                      <div id="calcPaymentDayDays" class="calendar-days"></div>
+                    </div>
+                  </div>
+                  <input type="hidden" id="calcFirstDepositDate" value="2026-03-17">
+                </div>
+              </div>
+              
+              <!-- Columna Derecha: Resultados -->
+              <div class="info-column calc-results-column">
+                <h4 class="calc-column-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
+                    <path d="M3 3v18h18"></path>
+                    <path d="M18 17V9"></path>
+                    <path d="M13 17V5"></path>
+                    <path d="M8 17v-3"></path>
+                  </svg>
+                  Resultados
+                </h4>
+                
+                <div class="info-row">
+                  <span class="info-row-label">Est. Settlement Amount</span>
+                  <span class="info-row-value mono" id="resultSettlement">$0.00</span>
+                </div>
+                
+                <div class="info-row">
+                  <span class="info-row-label">Total Program Fees</span>
+                  <span class="info-row-value mono" id="resultProgramFees">$0.00</span>
+                </div>
+                
+                <div class="info-row">
+                  <span class="info-row-label">Total Legal Fees</span>
+                  <span class="info-row-value mono" id="resultLegalFees">$0.00</span>
+                </div>
+                
+                <div class="info-row">
+                  <span class="info-row-label">Total Bank Fees</span>
+                  <span class="info-row-value mono" id="resultBankFees">$0.00</span>
+                </div>
+                
+                <div class="info-row highlight-row">
+                  <span class="info-row-label">Total Program Cost</span>
+                  <span class="info-row-value mono accent" id="resultTotalProgram">$0.00</span>
+                </div>
+                
+                <div class="info-row savings-row">
+                  <span class="info-row-label">Total Savings</span>
+                  <span class="info-row-value mono" id="resultSavings">$0.00</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Sección especial: Meses y Monthly Payment - Compacto -->
+            <div class="calc-duration-payment-row">
+              <!-- Program Duration -->
+              <div class="calc-duration-compact">
+                <div class="calc-duration-wheel-area">
+                  <span class="calc-duration-label-compact">Program Duration</span>
+                  <div class="months-inline-wheel-wrapper compact">
+                    <div class="months-inline-wheel compact" id="monthsInlineWheel" role="spinbutton" aria-label="Program duration in months" aria-valuemin="6" aria-valuemax="120" aria-valuenow="48" tabindex="0">
+                      <div class="months-wheel-track-inline" id="monthsWheelTrackInline"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Botones rápidos debajo de la ruleta -->
+                <div class="months-quick-buttons minimal under-wheel">
+                  <button class="months-quick-btn minimal" data-months="12">12</button>
+                  <button class="months-quick-btn minimal" data-months="24">24</button>
+                  <button class="months-quick-btn minimal" data-months="36">36</button>
+                  <button class="months-quick-btn minimal active" data-months="48">48</button>
+                  <button class="months-quick-btn minimal" data-months="60">60</button>
+                  <span class="months-unit-inline">months</span>
+                </div>
+                
+                <input type="hidden" id="calcMonths" value="48">
+              </div>
+              
+              <!-- Monthly Payment -->
+              <div class="calc-monthly-payment-minimal">
+                <div class="monthly-payment-content" id="copyMonthlyPayment" title="Click para copiar (meses + monto)">
+                  <span class="monthly-payment-label-minimal">Monthly Payment</span>
+                  <div class="monthly-payment-value-row">
+                    <span class="monthly-payment-amount-minimal" id="resultMonthlyPayment">$0.00</span>
+                    <svg class="copy-icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          
+          <!-- Payment Schedule -->
+          <div class="lead-info-card lead-info-card-wide payment-schedule-card">
+            <div class="schedule-header">
+              <h3 class="calculator-section-title" style="margin:0;padding:0;border:none;">Payment Schedule</h3>
+              <span class="plan-duration-badge" id="planDurationText">4 años</span>
+            </div>
+            <div class="schedule-table-container">
+              <table class="schedule-table">
+                <thead>
+                  <tr>
+                    <th>Payment #</th>
+                    <th>Payment Date</th>
+                    <th>Payment Amount</th>
+                    <th>Legal Fee</th>
+                    <th>Bank Fee</th>
+                    <th>Savings</th>
+                  </tr>
+                </thead>
+                <tbody id="scheduleTableBody">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Secciones placeholder para Banking, Budget, Creditors -->
+        <div id="bankingSection" class="lead-content-grid">
+        <div class="lead-info-card">
+          <h3>Bank Account</h3>
+          <div class="info-row">
+            <span class="info-row-label">Routing Number</span>
+            <span class="info-row-value editable mono" data-field="bank_routing_number" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Bank Account Number</span>
+            <span class="info-row-value editable mono" data-field="bank_account_number" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Account Type</span>
+            <span class="info-row-value editable" data-field="bank_account_type" tabindex="0">No especificado</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Name On Account</span>
+            <span class="info-row-value editable" data-field="bank_name_on_account" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Initial Payment Amount</span>
+            <span class="info-row-value editable mono" data-field="bank_initial_payment_amount" tabindex="0">$0.00</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Day of Month for Sub.</span>
+            <span class="info-row-value editable mono" data-field="bank_payment_day" tabindex="0">null</span>
+          </div>
+        </div>
+
+        <div class="lead-info-card">
+          <h3>Bank Contact</h3>
+          <div class="info-row">
+            <span class="info-row-label">Bank Name</span>
+            <span class="info-row-value editable" data-field="bank_name" tabindex="0">No especificado</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Bank Phone Number</span>
+            <span class="info-row-value editable mono" data-field="bank_phone" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Bank Email</span>
+            <span class="info-row-value editable" data-field="bank_email" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Mother's Maiden Name</span>
+            <span class="info-row-value editable" data-field="bank_mothers_maiden_name" tabindex="0">No especificado</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">SS #</span>
+            <span class="info-row-value editable mono" data-field="bank_ssn" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Relationship To Customer</span>
+            <span class="info-row-value editable" data-field="bank_relationship_to_customer" tabindex="0">No especificado</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">DOB</span>
+            <span class="info-row-value editable mono" data-field="bank_dob" tabindex="0">No especificado</span>
+          </div>
+        </div>
+
+        <div class="lead-info-card lead-info-card-wide">
+          <h3>Bank Address</h3>
+          <div class="two-column-layout">
+            <div class="info-column">
+              <div class="info-row">
+                <span class="info-row-label">Address</span>
+                <span class="info-row-value editable" data-field="bank_address" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+              </div>
+              <div class="info-row">
+                <span class="info-row-label">Address 2</span>
+                <span class="info-row-value editable" data-field="bank_address_2" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+              </div>
+              <div class="info-row">
+                <span class="info-row-label">City</span>
+                <span class="info-row-value editable" data-field="bank_city" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+              </div>
+            </div>
+            <div class="info-column">
+              <div class="info-row">
+                <span class="info-row-label">State</span>
+                <span class="info-row-value editable" data-field="bank_state_code" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+              </div>
+              <div class="info-row">
+                <span class="info-row-label">ZIP Code</span>
+                <span class="info-row-value editable mono" data-field="bank_zip_code" data-copy="true" tabindex="0">No especificado<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="copy-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+        
+        <div id="budgetSection" class="hidden" style="padding:40px;text-align:center;color:rgba(255,255,255,0.5);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="margin-bottom:16px;opacity:0.5;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M16 8h-6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"></path>
+          </svg>
+          <h2>Budget</h2>
+          <p>Sección en desarrollo</p>
+        </div>
+        
+        <div id="creditorsSection" class="hidden" style="padding:40px;text-align:center;color:rgba(255,255,255,0.5);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="margin-bottom:16px;opacity:0.5;">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <h2>Creditors</h2>
+          <p>Sección en desarrollo</p>
+        </div>
+      </div>
+    </div>
+  </div></main>
+
+  <div id="notesTemplatesModal" class="notes-templates-modal hidden" aria-hidden="true">
+    <div id="notesTemplatesModalBackdrop" class="notes-templates-modal-backdrop"></div>
+    <div class="notes-templates-modal-content" role="dialog" aria-modal="true" aria-labelledby="notesTemplatesModalTitle">
+      <button class="modal-close-mac notes-templates-modal-close" id="notesTemplatesModalClose" type="button" title="Cerrar"></button>
+      <div class="notes-templates-modal-header">
+        <h3 id="notesTemplatesModalTitle">Editar mis templates</h3>
+      </div>
+      <div class="notes-templates-modal-body">
+        <div class="notes-templates-manager-list">
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerSelect">Mis templates</label>
+          <select id="notesTemplatesManagerSelect" class="notes-templates-manager-select" size="8" aria-label="Lista de templates"></select>
+          <button id="notesTemplatesManagerNewBtn" class="notes-btn" type="button">Nuevo</button>
+        </div>
+        <div class="notes-templates-manager-editor">
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerName">Nombre</label>
+          <input id="notesTemplatesManagerName" class="notes-templates-manager-input" type="text" maxlength="120" placeholder="Ej: Contacto inicial">
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerContent">Contenido</label>
+          <textarea id="notesTemplatesManagerContent" class="notes-templates-manager-textarea" maxlength="5000" placeholder="Escribe el contenido del template..."></textarea>
+          <div class="notes-templates-manager-actions">
+            <button id="notesTemplatesManagerSaveBtn" class="notes-btn primary" type="button">Guardar</button>
+            <button id="notesTemplatesManagerSaveAsNewBtn" class="notes-btn" type="button">Guardar como nuevo</button>
+            <button id="notesTemplatesManagerDeleteBtn" class="notes-btn danger" type="button">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="crm-helpers.js?v=20260216b"></script>
+  <script src="client.js?v=20260216s"></script>
+  <script src="quick-actions.js?v=20260216c"></script><div class="quick-radial-menu" style="left: 375px; top: 242px;">
+      <button type="button" class="quick-radial-node quick-radial-node-creditor" data-action="creditor" style="--orbit-phase:0deg;--open-dx:-118px;--open-dy:-16px;">
+        <span class="quick-node-dot" aria-hidden="true"></span>
+        <svg class="quick-node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 7h18M6 12h12M9 17h6"></path>
+        </svg>
+        <span class="quick-node-label">Acreedor califica</span>
+      </button>
+
+      <button type="button" class="quick-radial-node quick-radial-node-lead" data-action="lead" style="--orbit-phase:180deg;--open-dx:118px;--open-dy:-16px;">
+        <span class="quick-node-dot" aria-hidden="true"></span>
+        <svg class="quick-node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="8.5" cy="7" r="3.2"></circle>
+          <path d="M20 8v6M17 11h6"></path>
+        </svg>
+        <span class="quick-node-label">Nuevo Lead</span>
+      </button>
+
+      <p id="quickRadialHint" class="quick-radial-hint" aria-live="polite"></p>
+    </div>
+
+
+
+
+</body></html>

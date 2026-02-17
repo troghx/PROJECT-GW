@@ -528,6 +528,7 @@
     let originalName = '';
     let caseIdValue = '';
     let currentLeadId = null;
+    window.currentLeadId = currentLeadId;
     let currentLeadData = null;
     let relatedBadgeRequestVersion = 0;
     const zipLocationCache = new Map();
@@ -574,6 +575,17 @@
     let leadNotes = [];
     let notesLoadedForLeadId = null;
     let leadNotesLoadingPromise = null;
+    let creditorsSectionInitialized = false;
+    let creditorsLoadingPromise = null;
+    let currentCreditors = [];
+    let previewCreditors = [];
+    let creditorsParseRunId = 0;
+
+    const CREDITORS_STATUS_TONE_CLASS_MAP = {
+      neutral: '',
+      success: 'success',
+      error: 'error'
+    };
 
     const PARTY_SWITCHABLE_FIELDS = new Set([
       'home_phone',
@@ -997,6 +1009,925 @@
         syncLeadDataState(data.lead);
       }
       return data.lead || null;
+    }
+
+    // ============================================
+    // CREDITORS
+    // ============================================
+    function setCreditorsStatus(message, tone = 'neutral') {
+      const statusEl = document.getElementById('creditorsStatus');
+      if (!statusEl) return;
+      statusEl.textContent = String(message || '');
+      statusEl.className = 'creditors-status';
+      const toneClass = CREDITORS_STATUS_TONE_CLASS_MAP[tone] || '';
+      if (toneClass) statusEl.classList.add(toneClass);
+    }
+
+    function normalizeMoneyValue(value) {
+      return Number(parseCurrency(value).toFixed(2));
+    }
+
+    function moneyFromTextFragment(fragment) {
+      const match = String(fragment || '').match(/\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/);
+      if (!match) return 0;
+      return normalizeMoneyValue(match[1]);
+    }
+
+    function computeDebtAmountFromParts(parts = {}) {
+      const options = [parts.debtAmount, parts.unpaidBalance, parts.pastDue, parts.balance]
+        .map((value) => normalizeMoneyValue(value))
+        .filter((value) => Number.isFinite(value) && value >= 0);
+      if (!options.length) return 0;
+      return Number(Math.max(...options).toFixed(2));
+    }
+
+    function normalizeCreditorName(name) {
+      return String(name || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function normalizeAccountToken(value) {
+      return String(value || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '');
+    }
+
+    function accountTokensLikelySame(a, b) {
+      const tokenA = normalizeAccountToken(a);
+      const tokenB = normalizeAccountToken(b);
+      if (!tokenA || !tokenB) return false;
+      if (tokenA === tokenB) return true;
+
+      const compactA = tokenA.replace(/X+/g, '');
+      const compactB = tokenB.replace(/X+/g, '');
+      if (compactA && compactB && (compactA.includes(compactB) || compactB.includes(compactA))) {
+        return true;
+      }
+
+      const lastA = compactA.slice(-4);
+      const lastB = compactB.slice(-4);
+      return Boolean(lastA && lastB && lastA.length === 4 && lastA === lastB);
+    }
+
+    function isLikelyCreditorHeader(nameValue) {
+      const name = normalizeCreditorName(nameValue);
+      if (!name || name.length < 4 || name.length > 90) return false;
+      if (!/[A-Za-z]/.test(name)) return false;
+
+      const blockedStarts = [
+        'Account',
+        'Balance',
+        'Bureau',
+        'Report',
+        'Overview',
+        'Payment',
+        'CreditorsA',
+        'Creditors',
+        'Total',
+        'Public records',
+        'Inquiries'
+      ];
+
+      return !blockedStarts.some((prefix) => name.startsWith(prefix));
+    }
+
+    function mergeParsedCreditor(base, incoming) {
+      const merged = { ...base };
+      const textKeys = ['creditorName', 'originalCreditor', 'accountNumber', 'accountStatus', 'accountType', 'sourceReport'];
+      textKeys.forEach((key) => {
+        const baseValue = String(merged[key] || '');
+        const nextValue = String(incoming[key] || '');
+        if (!baseValue && nextValue) {
+          merged[key] = incoming[key];
+          return;
+        }
+        if (key === 'accountNumber' && nextValue && nextValue.replace(/X/gi, '').length > baseValue.replace(/X/gi, '').length) {
+          merged[key] = incoming[key];
+        }
+      });
+
+      const numberKeys = ['monthlyPayment', 'balance', 'pastDue', 'unpaidBalance', 'creditLimit', 'highCredit', 'debtAmount'];
+      numberKeys.forEach((key) => {
+        const baseValue = normalizeMoneyValue(merged[key]);
+        const nextValue = normalizeMoneyValue(incoming[key]);
+        merged[key] = Number(Math.max(baseValue, nextValue).toFixed(2));
+      });
+
+      merged.debtAmount = computeDebtAmountFromParts(merged);
+      merged.isIncluded = merged.debtAmount > 0;
+      return merged;
+    }
+
+    function dedupeParsedCreditors(entries = []) {
+      const deduped = [];
+      for (const entry of entries) {
+        const creditorKey = normalizeCreditorName(entry.creditorName).toUpperCase();
+        const matchIndex = deduped.findIndex((candidate) => {
+          const candidateKey = normalizeCreditorName(candidate.creditorName).toUpperCase();
+          if (!creditorKey || creditorKey !== candidateKey) return false;
+
+          const sameDebt = Math.abs(normalizeMoneyValue(candidate.debtAmount) - normalizeMoneyValue(entry.debtAmount)) < 0.01;
+          if (!sameDebt) return false;
+
+          if (accountTokensLikelySame(candidate.accountNumber, entry.accountNumber)) return true;
+          if (!candidate.accountNumber && !entry.accountNumber) return true;
+          return false;
+        });
+
+        if (matchIndex >= 0) {
+          deduped[matchIndex] = mergeParsedCreditor(deduped[matchIndex], entry);
+        } else {
+          deduped.push({ ...entry });
+        }
+      }
+      return deduped;
+    }
+
+    function extractCreditorHeaderCandidate(line) {
+      const raw = normalizeCreditorName(line);
+      if (!raw || raw.length < 4) return null;
+
+      const blockedPrefixes = [
+        'Account ',
+        'Balance',
+        'Bureau',
+        'Report',
+        'Overview',
+        'Payment',
+        'CreditorsA',
+        'Creditors',
+        'Total',
+        'Public records',
+        'Inquiries',
+        'Type ',
+        'Responsibility',
+        'Remarks',
+        'Term ',
+        'High ',
+        'Current ',
+        'Amount ',
+        'Collections',
+        'Accounts',
+        'Open accounts',
+        'Closed accounts',
+        'Delinquent',
+        'Derogatory'
+      ];
+      if (blockedPrefixes.some((prefix) => raw.startsWith(prefix))) return null;
+
+      const dateMatch = raw.match(/\b[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\b/);
+      const moneyMatch = raw.match(/\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/);
+      if (!dateMatch && !moneyMatch) return null;
+
+      const cutIndexCandidates = [];
+      if (dateMatch) cutIndexCandidates.push(dateMatch.index);
+      if (moneyMatch) cutIndexCandidates.push(moneyMatch.index);
+      const cutIndex = cutIndexCandidates.length ? Math.min(...cutIndexCandidates) : raw.length;
+      const creditorName = normalizeCreditorName(raw.slice(0, cutIndex));
+      if (!isLikelyCreditorHeader(creditorName)) return null;
+
+      return {
+        creditorName,
+        balanceHint: moneyMatch ? normalizeMoneyValue(moneyMatch[1]) : 0
+      };
+    }
+
+    function extractNameFromCreditorInfoLine(line) {
+      let value = normalizeCreditorName(line);
+      if (!value) return '';
+      value = value.split(/(?:PO BOX|P\.?\s*O\.?\s*BOX| \d{3,}|https?:\/\/)/i)[0].trim();
+      if (!isLikelyCreditorHeader(value)) return '';
+      return value;
+    }
+
+    function parseCreditReportText(rawText, sourceReport = 'Reporte') {
+      const text = String(rawText || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\r/g, '\n');
+      const lines = text
+        .split('\n')
+        .map((line) => line.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+      const parsedEntries = [];
+      let current = null;
+      let recentHeader = null;
+      let recentHeaderLine = -9999;
+      let waitingCreditorInfo = false;
+
+      function createEmptyEntry() {
+        return {
+          sourceReport,
+          creditorName: '',
+          accountNumber: '',
+          accountStatus: '',
+          accountType: '',
+          originalCreditor: '',
+          monthlyPayment: 0,
+          balance: 0,
+          pastDue: 0,
+          unpaidBalance: 0,
+          creditLimit: 0,
+          highCredit: 0,
+          debtAmount: 0,
+          isIncluded: true
+        };
+      }
+
+      function ensureCurrent(lineIndex) {
+        if (current) return;
+        current = createEmptyEntry();
+        if (recentHeader && lineIndex - recentHeaderLine <= 12) {
+          current.creditorName = normalizeCreditorName(recentHeader.creditorName);
+          if (recentHeader.balanceHint > 0) {
+            current.balance = Math.max(current.balance, recentHeader.balanceHint);
+          }
+        }
+      }
+
+      function flushCurrent() {
+        if (!current) return;
+        current.creditorName = normalizeCreditorName(current.creditorName);
+        if (!current.creditorName && current.originalCreditor) {
+          current.creditorName = normalizeCreditorName(current.originalCreditor);
+        }
+        if (!current.creditorName && current.accountNumber) {
+          current.creditorName = `Account ${String(current.accountNumber).slice(-4)}`;
+        }
+        current.debtAmount = computeDebtAmountFromParts(current);
+        current.isIncluded = current.debtAmount > 0;
+        if (current.debtAmount > 0) {
+          parsedEntries.push(current);
+        }
+        current = null;
+      }
+
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+        const line = lines[lineIndex];
+
+        const headerCandidate = extractCreditorHeaderCandidate(line);
+        if (headerCandidate) {
+          recentHeader = headerCandidate;
+          recentHeaderLine = lineIndex;
+        }
+
+        if (/^Creditor information/i.test(line)) {
+          waitingCreditorInfo = true;
+          continue;
+        }
+
+        if (waitingCreditorInfo) {
+          const infoName = extractNameFromCreditorInfoLine(line);
+          if (infoName) {
+            ensureCurrent(lineIndex);
+            if (!current.creditorName) current.creditorName = infoName;
+          }
+          if (/PO BOX|P\.?\s*O\.?\s*BOX|\(\d{3}\)|^\(\d{3}\)|^\d{3}-\d{3}-\d{4}/i.test(line)) {
+            waitingCreditorInfo = false;
+          }
+        }
+
+        const hasBalanceLine = /Balance\s*:/i.test(line);
+        const hasUnpaidLine = /Unpaid Balance/i.test(line);
+        const accountMatchEarly = line.match(/^Account Number\s*:?\s*([A-Za-z0-9-]+)/i);
+
+        if (hasBalanceLine || hasUnpaidLine || accountMatchEarly) {
+          if (
+            current &&
+            (hasBalanceLine || (accountMatchEarly && current.accountNumber)) &&
+            (current.balance > 0 || current.unpaidBalance > 0 || current.pastDue > 0 || current.debtAmount > 0)
+          ) {
+            flushCurrent();
+          }
+          ensureCurrent(lineIndex);
+        }
+        if (!current) {
+          continue;
+        }
+
+        const accountMatch = accountMatchEarly || line.match(/^Account Number\s*:?\s*([A-Za-z0-9-]+)/i);
+        if (accountMatch) {
+          const accountToken = accountMatch[1];
+          if (
+            current.accountNumber &&
+            !accountTokensLikelySame(current.accountNumber, accountToken) &&
+            (current.balance > 0 || current.unpaidBalance > 0 || current.pastDue > 0 || current.debtAmount > 0)
+          ) {
+            flushCurrent();
+            ensureCurrent(lineIndex);
+          }
+          current.accountNumber = accountToken;
+        }
+
+        const statusMatch = line.match(/^Account Status\s*:?\s*(.+)$/i) || line.match(/^Status\s*:?\s*(.+)$/i);
+        if (statusMatch) {
+          current.accountStatus = normalizeCreditorName(statusMatch[1]);
+        }
+
+        const typeMatch = line.match(/^Type\s+(.+)$/i);
+        if (typeMatch) {
+          current.accountType = normalizeCreditorName(typeMatch[1]);
+        }
+
+        const originalCreditorMatch = line.match(/^Original\s*Creditor\s*:?\s*(.+)$/i);
+        if (originalCreditorMatch) {
+          current.originalCreditor = normalizeCreditorName(originalCreditorMatch[1]);
+        }
+
+        if (hasBalanceLine) {
+          const balanceMatch = line.match(/Balance\s*:\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i);
+          if (balanceMatch) current.balance = normalizeMoneyValue(balanceMatch[1]);
+
+          const creditLimitMatch = line.match(/Credit limit\s*:\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i);
+          if (creditLimitMatch) current.creditLimit = normalizeMoneyValue(creditLimitMatch[1]);
+
+          const highestBalanceMatch = line.match(/Highest balance\s*:\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i);
+          if (highestBalanceMatch) current.highCredit = Math.max(current.highCredit, normalizeMoneyValue(highestBalanceMatch[1]));
+        }
+
+        if (/High Balance/i.test(line) || /High Credit/i.test(line)) {
+          const amount = moneyFromTextFragment(line);
+          current.highCredit = Math.max(current.highCredit, amount);
+        }
+
+        if (/Monthly Payment/i.test(line)) {
+          current.monthlyPayment = Math.max(current.monthlyPayment, moneyFromTextFragment(line));
+        }
+
+        if (/Amount Past Due/i.test(line)) {
+          current.pastDue = Math.max(current.pastDue, moneyFromTextFragment(line));
+        }
+
+        if (/Unpaid Balance/i.test(line)) {
+          current.unpaidBalance = Math.max(current.unpaidBalance, moneyFromTextFragment(line));
+        }
+
+        if (!current.creditorName && headerCandidate?.creditorName) {
+          current.creditorName = normalizeCreditorName(headerCandidate.creditorName);
+        }
+      }
+
+      flushCurrent();
+      return dedupeParsedCreditors(parsedEntries);
+    }
+
+    async function extractTextFromPdfFile(file) {
+      const pdfjs = window.pdfjsLib;
+      if (!pdfjs) {
+        throw new Error('No se pudo cargar el motor PDF en el navegador.');
+      }
+      if (pdfjs.GlobalWorkerOptions) {
+        pdfjs.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+      }
+
+      const buffer = await file.arrayBuffer();
+      const loadingTask = pdfjs.getDocument({ data: buffer });
+      const pdf = await loadingTask.promise;
+      const rows = [];
+
+      for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+        const page = await pdf.getPage(pageNo);
+        const textContent = await page.getTextContent();
+        const byY = new Map();
+
+        textContent.items.forEach((item) => {
+          const str = String(item?.str || '').trim();
+          if (!str) return;
+          const y = Math.round(item?.transform?.[5] || 0);
+          const x = Number(item?.transform?.[4] || 0);
+          if (!byY.has(y)) byY.set(y, []);
+          byY.get(y).push({ x, str });
+        });
+
+        const orderedY = Array.from(byY.keys()).sort((a, b) => b - a);
+        orderedY.forEach((y) => {
+          const line = byY.get(y)
+            .sort((a, b) => a.x - b.x)
+            .map((item) => item.str)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (line) rows.push(line);
+        });
+        rows.push('');
+      }
+
+      return rows.join('\n');
+    }
+
+    function buildCreditorPayload(entry = {}) {
+      return {
+        sourceReport: entry.sourceReport || null,
+        creditorName: normalizeCreditorName(entry.creditorName),
+        originalCreditor: normalizeCreditorName(entry.originalCreditor),
+        accountNumber: normalizeCreditorName(entry.accountNumber),
+        accountStatus: normalizeCreditorName(entry.accountStatus),
+        accountType: normalizeCreditorName(entry.accountType),
+        monthlyPayment: normalizeMoneyValue(entry.monthlyPayment),
+        balance: normalizeMoneyValue(entry.balance),
+        pastDue: normalizeMoneyValue(entry.pastDue),
+        unpaidBalance: normalizeMoneyValue(entry.unpaidBalance),
+        creditLimit: normalizeMoneyValue(entry.creditLimit),
+        highCredit: normalizeMoneyValue(entry.highCredit),
+        debtAmount: normalizeMoneyValue(entry.debtAmount),
+        isIncluded: entry.isIncluded !== false
+      };
+    }
+
+    function mapSavedCreditorForUi(creditor = {}) {
+      return {
+        id: Number(creditor.id),
+        sourceReport: creditor.source_report || '',
+        creditorName: creditor.creditor_name || '',
+        originalCreditor: creditor.original_creditor || '',
+        accountNumber: creditor.account_number || '',
+        accountStatus: creditor.account_status || '',
+        accountType: creditor.account_type || '',
+        monthlyPayment: normalizeMoneyValue(creditor.monthly_payment),
+        balance: normalizeMoneyValue(creditor.balance),
+        pastDue: normalizeMoneyValue(creditor.past_due),
+        unpaidBalance: normalizeMoneyValue(creditor.unpaid_balance),
+        creditLimit: normalizeMoneyValue(creditor.credit_limit),
+        highCredit: normalizeMoneyValue(creditor.high_credit),
+        debtAmount: normalizeMoneyValue(creditor.debt_amount),
+        isIncluded: Boolean(creditor.is_included)
+      };
+    }
+
+    function updateCreditorsImportButtonState() {
+      const importBtn = document.getElementById('creditorsImportBtn');
+      if (!importBtn) return;
+      const totalSelected = previewCreditors.filter((item) => item.isIncluded).length;
+      importBtn.disabled = totalSelected <= 0;
+    }
+
+    function renderCreditorsPreviewTable() {
+      const previewWrap = document.getElementById('creditorsPreviewWrap');
+      const previewBody = document.getElementById('creditorsPreviewBody');
+      const selectAll = document.getElementById('creditorsPreviewSelectAll');
+      if (!previewWrap || !previewBody || !selectAll) return;
+
+      if (!previewCreditors.length) {
+        previewWrap.classList.add('hidden');
+        previewBody.innerHTML = '<tr><td class="creditors-row-empty" colspan="11">No hay preview aun.</td></tr>';
+        selectAll.checked = false;
+        updateCreditorsImportButtonState();
+        return;
+      }
+
+      previewWrap.classList.remove('hidden');
+      previewBody.innerHTML = previewCreditors.map((entry, index) => `
+        <tr>
+          <td class="mono">${index + 1}</td>
+          <td><input type="checkbox" class="preview-include-toggle" data-preview-index="${index}" ${entry.isIncluded ? 'checked' : ''}></td>
+          <td>${escapeHtml(entry.creditorName || '-')}</td>
+          <td class="mono">${escapeHtml(entry.accountNumber || '-')}</td>
+          <td>${escapeHtml(entry.accountStatus || '-')}</td>
+          <td>${escapeHtml(entry.accountType || '-')}</td>
+          <td><input type="text" class="creditors-inline-input preview-debt-input mono" data-preview-index="${index}" value="${Number(entry.debtAmount || 0).toFixed(2)}"></td>
+          <td class="mono">${formatCurrency(entry.balance || 0)}</td>
+          <td class="mono">${formatCurrency(entry.pastDue || 0)}</td>
+          <td class="mono">${formatCurrency(entry.monthlyPayment || 0)}</td>
+          <td>${escapeHtml(entry.sourceReport || '-')}</td>
+        </tr>
+      `).join('');
+
+      selectAll.checked = previewCreditors.every((item) => item.isIncluded);
+      updateCreditorsImportButtonState();
+    }
+
+    function renderSavedCreditorsTable() {
+      const body = document.getElementById('creditorsSavedBody');
+      if (!body) return;
+      if (!currentCreditors.length) {
+        body.innerHTML = '<tr><td class="creditors-row-empty" colspan="11">No hay creditors guardados.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = currentCreditors.map((entry, index) => `
+        <tr>
+          <td class="mono">${index + 1}</td>
+          <td><input type="checkbox" class="saved-include-toggle" data-creditor-id="${entry.id}" ${entry.isIncluded ? 'checked' : ''}></td>
+          <td>${escapeHtml(entry.creditorName || '-')}</td>
+          <td class="mono">${escapeHtml(entry.accountNumber || '-')}</td>
+          <td>${escapeHtml(entry.accountStatus || '-')}</td>
+          <td>${escapeHtml(entry.accountType || '-')}</td>
+          <td><input type="text" class="creditors-inline-input saved-debt-input mono" data-creditor-id="${entry.id}" value="${Number(entry.debtAmount || 0).toFixed(2)}"></td>
+          <td class="mono">${formatCurrency(entry.balance || 0)}</td>
+          <td class="mono">${formatCurrency(entry.pastDue || 0)}</td>
+          <td class="mono">${formatCurrency(entry.monthlyPayment || 0)}</td>
+          <td class="actions-cell"><button class="creditors-btn secondary saved-delete-btn" type="button" data-creditor-id="${entry.id}">Delete</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderCreditorsSummary(summary = null) {
+      const includedDebtEl = document.getElementById('creditorsIncludedDebt');
+      const includedCountEl = document.getElementById('creditorsIncludedCount');
+      const pastDueEl = document.getElementById('creditorsPastDue');
+      if (!includedDebtEl || !includedCountEl || !pastDueEl) return;
+
+      const normalizedSummary = summary || {
+        includedDebt: currentCreditors
+          .filter((entry) => entry.isIncluded)
+          .reduce((acc, item) => acc + normalizeMoneyValue(item.debtAmount), 0),
+        includedPastDue: currentCreditors
+          .filter((entry) => entry.isIncluded)
+          .reduce((acc, item) => acc + normalizeMoneyValue(item.pastDue), 0),
+        includedCount: currentCreditors.filter((entry) => entry.isIncluded).length,
+        totalCount: currentCreditors.length
+      };
+
+      includedDebtEl.textContent = formatCurrency(normalizedSummary.includedDebt || 0);
+      includedCountEl.textContent = `${Number(normalizedSummary.includedCount || 0)} / ${Number(normalizedSummary.totalCount || 0)}`;
+      pastDueEl.textContent = formatCurrency(normalizedSummary.includedPastDue || 0);
+    }
+
+    function applyCreditorsTotalToCalculator(options = {}) {
+      const { persist = false, toast = false } = options;
+      const totalIncludedDebt = currentCreditors
+        .filter((entry) => entry.isIncluded)
+        .reduce((acc, item) => acc + normalizeMoneyValue(item.debtAmount), 0);
+      const totalDebtInput = document.getElementById('calcTotalDebt');
+      if (!totalDebtInput) return;
+
+      totalDebtInput.value = Number(totalIncludedDebt.toFixed(2)).toFixed(2);
+      calculateAll();
+      if (persist) queuePersistCalculatorConfig();
+      if (toast) {
+        showToast(`Total Debt actualizado desde Creditors: ${formatCurrency(totalIncludedDebt)}`, 'success');
+      }
+    }
+
+    async function loadCreditorsData(options = {}) {
+      if (!currentLeadId) return;
+      if (window.initCreditorsRedesign && typeof window.loadSavedCreditors === 'function') {
+        return window.loadSavedCreditors();
+      }
+      const { silent = false } = options;
+      if (creditorsLoadingPromise) return creditorsLoadingPromise;
+
+      creditorsLoadingPromise = (async () => {
+        try {
+          const response = await fetch(`/api/leads/${currentLeadId}/creditors`);
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.message || 'No se pudieron cargar los creditors.');
+          }
+
+          currentCreditors = Array.isArray(data.creditors) ? data.creditors.map(mapSavedCreditorForUi) : [];
+          renderSavedCreditorsTable();
+          renderCreditorsSummary(data.summary || null);
+          if (currentCreditors.length > 0) {
+            applyCreditorsTotalToCalculator({ persist: false, toast: false });
+          }
+
+          if (!silent) {
+            setCreditorsStatus(
+              currentCreditors.length > 0
+                ? `Cargados ${currentCreditors.length} creditors.`
+                : 'No hay creditors guardados para este lead.',
+              'neutral'
+            );
+          }
+        } catch (error) {
+          renderSavedCreditorsTable();
+          renderCreditorsSummary(null);
+          if (!silent) {
+            setCreditorsStatus(error.message || 'No se pudieron cargar creditors.', 'error');
+          }
+        }
+      })().finally(() => {
+        creditorsLoadingPromise = null;
+      });
+
+      return creditorsLoadingPromise;
+    }
+
+    async function importPreviewCreditors() {
+      if (!currentLeadId) return;
+      const selectedEntries = previewCreditors.filter((item) => item.isIncluded).map(buildCreditorPayload);
+      if (!selectedEntries.length) {
+        setCreditorsStatus('No hay candidatos seleccionados para importar.', 'error');
+        return;
+      }
+
+      setCreditorsStatus(`Importando ${selectedEntries.length} creditors...`, 'neutral');
+
+      try {
+        const response = await fetch(`/api/leads/${currentLeadId}/creditors/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: selectedEntries })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo completar la importacion.');
+        }
+
+        previewCreditors = [];
+        renderCreditorsPreviewTable();
+        await loadCreditorsData({ silent: true });
+        applyCreditorsTotalToCalculator({ persist: true, toast: true });
+        renderCreditorsSummary(data.summary || null);
+        setCreditorsStatus(`Importados ${data.createdCount || 0} creditors (${data.skippedCount || 0} duplicados).`, 'success');
+      } catch (error) {
+        setCreditorsStatus(error.message || 'Error importando creditors.', 'error');
+      }
+    }
+
+    async function handleCreditorsFilesSelected(fileList) {
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (!files.length) return;
+
+      const runId = ++creditorsParseRunId;
+      const allEntries = [];
+      const diagnostics = [];
+      setCreditorsStatus('Analizando reporte(s)...', 'neutral');
+
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const fileName = String(file.name || `Reporte ${index + 1}`);
+        try {
+          let reportText = '';
+          if (/\.txt$/i.test(fileName)) {
+            reportText = await file.text();
+          } else if (/\.pdf$/i.test(fileName)) {
+            reportText = await extractTextFromPdfFile(file);
+          } else {
+            diagnostics.push(`${fileName}: formato no soportado`);
+            continue;
+          }
+
+          if (!String(reportText || '').trim()) {
+            diagnostics.push(`${fileName}: sin texto extraible`);
+            continue;
+          }
+
+          const parsed = parseCreditReportText(reportText, fileName);
+          if (!parsed.length) {
+            diagnostics.push(`${fileName}: 0 cuentas detectadas`);
+          }
+          allEntries.push(...parsed);
+        } catch (error) {
+          console.error('Error parseando reporte de credito:', error);
+          diagnostics.push(`${fileName}: error de lectura`);
+        }
+      }
+
+      if (runId !== creditorsParseRunId) return;
+      previewCreditors = dedupeParsedCreditors(allEntries);
+      renderCreditorsPreviewTable();
+
+      if (!previewCreditors.length) {
+        const diagnosticText = diagnostics.length ? ` (${diagnostics.slice(0, 3).join(' | ')})` : '';
+        setCreditorsStatus(`No se detectaron deudas utiles en los archivos seleccionados.${diagnosticText}`, 'error');
+        return;
+      }
+
+      const selected = previewCreditors.filter((item) => item.isIncluded).length;
+      setCreditorsStatus(`Extraccion lista: ${previewCreditors.length} cuentas detectadas (${selected} seleccionadas).`, 'success');
+    }
+
+    function analyzePastedCreditReportText() {
+      const rawTextEl = document.getElementById('creditorsRawText');
+      const rawText = String(rawTextEl?.value || '').trim();
+      if (!rawText) {
+        setCreditorsStatus('Pega texto del reporte para analizar.', 'error');
+        return;
+      }
+
+      previewCreditors = parseCreditReportText(rawText, 'Texto pegado');
+      renderCreditorsPreviewTable();
+      if (!previewCreditors.length) {
+        setCreditorsStatus('No se detectaron deudas utiles en el texto pegado.', 'error');
+        return;
+      }
+
+      const selected = previewCreditors.filter((item) => item.isIncluded).length;
+      setCreditorsStatus(`Extraccion lista: ${previewCreditors.length} cuentas detectadas (${selected} seleccionadas).`, 'success');
+    }
+
+    async function saveManualCreditor() {
+      if (!currentLeadId) return;
+      const creditorNameInput = document.getElementById('manualCreditorName');
+      const accountNumberInput = document.getElementById('manualAccountNumber');
+      const debtAmountInput = document.getElementById('manualDebtAmount');
+      const statusInput = document.getElementById('manualAccountStatus');
+
+      const creditorName = normalizeCreditorName(creditorNameInput?.value);
+      const debtAmount = normalizeMoneyValue(debtAmountInput?.value);
+      if (!creditorName) {
+        setCreditorsStatus('El nombre del creditor es obligatorio.', 'error');
+        return;
+      }
+      if (debtAmount <= 0) {
+        setCreditorsStatus('Debt Amount debe ser mayor a 0.', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/leads/${currentLeadId}/creditors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceReport: 'Manual',
+            creditorName,
+            accountNumber: normalizeCreditorName(accountNumberInput?.value),
+            accountStatus: normalizeCreditorName(statusInput?.value),
+            debtAmount,
+            isIncluded: true
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo guardar el creditor manual.');
+        }
+
+        if (creditorNameInput) creditorNameInput.value = '';
+        if (accountNumberInput) accountNumberInput.value = '';
+        if (debtAmountInput) debtAmountInput.value = '';
+        if (statusInput) statusInput.value = '';
+
+        await loadCreditorsData({ silent: true });
+        applyCreditorsTotalToCalculator({ persist: true, toast: true });
+        renderCreditorsSummary(data.summary || null);
+        setCreditorsStatus('Creditor manual guardado.', 'success');
+      } catch (error) {
+        setCreditorsStatus(error.message || 'No se pudo guardar creditor manual.', 'error');
+      }
+    }
+
+    async function patchSavedCreditor(creditorId, payload) {
+      if (!currentLeadId || !creditorId) return null;
+      const response = await fetch(`/api/leads/${currentLeadId}/creditors/${creditorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo actualizar el creditor.');
+      }
+      return data;
+    }
+
+    async function deleteSavedCreditor(creditorId) {
+      if (!currentLeadId || !creditorId) return null;
+      const response = await fetch(`/api/leads/${currentLeadId}/creditors/${creditorId}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo eliminar el creditor.');
+      }
+      return data;
+    }
+
+    function initCreditorsSection() {
+      if (creditorsSectionInitialized) return;
+      creditorsSectionInitialized = true;
+      
+      // Usar nuevo diseño si está disponible
+      if (window.initCreditorsRedesign) {
+        window.initCreditorsRedesign();
+        return;
+      }
+
+      const fileInput = document.getElementById('creditorsReportInput');
+      const analyzeBtn = document.getElementById('creditorsAnalyzeTextBtn');
+      const importBtn = document.getElementById('creditorsImportBtn');
+      const addManualBtn = document.getElementById('creditorsAddManualBtn');
+      const applyTotalBtn = document.getElementById('creditorsApplyTotalBtn');
+      const previewBody = document.getElementById('creditorsPreviewBody');
+      const previewSelectAll = document.getElementById('creditorsPreviewSelectAll');
+      const manualForm = document.getElementById('creditorsManualForm');
+      const manualSaveBtn = document.getElementById('manualCreditorSaveBtn');
+      const manualCancelBtn = document.getElementById('manualCreditorCancelBtn');
+      const savedBody = document.getElementById('creditorsSavedBody');
+
+      if (fileInput) {
+        fileInput.addEventListener('change', async (event) => {
+          await handleCreditorsFilesSelected(event.target.files);
+          event.target.value = '';
+        });
+      }
+
+      if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', () => {
+          analyzePastedCreditReportText();
+        });
+      }
+
+      if (importBtn) {
+        importBtn.addEventListener('click', () => {
+          importPreviewCreditors();
+        });
+      }
+
+      if (previewSelectAll) {
+        previewSelectAll.addEventListener('change', (event) => {
+          const checked = event.target.checked;
+          previewCreditors = previewCreditors.map((entry) => ({ ...entry, isIncluded: checked }));
+          renderCreditorsPreviewTable();
+        });
+      }
+
+      if (previewBody) {
+        previewBody.addEventListener('change', (event) => {
+          const target = event.target;
+          const index = Number(target.dataset.previewIndex);
+          if (!Number.isInteger(index) || !previewCreditors[index]) return;
+
+          if (target.classList.contains('preview-include-toggle')) {
+            previewCreditors[index].isIncluded = Boolean(target.checked);
+            updateCreditorsImportButtonState();
+            return;
+          }
+
+          if (target.classList.contains('preview-debt-input')) {
+            const nextDebt = normalizeMoneyValue(target.value);
+            previewCreditors[index].debtAmount = nextDebt;
+            previewCreditors[index].isIncluded = nextDebt > 0 && previewCreditors[index].isIncluded;
+            target.value = nextDebt.toFixed(2);
+            updateCreditorsImportButtonState();
+          }
+        });
+      }
+
+      if (addManualBtn && manualForm) {
+        addManualBtn.addEventListener('click', () => {
+          manualForm.classList.toggle('hidden');
+        });
+      }
+
+      if (manualCancelBtn && manualForm) {
+        manualCancelBtn.addEventListener('click', () => {
+          manualForm.classList.add('hidden');
+        });
+      }
+
+      if (manualSaveBtn) {
+        manualSaveBtn.addEventListener('click', () => {
+          saveManualCreditor();
+        });
+      }
+
+      if (applyTotalBtn) {
+        applyTotalBtn.addEventListener('click', () => {
+          applyCreditorsTotalToCalculator({ persist: true, toast: true });
+        });
+      }
+
+      if (savedBody) {
+        savedBody.addEventListener('change', async (event) => {
+          const target = event.target;
+          const creditorId = Number(target.dataset.creditorId);
+          if (!Number.isInteger(creditorId) || creditorId <= 0) return;
+
+          try {
+            if (target.classList.contains('saved-include-toggle')) {
+              const result = await patchSavedCreditor(creditorId, { isIncluded: Boolean(target.checked) });
+              await loadCreditorsData({ silent: true });
+              renderCreditorsSummary(result.summary || null);
+              applyCreditorsTotalToCalculator({ persist: true, toast: false });
+              setCreditorsStatus('Creditor actualizado.', 'success');
+            } else if (target.classList.contains('saved-debt-input')) {
+              const nextDebt = normalizeMoneyValue(target.value);
+              target.value = nextDebt.toFixed(2);
+              const result = await patchSavedCreditor(creditorId, { debtAmount: nextDebt });
+              await loadCreditorsData({ silent: true });
+              renderCreditorsSummary(result.summary || null);
+              applyCreditorsTotalToCalculator({ persist: true, toast: false });
+              setCreditorsStatus('Debt actualizado.', 'success');
+            }
+          } catch (error) {
+            setCreditorsStatus(error.message || 'No se pudo actualizar creditor.', 'error');
+          }
+        });
+
+        savedBody.addEventListener('click', async (event) => {
+          const deleteBtn = event.target.closest('.saved-delete-btn');
+          if (!deleteBtn) return;
+          const creditorId = Number(deleteBtn.dataset.creditorId);
+          if (!Number.isInteger(creditorId) || creditorId <= 0) return;
+
+          try {
+            const result = await deleteSavedCreditor(creditorId);
+            await loadCreditorsData({ silent: true });
+            renderCreditorsSummary(result.summary || null);
+            applyCreditorsTotalToCalculator({ persist: true, toast: false });
+            setCreditorsStatus('Creditor eliminado.', 'success');
+          } catch (error) {
+            setCreditorsStatus(error.message || 'No se pudo eliminar creditor.', 'error');
+          }
+        });
+      }
+
+      renderCreditorsPreviewTable();
+      renderSavedCreditorsTable();
+      renderCreditorsSummary(null);
     }
 
     function trimNoteText(value) {
@@ -3640,9 +4571,33 @@
     // ============================================
     
     const ACTIVE_TAB_KEY = 'lead_active_tab';
+
+    function ensureLeadSectionsPlacement() {
+      const leadContentArea = document.querySelector('.lead-content-area');
+      const calculatorSection = document.getElementById('calculatorSection');
+      if (!leadContentArea || !calculatorSection) return;
+
+      const sectionIds = ['bankingSection', 'budgetSection', 'creditorsSection'];
+      let insertAfter = calculatorSection;
+
+      sectionIds.forEach((sectionId) => {
+        const section = document.getElementById(sectionId);
+        if (!section || section === calculatorSection) return;
+
+        const isDirectChild = section.parentElement === leadContentArea;
+        const nestedInsideCalculator = calculatorSection.contains(section);
+
+        if (nestedInsideCalculator || !isDirectChild || section.previousElementSibling !== insertAfter) {
+          leadContentArea.insertBefore(section, insertAfter.nextSibling);
+        }
+
+        insertAfter = section;
+      });
+    }
     
     function initLeadTabs() {
       const tabs = document.querySelectorAll('.lead-tab');
+      ensureLeadSectionsPlacement();
       
       // Secciones
       const sections = {
@@ -3655,6 +4610,8 @@
       
       // Función para activar una pestaña
       function activateTab(tabName) {
+        ensureLeadSectionsPlacement();
+
         // Remover clase active de todas las pestañas
         tabs.forEach(t => t.classList.remove('active'));
         
@@ -3683,6 +4640,11 @@
         // Inicializar banking si es la pestaña de banking
         if (tabName === 'banking') {
           initBankingSection();
+        }
+
+        if (tabName === 'creditors') {
+          initCreditorsSection();
+          loadCreditorsData({ silent: false });
         }
       }
       
@@ -3855,6 +4817,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const leadId = urlParams.get('id');
       currentLeadId = leadId || null;
+      window.currentLeadId = currentLeadId;
       
       if (!leadId) {
         document.getElementById('leadSection').innerHTML = `
@@ -3891,6 +4854,8 @@
         syncLeadDataState(lead);
         prepareNotesForLead(lead.id);
         hydrateCalculatorFromLead(lead);
+        initCreditorsSection();
+        await loadCreditorsData({ silent: true });
         caseIdValue = String(lead.case_id);
         selectedDOB = applicantData.dob;
         
@@ -4159,19 +5124,28 @@
       const filesUploadZone = document.getElementById('filesUploadZone');
       const filesUploadInput = document.getElementById('filesUploadInput');
       const filesList = document.getElementById('filesList');
-      
+      const fileMetaModal = document.getElementById('fileMetaModal');
+      const fileMetaForm = document.getElementById('fileMetaForm');
+      const fileMetaFileName = document.getElementById('fileMetaFileName');
+      const fileDocType = document.getElementById('fileDocType');
+      const fileCreditPartyWrap = document.getElementById('fileCreditPartyWrap');
+      const fileCreditParty = document.getElementById('fileCreditParty');
+      const fileMetaCancelBtn = document.getElementById('fileMetaCancelBtn');
+      const fileMetaBackdrop = fileMetaModal?.querySelector('.file-meta-modal-backdrop');
+
       if (!filesBtn || !filesPanel) return;
-      
-      // Toggle panel
+
+      let uploadPreviewContainer = null;
+      let resolveMetaSelection = null;
+
       filesBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isHidden = filesPanel.classList.contains('hidden');
-        
-        // Cerrar otros paneles
-        document.querySelectorAll('.files-panel, .notes-panel').forEach(p => {
-          if (p !== filesPanel) p.classList.add('hidden');
+
+        document.querySelectorAll('.files-panel, .notes-panel').forEach((panel) => {
+          if (panel !== filesPanel) panel.classList.add('hidden');
         });
-        
+
         if (isHidden) {
           filesPanel.classList.remove('hidden');
           filesBtn.setAttribute('aria-expanded', 'true');
@@ -4181,100 +5155,124 @@
           filesBtn.setAttribute('aria-expanded', 'false');
         }
       });
-      
-      // Close button
-      if (filesCloseBtn) {
-        filesCloseBtn.addEventListener('click', () => {
-          filesPanel.classList.add('hidden');
-          filesBtn.setAttribute('aria-expanded', 'false');
-        });
-      }
-      
-      // Click outside to close
+
+      filesCloseBtn?.addEventListener('click', () => {
+        filesPanel.classList.add('hidden');
+        filesBtn.setAttribute('aria-expanded', 'false');
+      });
+
       document.addEventListener('click', (e) => {
         if (!filesPanel.contains(e.target) && !filesBtn.contains(e.target)) {
           filesPanel.classList.add('hidden');
           filesBtn.setAttribute('aria-expanded', 'false');
         }
       });
-      
-      // File upload
-      if (filesUploadInput) {
-        filesUploadInput.addEventListener('change', handleFileUpload);
-      }
-      
-      // Drag and drop
+
+      filesUploadInput?.addEventListener('change', async (e) => {
+        await handleFiles(e.target.files);
+        e.target.value = '';
+      });
+
       if (filesUploadZone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
           filesUploadZone.addEventListener(eventName, preventDefaults, false);
         });
-        
-        ['dragenter', 'dragover'].forEach(eventName => {
+
+        ['dragenter', 'dragover'].forEach((eventName) => {
           filesUploadZone.addEventListener(eventName, () => {
             filesUploadZone.classList.add('dragover');
           }, false);
         });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
+
+        ['dragleave', 'drop'].forEach((eventName) => {
           filesUploadZone.addEventListener(eventName, () => {
             filesUploadZone.classList.remove('dragover');
           }, false);
         });
-        
-        filesUploadZone.addEventListener('drop', handleDrop, false);
+
+        filesUploadZone.addEventListener('drop', async (e) => {
+          await handleFiles(e.dataTransfer?.files);
+        }, false);
       }
-      
+
+      fileDocType?.addEventListener('change', () => {
+        const isCreditReport = fileDocType.value === 'credit_report';
+        fileCreditPartyWrap?.classList.toggle('hidden', !isCreditReport);
+        if (fileCreditParty) {
+          if (!isCreditReport) {
+            fileCreditParty.value = '';
+            fileCreditParty.required = false;
+          } else {
+            fileCreditParty.required = true;
+          }
+        }
+      });
+
+      fileMetaForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const documentCategory = String(fileDocType?.value || '').trim();
+        if (!documentCategory) {
+          showToast('Debes seleccionar el tipo de archivo.', 'error');
+          return;
+        }
+
+        let creditReportParty = null;
+        if (documentCategory === 'credit_report') {
+          creditReportParty = String(fileCreditParty?.value || '').trim();
+          if (!creditReportParty) {
+            showToast('Selecciona si la deuda es de Applicant o Co-Applicant.', 'error');
+            return;
+          }
+        }
+
+        closeFileMetaModal({
+          documentCategory,
+          creditReportParty
+        });
+      });
+
+      fileMetaCancelBtn?.addEventListener('click', () => {
+        closeFileMetaModal(null);
+      });
+
+      fileMetaBackdrop?.addEventListener('click', () => {
+        closeFileMetaModal(null);
+      });
+
       function preventDefaults(e) {
         e.preventDefault();
         e.stopPropagation();
       }
-      
-      function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
+
+      function escapeUnsafeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
       }
-      
-      function handleFileUpload(e) {
-        const files = e.target.files;
-        handleFiles(files);
-      }
-      
-      function handleFiles(files) {
-        if (!currentLeadId) {
-          showToast('No hay lead seleccionado', 'error');
-          return;
-        }
-        
-        Array.from(files).forEach(file => {
-          uploadFile(file);
-        });
-      }
-      
-      // Contenedor para vistas previas
-      let uploadPreviewContainer = null;
-      
+
       function getUploadPreviewContainer() {
         if (!uploadPreviewContainer) {
-          const uploadZone = document.getElementById('filesUploadZone');
           uploadPreviewContainer = document.createElement('div');
           uploadPreviewContainer.className = 'files-upload-preview';
           uploadPreviewContainer.style.cssText = 'display:none;';
-          uploadZone.appendChild(uploadPreviewContainer);
+          filesUploadZone?.appendChild(uploadPreviewContainer);
         }
         return uploadPreviewContainer;
       }
-      
+
       function showUploadPreview(file, dataUrl) {
         const container = getUploadPreviewContainer();
-        const isImage = file.type && file.type.includes('image');
-        
+        const fileType = String(file.type || '').toLowerCase();
+        const isImage = fileType.includes('image');
         const previewItem = document.createElement('div');
         previewItem.style.cssText = 'position:relative;width:60px;height:60px;';
-        
+
         if (isImage && dataUrl) {
           previewItem.innerHTML = `
-            <img src="${dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid rgba(126,234,252,0.5);" title="${file.name}">
+            <img src="${dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid rgba(126,234,252,0.5);" title="${escapeUnsafeHtml(file.name)}">
             <div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#4ade80;border-radius:50%;display:flex;align-items:center;justify-content:center;">
               <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="10" height="10">
                 <polyline points="20 6 9 17 4 12"/>
@@ -4284,7 +5282,7 @@
         } else {
           previewItem.innerHTML = `
             <div style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(126,234,252,0.1);border-radius:8px;border:2px solid rgba(126,234,252,0.3);">
-              ${getFileIcon(file.type)}
+              ${getFileIcon(fileType)}
             </div>
             <div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#4ade80;border-radius:50%;display:flex;align-items:center;justify-content:center;">
               <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="10" height="10">
@@ -4293,11 +5291,10 @@
             </div>
           `;
         }
-        
+
         container.appendChild(previewItem);
         container.style.display = 'flex';
-        
-        // Ocultar después de 3 segundos
+
         setTimeout(() => {
           previewItem.remove();
           if (container.children.length === 0) {
@@ -4305,88 +5302,250 @@
           }
         }, 3000);
       }
-      
+
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+      }
+
+      function getFileIcon(type) {
+        const normalizedType = String(type || '').toLowerCase();
+        if (normalizedType.includes('pdf')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>`;
+        }
+        if (normalizedType.includes('image')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+        }
+        if (normalizedType.includes('word') || normalizedType.includes('document')) {
+          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+        }
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+      }
+
+      function getDocumentCategoryLabel(category) {
+        switch (String(category || '').toLowerCase()) {
+          case 'official_document':
+            return 'Documento oficial';
+          case 'credit_report':
+            return 'Reporte de cr�dito';
+          case 'income_proof':
+            return 'Prueba de ingresos';
+          case 'bank_statement':
+            return 'Estado bancario';
+          case 'contract':
+            return 'Contrato';
+          case 'other':
+            return 'Otro';
+          default:
+            return 'Sin clasificar';
+        }
+      }
+
+      function getCreditPartyLabel(value) {
+        const normalized = String(value || '').toLowerCase();
+        if (normalized === 'coapp') return 'Co-Applicant';
+        if (normalized === 'applicant') return 'Applicant';
+        return '';
+      }
+
+      function getMimeTypeFromFile(file) {
+        const explicit = String(file?.type || '').trim().toLowerCase();
+        if (explicit) return explicit;
+        const ext = String(file?.name || '').split('.').pop()?.toLowerCase();
+        if (ext === 'pdf') return 'application/pdf';
+        if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+        if (ext === 'png') return 'image/png';
+        if (ext === 'doc') return 'application/msword';
+        if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        return '';
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target?.result || '');
+          reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function openFileMetaModal(file) {
+        if (!fileMetaModal || !fileMetaForm || !fileDocType || !fileCreditParty || !fileMetaFileName) {
+          return Promise.resolve(null);
+        }
+
+        if (resolveMetaSelection) {
+          resolveMetaSelection(null);
+          resolveMetaSelection = null;
+        }
+
+        fileMetaFileName.textContent = String(file?.name || 'Archivo');
+        fileDocType.value = '';
+        fileCreditParty.value = '';
+        fileCreditParty.required = false;
+        fileCreditPartyWrap?.classList.add('hidden');
+
+        fileMetaModal.classList.remove('hidden');
+        fileMetaModal.setAttribute('aria-hidden', 'false');
+
+        return new Promise((resolve) => {
+          resolveMetaSelection = resolve;
+        });
+      }
+
+      function closeFileMetaModal(result) {
+        if (!fileMetaModal) return;
+        fileMetaModal.classList.add('hidden');
+        fileMetaModal.setAttribute('aria-hidden', 'true');
+        if (resolveMetaSelection) {
+          resolveMetaSelection(result);
+          resolveMetaSelection = null;
+        }
+      }
+
+      async function handleFiles(fileList) {
+        const files = Array.from(fileList || []).filter(Boolean);
+        if (!files.length) return;
+
+        if (!currentLeadId) {
+          showToast('No hay lead seleccionado', 'error');
+          return;
+        }
+
+        for (const file of files) {
+          await uploadFile(file);
+        }
+      }
+
       async function uploadFile(file) {
-        // Validar tipo y tamaño
-        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 
-          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        const maxSize = 10 * 1024 * 1024; // 10MB
-        
-        if (!allowedTypes.includes(file.type)) {
+        const allowedTypes = new Set([
+          'application/pdf',
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ]);
+        const maxSize = 10 * 1024 * 1024;
+        const mimeType = getMimeTypeFromFile(file);
+
+        if (!allowedTypes.has(mimeType)) {
           showToast(`Tipo de archivo no permitido: ${file.name}`, 'error');
           return;
         }
-        
+
         if (file.size > maxSize) {
-          showToast(`Archivo muy grande: ${file.name} (máx 10MB)`, 'error');
+          showToast(`Archivo muy grande: ${file.name} (m�x 10MB)`, 'error');
           return;
         }
-        
-        // Guardar en localStorage como base64 (simulación)
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const dataUrl = e.target.result;
-          
+
+        const metadata = await openFileMetaModal(file);
+        if (!metadata) {
+          showToast(`Carga cancelada: ${file.name}`, 'info');
+          return;
+        }
+
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
           const fileData = {
-            id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
             leadId: currentLeadId,
             name: file.name,
-            type: file.type,
+            type: mimeType,
             size: file.size,
             data: dataUrl,
+            documentCategory: metadata.documentCategory,
+            creditReportParty: metadata.creditReportParty || null,
             uploadedAt: new Date().toISOString()
           };
-          
-          // Mostrar vista previa
+
           showUploadPreview(file, dataUrl);
-          
-          // Guardar en localStorage
+
           const filesKey = `lead_files_${currentLeadId}`;
           const existingFiles = JSON.parse(localStorage.getItem(filesKey) || '[]');
           existingFiles.push(fileData);
           localStorage.setItem(filesKey, JSON.stringify(existingFiles));
-          
-          showToast(`Archivo subido: ${file.name}`, 'success');
+
           loadFilesList();
-        };
-        reader.readAsDataURL(file);
+          showToast(`Archivo subido: ${file.name}`, 'success');
+
+          window.dispatchEvent(new CustomEvent('lead:file-uploaded', {
+            detail: {
+              leadId: currentLeadId,
+              file,
+              storedFile: fileData,
+              metadata
+            }
+          }));
+        } catch (error) {
+          console.error('Error subiendo archivo:', error);
+          showToast(error.message || 'No se pudo subir el archivo.', 'error');
+        }
       }
-      
+
+      function buildFileMetadataBadges(file) {
+        const badges = [];
+        const category = String(file.documentCategory || '').toLowerCase();
+        const categoryLabel = getDocumentCategoryLabel(category);
+        if (categoryLabel) {
+          badges.push(`<span class="file-meta-badge ${category === 'credit_report' ? 'credit-report' : ''}">${escapeUnsafeHtml(categoryLabel)}</span>`);
+        }
+
+        if (category === 'credit_report') {
+          const party = String(file.creditReportParty || '').toLowerCase();
+          const partyLabel = getCreditPartyLabel(party);
+          if (partyLabel) {
+            const partyClass = party === 'coapp' ? 'party-coapp' : 'party-applicant';
+            badges.push(`<span class="file-meta-badge ${partyClass}">${escapeUnsafeHtml(partyLabel)}</span>`);
+          }
+        }
+
+        return badges.join('');
+      }
+
       function loadFilesList() {
         if (!filesList || !currentLeadId) return;
-        
+
         const filesKey = `lead_files_${currentLeadId}`;
         const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        
-        if (files.length === 0) {
+
+        if (!files.length) {
           filesList.innerHTML = `
             <div class="files-empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14,2 14,8 20,8"/>
               </svg>
-              <p>No hay archivos aún</p>
-              <span>Los archivos subidos aparecerán aquí</span>
+              <p>No hay archivos a�n</p>
+              <span>Los archivos subidos aparecer�n aqu�</span>
             </div>
           `;
           return;
         }
-        
-        filesList.innerHTML = files.map(file => {
-          const size = formatFileSize(file.size);
+
+        filesList.innerHTML = files.map((file) => {
+          const size = formatFileSize(Number(file.size || 0));
           const date = new Date(file.uploadedAt).toLocaleDateString('es-ES');
-          const isImage = file.type && file.type.includes('image');
-          const clickableClass = isImage || file.type === 'application/pdf' ? 'clickable' : '';
-          const thumbnail = isImage && file.data 
-            ? `<img src="${file.data}" class="file-thumbnail" alt="${file.name}" onclick="openFile('${file.id}')">`
-            : `<div class="file-icon" onclick="openFile('${file.id}')">${getFileIcon(file.type)}</div>`;
-          
+          const fileType = String(file.type || '').toLowerCase();
+          const isImage = fileType.includes('image');
+          const isPdf = fileType === 'application/pdf';
+          const clickableClass = isImage || isPdf ? 'clickable' : '';
+          const safeName = escapeUnsafeHtml(file.name);
+          const metadataBadges = buildFileMetadataBadges(file);
+          const thumbnail = isImage && file.data
+            ? `<img src="${file.data}" class="file-thumbnail" alt="${safeName}" onclick="openFile('${file.id}')">`
+            : `<div class="file-icon" onclick="openFile('${file.id}')">${getFileIcon(fileType)}</div>`;
+
           return `
             <div class="file-item ${clickableClass}" data-file-id="${file.id}">
               ${thumbnail}
-              <div class="file-info" onclick="${isImage || file.type === 'application/pdf' ? `openFile('${file.id}')` : ''}">
-                <div class="file-name" title="${file.name}">${file.name}</div>
-                <div class="file-meta">${size} • ${date}</div>
+              <div class="file-info" onclick="${isImage || isPdf ? `openFile('${file.id}')` : ''}">
+                <div class="file-name" title="${safeName}">${safeName}</div>
+                <div class="file-meta">${size} � ${date}</div>
+                <div class="file-meta-row">${metadataBadges}</div>
               </div>
               <div class="file-actions">
                 <button class="file-btn" title="Ver" onclick="openFile('${file.id}')">
@@ -4413,33 +5572,13 @@
           `;
         }).join('');
       }
-      
-      function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-      }
-      
-      function getFileIcon(type) {
-        if (type.includes('pdf')) {
-          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>`;
-        } else if (type.includes('image')) {
-          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
-        } else if (type.includes('word')) {
-          return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
-        }
-        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
-      }
-      
-      // Exponer funciones globales
+
       window.downloadFile = function(fileId) {
         const filesKey = `lead_files_${currentLeadId}`;
         const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const file = files.find(f => f.id === fileId);
-        
-        if (file && file.data) {
+        const file = files.find((item) => item.id === fileId);
+
+        if (file?.data) {
           const link = document.createElement('a');
           link.href = file.data;
           link.download = file.name;
@@ -4448,80 +5587,88 @@
           document.body.removeChild(link);
         }
       };
-      
+
       window.deleteFile = function(fileId) {
-        if (!confirm('¿Eliminar este archivo?')) return;
-        
+        if (!confirm('�Eliminar este archivo?')) return;
+
         const filesKey = `lead_files_${currentLeadId}`;
         const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const updatedFiles = files.filter(f => f.id !== fileId);
+        const deletedFile = files.find((item) => item.id === fileId) || null;
+        const updatedFiles = files.filter((item) => item.id !== fileId);
         localStorage.setItem(filesKey, JSON.stringify(updatedFiles));
-        
+
+        window.dispatchEvent(new CustomEvent('lead:file-deleted', {
+          detail: {
+            leadId: currentLeadId,
+            fileId,
+            deletedFile
+          }
+        }));
+
         showToast('Archivo eliminado', 'success');
         loadFilesList();
       };
-      
+
       window.openFile = function(fileId) {
         const filesKey = `lead_files_${currentLeadId}`;
         const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const file = files.find(f => f.id === fileId);
-        
-        if (!file || !file.data) {
+        const file = files.find((item) => item.id === fileId);
+
+        if (!file?.data) {
           showToast('Archivo no encontrado', 'error');
           return;
         }
-        
+
         const modal = document.getElementById('fileViewerModal');
         const title = document.getElementById('fileViewerTitle');
         const body = document.getElementById('fileViewerBody');
         const downloadBtn = document.getElementById('fileViewerDownloadBtn');
-        
+        if (!modal || !title || !body || !downloadBtn) return;
+
         title.textContent = file.name;
         body.innerHTML = '';
-        
-        // Configurar botón de descarga
         downloadBtn.onclick = () => downloadFile(fileId);
-        
-        // Mostrar contenido según el tipo
-        const isImage = file.type && file.type.includes('image');
-        const isPDF = file.type === 'application/pdf';
-        
+
+        const fileType = String(file.type || '').toLowerCase();
+        const isImage = fileType.includes('image');
+        const isPdf = fileType === 'application/pdf';
+
         if (isImage) {
           const img = document.createElement('img');
           img.src = file.data;
           img.alt = file.name;
           body.appendChild(img);
-        } else if (isPDF) {
+        } else if (isPdf) {
           const iframe = document.createElement('iframe');
           iframe.src = file.data;
           body.appendChild(iframe);
         } else {
-          // Para otros tipos de archivo, mostrar icono grande
           body.innerHTML = `
             <div class="file-icon-large">
-              ${getFileIcon(file.type)}
+              ${getFileIcon(fileType)}
               <p>Este tipo de archivo no se puede previsualizar</p>
-              <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">${file.name}</p>
+              <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">${escapeUnsafeHtml(file.name)}</p>
             </div>
           `;
         }
-        
+
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
       };
-      
+
       window.closeFileViewer = function() {
         const modal = document.getElementById('fileViewerModal');
         const body = document.getElementById('fileViewerBody');
-        
+        if (!modal || !body) return;
+
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
-        body.innerHTML = ''; // Limpiar contenido
+        body.innerHTML = '';
       };
     }
-    
+
     // Cargar datos
     initNotesPanel();
     initFilesPanel();
@@ -4538,20 +5685,8 @@
     
     function initBankingSection() {
       if (bankingDataLoaded) return;
-      
-      // FIX: Mover bankingSection fuera de calculatorSection si está dentro
-      const bankingSection = document.getElementById('bankingSection');
-      const calculatorSection = document.getElementById('calculatorSection');
-      const leadContentArea = document.querySelector('.lead-content-area');
-      
-      if (bankingSection && calculatorSection && leadContentArea) {
-        // Verificar si bankingSection está dentro de calculatorSection
-        if (calculatorSection.contains(bankingSection)) {
-          console.log('[Banking] Moving section outside calculatorSection');
-          // Mover bankingSection después de calculatorSection
-          leadContentArea.insertBefore(bankingSection, calculatorSection.nextSibling);
-        }
-      }
+
+      ensureLeadSectionsPlacement();
       
       loadBankingData();
       setupBankingEventListeners();
@@ -4899,3 +6034,4 @@
       }
     `;
     document.head.appendChild(bankingStyles);
+

@@ -1,0 +1,226 @@
+<!-- NUEVA SECCIÓN CREDITORS - REDISEÑO LIQUID GLASS -->
+<div id="creditorsSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
+  <div class="creditors-glass-container">
+    
+    <!-- Header con título y resumen -->
+    <div class="creditors-header-glass">
+      <div class="creditors-title-section">
+        <h3 class="creditors-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Creditors
+        </h3>
+        <p class="creditors-subtitle">Extrae y gestiona las deudas del reporte de crédito</p>
+      </div>
+      
+      <!-- Chips de resumen -->
+      <div class="creditors-summary-cards">
+        <div class="creditor-summary-card debt-total">
+          <span class="summary-label">Total Debt</span>
+          <strong class="summary-value" id="creditorsTotalDebt">$0.00</strong>
+        </div>
+        <div class="creditor-summary-card accounts-count">
+          <span class="summary-label">Cuentas</span>
+          <strong class="summary-value" id="creditorsAccountsCount">0</strong>
+        </div>
+        <div class="creditor-summary-card included-amount">
+          <span class="summary-label">Incluidas</span>
+          <strong class="summary-value" id="creditorsIncludedAmount">$0.00</strong>
+        </div>
+        <div class="creditor-summary-card past-due">
+          <span class="summary-label">Vencido</span>
+          <strong class="summary-value" id="creditorsPastDueTotal">$0.00</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Área de extracción/importación -->
+    <div class="creditors-import-area">
+      <div class="import-tabs">
+        <button class="import-tab active" data-tab="pdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          PDF Reporte
+        </button>
+        <button class="import-tab" data-tab="text">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Pegar Texto
+        </button>
+        <button class="import-tab" data-tab="manual">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Manual
+        </button>
+      </div>
+
+      <!-- Panel PDF -->
+      <div class="import-panel active" id="pdfPanel">
+        <div class="upload-zone" id="creditorsUploadZone">
+          <input type="file" id="creditorsReportInput" accept=".pdf,.txt" multiple hidden>
+          <div class="upload-zone-content">
+            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <p class="upload-text">Arrastra PDFs aquí o <span class="upload-link">selecciona archivos</span></p>
+            <p class="upload-hint">Soporta reportes de TransUnion, Equifax, Experian</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Texto -->
+      <div class="import-panel hidden" id="textPanel">
+        <div class="text-input-area">
+          <textarea id="creditorsRawText" class="creditors-textarea" placeholder="Pega aquí el texto del reporte de crédito...&#10;&#10;Ejemplo:&#10;CAPITAL ONE BANK&#10;Account Number: 5156768017592034&#10;Account Status: Open&#10;Type: Credit Card&#10;Responsibility: Individual&#10;Month's Reviewed: 23&#10;Balance: $445.00"></textarea>
+          <button class="analyze-btn" id="creditorsAnalyzeTextBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Analizar Texto
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel Manual -->
+      <div class="import-panel hidden" id="manualPanel">
+        <form class="manual-form" id="creditorsManualForm">
+          <div class="form-row">
+            <div class="form-field">
+              <label>Nombre del Acreedor *</label>
+              <input type="text" id="manualCreditorName" placeholder="Ej: CAPITAL ONE BANK" required>
+            </div>
+            <div class="form-field">
+              <label>Número de Cuenta</label>
+              <input type="text" id="manualAccountNumber" placeholder="XXXX1234">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Deuda (Balance) *</label>
+              <input type="text" id="manualDebtAmount" placeholder="0.00" required>
+            </div>
+            <div class="form-field">
+              <label>Estado de Cuenta</label>
+              <select id="manualAccountStatus">
+                <option value="">Seleccionar...</option>
+                <option value="Open">Open</option>
+                <option value="Closed">Closed</option>
+                <option value="Charge Off">Charge Off</option>
+                <option value="Collection">Collection</option>
+                <option value="In Good Standing">In Good Standing</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Tipo de Cuenta</label>
+              <input type="text" id="manualAccountType" placeholder="Ej: Credit Card">
+            </div>
+            <div class="form-field">
+              <label>Responsabilidad</label>
+              <select id="manualResponsibility">
+                <option value="Individual">Individual</option>
+                <option value="Joint">Joint</option>
+                <option value="Authorized User">Authorized User</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Months Reviewed</label>
+              <input type="number" id="manualMonthsReviewed" placeholder="Ej: 23" min="0" max="999">
+            </div>
+            <div class="form-field">
+              <label>Vencido (Past Due)</label>
+              <input type="text" id="manualPastDue" placeholder="0.00">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="manualCreditorCancelBtn">Cancelar</button>
+            <button type="submit" class="btn-primary" id="manualCreditorSaveBtn">Guardar Creditor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="creditors-status-bar">
+      <span class="status-text" id="creditorsStatus">Listo para importar reporte</span>
+      <div class="status-actions">
+        <button class="btn-ghost" id="creditorsClearAllBtn" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          Limpiar
+        </button>
+        <button class="btn-primary" id="creditorsImportBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Importar <span id="importCount">0</span> seleccionados
+        </button>
+      </div>
+    </div>
+
+    <!-- Preview de extracción -->
+    <div class="creditors-preview-section hidden" id="creditorsPreviewSection">
+      <div class="preview-header">
+        <h4>Cuentas detectadas en el reporte</h4>
+        <label class="select-all-toggle">
+          <input type="checkbox" id="creditorsPreviewSelectAll" checked>
+          <span>Seleccionar todo</span>
+        </label>
+      </div>
+      <div class="creditors-cards-grid" id="creditorsPreviewBody">
+        <!-- Las cards se generan dinámicamente -->
+      </div>
+    </div>
+
+    <!-- Lista de creditors guardados -->
+    <div class="creditors-saved-section" id="creditorsSavedSection">
+      <div class="saved-header">
+        <h4>Creditors guardados</h4>
+        <div class="saved-actions">
+          <button class="btn-ghost" id="creditorsApplyTotalBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 2v20M2 12h20"/>
+            </svg>
+            Aplicar a Calculadora
+          </button>
+        </div>
+      </div>
+      <div class="creditors-cards-grid saved" id="creditorsSavedBody">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <p>No hay creditors guardados</p>
+          <span>Importa un reporte o agrega manualmente</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

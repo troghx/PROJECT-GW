@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260216e">
+  <link rel="stylesheet" href="creditors-compact.css?v=20260217f">
   <style>
     :root {
       --lead-viewport-height: 100vh;
@@ -72,14 +73,14 @@
       border-radius: 8px;
     }
     
-    /* Toolbar en misma posición que dashboard */
+    /* Toolbar en misma posiciÃ³n que dashboard */
     .lead-floating .toolbar-wrap {
       grid-column: 2;
       grid-row: 1;
       justify-self: center;
     }
     
-    /* Home actions en misma posición */
+    /* Home actions en misma posiciÃ³n */
     .lead-floating .home-actions {
       grid-column: 3;
       grid-row: 1;
@@ -110,7 +111,7 @@
       flex-shrink: 0;
     }
     
-    /* Sección del nombre */
+    /* SecciÃ³n del nombre */
     .lead-title-section {
       display: flex;
       align-items: center;
@@ -159,7 +160,7 @@
       background: rgba(255, 255, 255, 0.1);
     }
     
-    /* Botón de cambio Applicant/Co-Applicant */
+    /* BotÃ³n de cambio Applicant/Co-Applicant */
     .applicant-toggle-btn {
       display: flex;
       align-items: center;
@@ -210,7 +211,7 @@
       color: #60a5fa;
     }
     
-    /* Botón de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
+    /* BotÃ³n de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
     .copy-btn {
       display: flex;
       align-items: center;
@@ -334,7 +335,7 @@
       font-weight: 600;
     }
     
-    /* Botones de acción al lado del Case ID */
+    /* Botones de acciÃ³n al lado del Case ID */
     .case-id-actions {
       display: flex;
       align-items: center;
@@ -565,6 +566,47 @@
       color: rgba(255, 255, 255, 0.5);
     }
 
+    .file-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .file-meta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.86);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .file-meta-badge.credit-report {
+      border-color: rgba(59, 130, 246, 0.45);
+      background: rgba(59, 130, 246, 0.22);
+      color: rgba(191, 219, 254, 0.98);
+    }
+
+    .file-meta-badge.party-applicant {
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.2);
+      color: rgba(187, 247, 208, 0.98);
+    }
+
+    .file-meta-badge.party-coapp {
+      border-color: rgba(245, 158, 11, 0.42);
+      background: rgba(245, 158, 11, 0.22);
+      color: rgba(254, 240, 138, 0.98);
+    }
+
     .file-actions {
       display: flex;
       gap: 6px;
@@ -621,7 +663,7 @@
       background: rgba(126, 234, 252, 0.1);
     }
 
-    /* Modal de visualización de archivos */
+    /* Modal de visualizaciÃ³n de archivos */
     .file-viewer-modal {
       position: fixed;
       inset: 0;
@@ -775,6 +817,124 @@
     .file-viewer-btn.primary:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    /* Modal de clasificaciÃ³n de archivo */
+    .file-meta-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10020;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .file-meta-modal.hidden {
+      display: none;
+    }
+
+    .file-meta-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(6px);
+    }
+
+    .file-meta-modal-content {
+      position: relative;
+      width: min(520px, 94vw);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(155deg, rgba(21, 29, 44, 0.98) 0%, rgba(16, 23, 35, 0.96) 100%);
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .file-meta-modal-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 650;
+    }
+
+    .file-meta-modal-subtitle {
+      margin: 6px 0 0;
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.62);
+      word-break: break-word;
+    }
+
+    .file-meta-modal-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .file-meta-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .file-meta-field label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: rgba(255, 255, 255, 0.56);
+      font-weight: 600;
+    }
+
+    .file-meta-field select {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(0, 0, 0, 0.26);
+      color: rgba(255, 255, 255, 0.9);
+      padding: 11px 12px;
+      font-size: 0.86rem;
+      outline: none;
+    }
+
+    .file-meta-field select:focus {
+      border-color: rgba(59, 130, 246, 0.6);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .file-meta-field.hidden {
+      display: none;
+    }
+
+    .file-meta-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .file-meta-modal-btn {
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.86);
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .file-meta-modal-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+
+    .file-meta-modal-btn.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+      color: #fff;
     }
 
     /* Vista previa en upload zone */
@@ -1357,7 +1517,7 @@
       border-color: rgba(248, 113, 113, 0.56);
     }
     
-    /* Botón de copiar para Case ID - solo icono, sin box */
+    /* BotÃ³n de copiar para Case ID - solo icono, sin box */
     .copy-icon-btn {
       display: flex;
       align-items: center;
@@ -1387,7 +1547,7 @@
       color: #4ade80;
     }
     
-    /* Navegación de pestañas */
+    /* NavegaciÃ³n de pestaÃ±as */
     .lead-tabs-nav {
       display: flex;
       align-items: center;
@@ -1952,7 +2112,7 @@
       font-family: 'Inter', monospace;
     }
     
-    /* Botón de candado toggle */
+    /* BotÃ³n de candado toggle */
     .lock-toggle-btn {
       background: transparent;
       border: none;
@@ -2133,7 +2293,7 @@
       font-weight: 600;
     }
     
-    /* Sección de Meses y Monthly Payment - Minimalista */
+    /* SecciÃ³n de Meses y Monthly Payment - Minimalista */
     .calc-months-section {
       display: flex;
       align-items: stretch;
@@ -2277,7 +2437,7 @@
       margin-left: 4px;
     }
     
-    /* Botones rápidos debajo de la ruleta */
+    /* Botones rÃ¡pidos debajo de la ruleta */
     .months-quick-buttons.minimal.under-wheel {
       display: flex;
       align-items: center;
@@ -2297,7 +2457,7 @@
       border: 1px solid rgba(126, 234, 252, 0.2);
     }
     
-    /* Botones rápidos - sin cajas */
+    /* Botones rÃ¡pidos - sin cajas */
     .months-quick-buttons {
       display: flex;
       gap: 12px;
@@ -3224,7 +3384,7 @@
       50% { transform: scale(1.2); opacity: 0.8; }
     }
     
-    /* Días deshabilitados en calendario */
+    /* DÃ­as deshabilitados en calendario */
     .calendar-day.disabled {
       opacity: 0.35;
       cursor: not-allowed;
@@ -3679,6 +3839,30 @@
       color: rgba(15, 23, 42, 0.5);
     }
 
+    body.home-active.theme-light .file-meta-badge {
+      border-color: rgba(15, 23, 42, 0.15);
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    body.home-active.theme-light .file-meta-badge.credit-report {
+      border-color: rgba(37, 99, 235, 0.25);
+      background: rgba(37, 99, 235, 0.1);
+      color: rgba(30, 64, 175, 0.95);
+    }
+
+    body.home-active.theme-light .file-meta-badge.party-applicant {
+      border-color: rgba(22, 163, 74, 0.25);
+      background: rgba(22, 163, 74, 0.1);
+      color: rgba(22, 101, 52, 0.95);
+    }
+
+    body.home-active.theme-light .file-meta-badge.party-coapp {
+      border-color: rgba(217, 119, 6, 0.28);
+      background: rgba(217, 119, 6, 0.12);
+      color: rgba(146, 64, 14, 0.95);
+    }
+
     body.home-active.theme-light .file-btn {
       border-color: rgba(0, 0, 0, 0.15);
       color: rgba(15, 23, 42, 0.5);
@@ -3732,6 +3916,33 @@
 
     body.home-active.theme-light .file-viewer-modal-body .file-icon-large p {
       color: rgba(15, 23, 42, 0.6);
+    }
+
+    body.home-active.theme-light .file-meta-modal-content {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.97) 0%, rgba(247, 251, 255, 0.95) 100%);
+      box-shadow: 0 30px 60px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .file-meta-modal-header h3 {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .file-meta-modal-subtitle,
+    body.home-active.theme-light .file-meta-field label {
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    body.home-active.theme-light .file-meta-field select {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.94);
+      color: rgba(15, 23, 42, 0.88);
+    }
+
+    body.home-active.theme-light .file-meta-modal-btn {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(15, 23, 42, 0.05);
+      color: rgba(15, 23, 42, 0.78);
     }
 
     body.home-active.theme-light .file-thumbnail {
@@ -4915,7 +5126,7 @@
       border-color: rgba(126, 234, 252, 0.6);
     }
     
-    /* Expandibles más compactos */
+    /* Expandibles mÃ¡s compactos */
     .banking-expandable {
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
@@ -5002,7 +5213,7 @@
       border-color: rgba(59, 130, 246, 0.5);
     }
     
-    /* Sección de guardar */
+    /* SecciÃ³n de guardar */
     .banking-save-section {
       display: flex;
       align-items: center;
@@ -5068,7 +5279,7 @@
       color: #dc2626;
     }
     
-    /* Títulos de columna tipo lead-info-card */
+    /* TÃ­tulos de columna tipo lead-info-card */
     .banking-account-column .calc-column-title,
     .banking-holder-column .calc-column-title {
       margin: 0 0 12px 0;
@@ -5115,7 +5326,380 @@
         text-align: left;
       }
     }
-  </style>
+
+    /* ============================================
+       CREDITORS SECTION
+       ============================================ */
+    .creditors-main-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .creditors-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .creditors-header-title h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 650;
+    }
+
+    .creditors-header-title p {
+      margin: 4px 0 0 0;
+      font-size: 0.82rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .creditors-summary-chips {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(170px, 1fr));
+      gap: 8px;
+      width: min(100%, 560px);
+    }
+
+    .creditors-chip {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-height: 62px;
+    }
+
+    .creditors-chip span {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .creditors-chip strong {
+      font-size: 1rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.94);
+    }
+
+    .creditors-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .creditors-upload-btn,
+    .creditors-btn {
+      border: 1px solid rgba(126, 234, 252, 0.28);
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.14);
+      color: rgba(218, 244, 255, 0.94);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .creditors-btn.secondary {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .creditors-upload-btn:hover,
+    .creditors-btn:hover {
+      background: rgba(59, 130, 246, 0.24);
+      border-color: rgba(126, 234, 252, 0.56);
+    }
+
+    .creditors-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .creditors-status {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.66);
+    }
+
+    .creditors-status.success {
+      color: #4ade80;
+    }
+
+    .creditors-status.error {
+      color: #f87171;
+    }
+
+    .creditors-text-input-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .creditors-text-input-wrap label {
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+      color: rgba(255, 255, 255, 0.56);
+    }
+
+    .creditors-text-input {
+      min-height: 96px;
+      resize: vertical;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(6, 13, 24, 0.52);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.82rem;
+      padding: 10px;
+      line-height: 1.4;
+    }
+
+    .creditors-text-input:focus {
+      outline: none;
+      border-color: rgba(126, 234, 252, 0.56);
+    }
+
+    .creditors-manual-form {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 8px;
+      border: 1px dashed rgba(255, 255, 255, 0.22);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .creditors-manual-form.hidden {
+      display: none;
+    }
+
+    .creditors-manual-field {
+      display: grid;
+      gap: 4px;
+    }
+
+    .creditors-manual-field label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    .creditors-manual-field input,
+    .creditors-manual-field select {
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 7px 8px;
+      font-size: 0.82rem;
+    }
+
+    .creditors-manual-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .creditors-preview-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .creditors-preview-wrap.hidden {
+      display: none;
+    }
+
+    .creditors-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .creditors-preview-header h4 {
+      margin: 0;
+      font-size: 0.86rem;
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .creditors-preview-header label {
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.7);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .creditors-table-wrap {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 330px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .creditors-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+
+    .creditors-table th,
+    .creditors-table td {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px;
+      font-size: 0.79rem;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .creditors-table th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(6, 13, 24, 0.95);
+      color: rgba(255, 255, 255, 0.72);
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    .creditors-table td.actions-cell {
+      white-space: nowrap;
+    }
+
+    .creditors-inline-input {
+      width: 95px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 5px 6px;
+      font-size: 0.78rem;
+    }
+
+    .creditors-inline-input.small {
+      width: 70px;
+    }
+
+    .creditors-row-empty {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.56);
+      font-size: 0.8rem;
+      padding: 12px;
+    }
+
+    .creditors-table .mono {
+      font-variant-numeric: tabular-nums;
+    }
+
+    body.home-active.theme-light .creditors-header-title p,
+    body.home-active.theme-light .creditors-chip span,
+    body.home-active.theme-light .creditors-status,
+    body.home-active.theme-light .creditors-text-input-wrap label,
+    body.home-active.theme-light .creditors-manual-field label,
+    body.home-active.theme-light .creditors-preview-header label {
+      color: rgba(15, 23, 42, 0.66);
+    }
+
+    body.home-active.theme-light .creditors-chip {
+      border-color: rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    body.home-active.theme-light .creditors-chip strong,
+    body.home-active.theme-light .creditors-preview-header h4 {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .creditors-upload-btn,
+    body.home-active.theme-light .creditors-btn {
+      border-color: rgba(37, 99, 235, 0.28);
+      background: rgba(59, 130, 246, 0.1);
+      color: rgba(30, 64, 175, 0.95);
+    }
+
+    body.home-active.theme-light .creditors-btn.secondary {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.86);
+    }
+
+    body.home-active.theme-light .creditors-text-input {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.86);
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .creditors-manual-form {
+      border-color: rgba(15, 23, 42, 0.22);
+      background: rgba(255, 255, 255, 0.56);
+    }
+
+    body.home-active.theme-light .creditors-manual-field input,
+    body.home-active.theme-light .creditors-manual-field select,
+    body.home-active.theme-light .creditors-inline-input {
+      border-color: rgba(15, 23, 42, 0.2);
+      background: rgba(255, 255, 255, 0.92);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .creditors-table-wrap {
+      border-color: rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.66);
+    }
+
+    body.home-active.theme-light .creditors-table th {
+      background: rgba(241, 245, 249, 0.95);
+      color: rgba(15, 23, 42, 0.76);
+      border-bottom-color: rgba(15, 23, 42, 0.12);
+    }
+
+    body.home-active.theme-light .creditors-table td {
+      border-bottom-color: rgba(15, 23, 42, 0.08);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .creditors-row-empty {
+      color: rgba(15, 23, 42, 0.54);
+    }
+
+    @media (max-width: 980px) {
+      .creditors-summary-chips {
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .creditors-manual-form {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .creditors-manual-form {
+        grid-template-columns: 1fr;
+      }
+      .creditors-status {
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+    
+    /* Creditors styles moved to creditors-compact.css */</style>
 </head>
 <body class="home-active theme-dark">
   <div class="page-bg"></div>
@@ -5128,7 +5712,7 @@
         <img src="reference/CD logo.png" alt="Cero Deuda" />
       </button>
       
-      <!-- TOOLBAR - Copiado idéntico del dashboard -->
+      <!-- TOOLBAR - Copiado idÃ©ntico del dashboard -->
       <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
         <div id="toolbarShell" class="toolbar-shell">
           <div class="toolbar-glass-container">
@@ -5250,7 +5834,7 @@
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Cerrar sesión</span>
+            <span>Cerrar sesiÃ³n</span>
           </button>
         </div>
       </div>
@@ -5261,7 +5845,7 @@
           <div class="lead-title-section">
             <!-- Nombre editable -->
             <div class="lead-name-wrapper">
-              <!-- Botón de cambio Applicant/Co-Applicant -->
+              <!-- BotÃ³n de cambio Applicant/Co-Applicant -->
               <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M7 10h14l-4-4"/>
@@ -5272,7 +5856,7 @@
               
               <h1 id="leadName" class="lead-name-text" contenteditable="false" title="Click para editar"></h1>
               
-              <!-- Botón de copiar nombre - solo icono, sin box -->
+              <!-- BotÃ³n de copiar nombre - solo icono, sin box -->
               <button id="copyNameBtn" class="copy-btn" title="Copiar nombre">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -5287,7 +5871,7 @@
             <!-- Badge de Test (si aplica) -->
             <span id="testBadge" class="lead-test-badge hidden">Test</span>
 
-            <!-- Badge de relación -->
+            <!-- Badge de relaciÃ³n -->
             <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
@@ -5297,7 +5881,7 @@
             </a>
           </div>
           
-          <!-- Case ID y botones de acción -->
+          <!-- Case ID y botones de acciÃ³n -->
           <div class="lead-case-id">
             <div class="case-id-left">
               <span class="case-label">Case ID:</span>
@@ -5321,9 +5905,9 @@
               </div>
             </div>
             
-            <!-- Botones de acción al lado del Case ID -->
+            <!-- Botones de acciÃ³n al lado del Case ID -->
             <div class="case-id-actions">
-              <!-- Botón de Archivos -->
+              <!-- BotÃ³n de Archivos -->
               <div class="files-anchor">
                 <button class="action-icon-btn" id="filesBtn" title="Archivos" aria-controls="filesPanel" aria-expanded="false">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5347,7 +5931,7 @@
                         <polyline points="17,8 12,3 7,8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      <span class="files-upload-text">Arrastra archivos aquí o haz clic para seleccionar</span>
+                      <span class="files-upload-text">Arrastra archivos aquÃ­ o haz clic para seleccionar (requiere clasificaciï¿½n)</span>
                       <input type="file" id="filesUploadInput" class="files-upload-input" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                     </div>
                     <!-- Files List -->
@@ -5357,8 +5941,8 @@
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                           <polyline points="14,2 14,8 20,8"/>
                         </svg>
-                        <p>No hay archivos aún</p>
-                        <span>Los archivos subidos aparecerán aquí</span>
+                        <p>No hay archivos aÃºn</p>
+                        <span>Los archivos subidos aparecerÃ¡n aquÃ­</span>
                       </div>
                     </div>
                   </div>
@@ -5415,7 +5999,7 @@
             </div>
           </div>
           
-          <!-- Navegación de pestañas -->
+          <!-- NavegaciÃ³n de pestaÃ±as -->
           <div class="lead-tabs-nav">
             <button class="lead-tab active" data-tab="lead">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5469,23 +6053,23 @@
 
         </header>
         
-        <!-- Contenido dinámico -->
-        <!-- Sección Lead (Detalles) - Visible por defecto -->
+        <!-- Contenido dinÃ¡mico -->
+        <!-- SecciÃ³n Lead (Detalles) - Visible por defecto -->
         <div id="leadSection" class="lead-content-grid">
           <div class="loading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
             </svg>
-            <p>Cargando información del cliente...</p>
+            <p>Cargando informaciÃ³n del cliente...</p>
           </div>
         </div>
         
-        <!-- Sección Calculator -->
+        <!-- SecciÃ³n Calculator -->
         <div id="calculatorSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <!-- Calculator Box - Estilo Tiempos y Fechas -->
           <div class="lead-info-card lead-info-card-wide calculator-main-card">
             <div class="two-column-layout calc-layout">
-              <!-- Columna Izquierda: Configuración -->
+              <!-- Columna Izquierda: ConfiguraciÃ³n -->
               <div class="info-column calc-config-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -5501,7 +6085,7 @@
                     <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"/>
                     <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.8"/>
                   </svg>
-                  Configuración
+                  ConfiguraciÃ³n
                 </h4>
                 
                 <div class="info-row calc-input-row">
@@ -5604,8 +6188,8 @@
                         </button>
                       </div>
                       <div class="calendar-weekdays">
-                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
-                        <span>Jue</span><span>Vie</span><span>Sáb</span>
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>MiÃ©</span>
+                        <span>Jue</span><span>Vie</span><span>SÃ¡b</span>
                       </div>
                       <div id="calcPaymentDayDays" class="calendar-days"></div>
                     </div>
@@ -5658,7 +6242,7 @@
               </div>
             </div>
             
-            <!-- Sección especial: Meses y Monthly Payment - Compacto -->
+            <!-- SecciÃ³n especial: Meses y Monthly Payment - Compacto -->
             <div class="calc-duration-payment-row">
               <!-- Program Duration -->
               <div class="calc-duration-compact">
@@ -5671,7 +6255,7 @@
                   </div>
                 </div>
                 
-                <!-- Botones rápidos debajo de la ruleta -->
+                <!-- Botones rÃ¡pidos debajo de la ruleta -->
                 <div class="months-quick-buttons minimal under-wheel">
                   <button class="months-quick-btn minimal" data-months="12">12</button>
                   <button class="months-quick-btn minimal" data-months="24">24</button>
@@ -5703,7 +6287,7 @@
           <div class="lead-info-card lead-info-card-wide payment-schedule-card">
             <div class="schedule-header">
               <h3 class="calculator-section-title" style="margin:0;padding:0;border:none;">Payment Schedule</h3>
-              <span class="plan-duration-badge" id="planDurationText">4 años</span>
+              <span class="plan-duration-badge" id="planDurationText">4 aÃ±os</span>
             </div>
             <div class="schedule-table-container">
               <table class="schedule-table">
@@ -5725,11 +6309,11 @@
           </div>
         </div>
         
-        <!-- Sección Banking -->
+        <!-- SecciÃ³n Banking -->
         <div id="bankingSection" class="lead-content-grid hidden">
           <div class="lead-info-card lead-info-card-wide banking-main-card">
             <div class="two-column-layout banking-layout">
-              <!-- Columna Izquierda: Información de la Cuenta -->
+              <!-- Columna Izquierda: InformaciÃ³n de la Cuenta -->
               <div class="info-column banking-account-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -5779,7 +6363,7 @@
                   </div>
                 </div>
                 
-                <!-- Campos expandibles - Sección Bank Address -->
+                <!-- Campos expandibles - SecciÃ³n Bank Address -->
                 <div class="banking-expandable">
                   <button class="banking-expand-btn" data-target="bankAddressFields">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -5822,7 +6406,7 @@
                   </div>
                 </div>
                 
-                <!-- Botón Get Bank Details -->
+                <!-- BotÃ³n Get Bank Details -->
                 <button class="banking-action-btn" id="btnGetBankDetails">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <circle cx="11" cy="11" r="8"/>
@@ -5832,7 +6416,7 @@
                 </button>
               </div>
               
-              <!-- Columna Derecha: Información del Titular -->
+              <!-- Columna Derecha: InformaciÃ³n del Titular -->
               <div class="info-column banking-holder-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -5960,7 +6544,7 @@
               </div>
             </div>
             
-            <!-- Botón de guardar -->
+            <!-- BotÃ³n de guardar -->
             <div class="banking-save-section">
               <button class="banking-save-btn" id="btnSaveBankingInfo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -5981,17 +6565,87 @@
             <path d="M16 8h-6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"/>
           </svg>
           <h2>Budget</h2>
-          <p>Sección en desarrollo</p>
+          <p>SecciÃ³n en desarrollo</p>
         </div>
-        
-        <div id="creditorsSection" class="hidden" style="padding:40px;text-align:center;color:rgba(255,255,255,0.5);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="margin-bottom:16px;opacity:0.5;">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          <h2>Creditors</h2>
-          <p>Sección en desarrollo</p>
+        <!-- NUEVA SECCIï¿½N CREDITORS - REDISEï¿½O LIQUID GLASS -->
+        <div id="creditorsSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
+          <div class="creditors-glass-container">
+            
+            <!-- Header con tï¿½tulo y resumen -->
+            <div class="creditors-header-glass">
+              <div class="creditors-summary-cards">
+                <div class="creditor-summary-card debt-total">
+                  <span class="summary-label">Total Debt</span>
+                  <strong class="summary-value" id="creditorsTotalDebt">$0.00</strong>
+                </div>
+                <div class="creditor-summary-card applicant-debt" id="creditorsApplicantCard" hidden>
+                  <span class="summary-label">Applicant</span>
+                  <strong class="summary-value" id="creditorsApplicantDebt">$0.00</strong>
+                </div>
+                <div class="creditor-summary-card coapp-debt" id="creditorsCoappCard" hidden>
+                  <span class="summary-label">Co-Applicant</span>
+                  <strong class="summary-value" id="creditorsCoappDebt">$0.00</strong>
+                </div>
+                <div class="creditor-summary-card accounts-count">
+                  <span class="summary-label">Cuentas</span>
+                  <strong class="summary-value" id="creditorsAccountsCount">0</strong>
+                </div>
+                <div class="creditor-summary-card included-amount">
+                  <span class="summary-label">Incluidas</span>
+                  <strong class="summary-value" id="creditorsIncludedAmount">$0.00</strong>
+                </div>
+                <div class="creditor-summary-card past-due">
+                  <span class="summary-label">Vencido</span>
+                  <strong class="summary-value" id="creditorsPastDueTotal">$0.00</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lista de creditors guardados -->
+            <div class="creditors-saved-section" id="creditorsSavedSection">
+              <div class="saved-header">
+                <h4>Creditors guardados</h4>
+                <div class="saved-actions">
+                  <button class="btn-ghost" id="creditorsApplyTotalBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M12 2v20M2 12h20"/>
+                    </svg>
+                    Aplicar a Calculadora
+                  </button>
+                </div>
+              </div>
+              <div class="creditors-table-container">
+                <table class="creditors-table" id="creditorsSavedTable">
+                  <thead>
+                    <tr>
+                      <th class="col-checkbox"></th>
+                      <th class="col-num">#</th>
+                      <th class="col-name">ACREEDOR</th>
+                      <th class="col-debt">DEUDA</th>
+                      <th class="col-party">PARTE</th>
+                      <th class="col-account">CUENTA</th>
+                      <th class="col-resp">RESP.</th>
+                      <th class="col-status">STATUS</th>
+                      <th class="col-type">TIPO</th>
+                      <th class="col-months">MESES</th>
+                      <th class="col-past-due">VENCIDO</th>
+                      <th class="col-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="creditorsSavedBody">
+                    <tr>
+                      <td colspan="12" class="empty-cell">
+                        <div class="creditors-empty-status">
+                          <span class="status-text" id="creditorsStatus">Sube reportes de crédito desde Archivos para extraer deudas automáticamente.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>
@@ -6025,6 +6679,43 @@
     </div>
   </div>
 
+  <!-- Modal de clasificaciï¿½n de archivo -->
+  <div id="fileMetaModal" class="file-meta-modal hidden" aria-hidden="true">
+    <div class="file-meta-modal-backdrop"></div>
+    <div class="file-meta-modal-content" role="dialog" aria-modal="true" aria-labelledby="fileMetaModalTitle">
+      <div class="file-meta-modal-header">
+        <h3 id="fileMetaModalTitle">Clasificar archivo</h3>
+        <p class="file-meta-modal-subtitle" id="fileMetaFileName">Archivo</p>
+      </div>
+      <form id="fileMetaForm" class="file-meta-modal-form">
+        <div class="file-meta-field">
+          <label for="fileDocType">Tipo de archivo</label>
+          <select id="fileDocType" required>
+            <option value="">Seleccionar tipo...</option>
+            <option value="official_document">Documento oficial</option>
+            <option value="credit_report">Reporte de crï¿½dito</option>
+            <option value="income_proof">Prueba de ingresos</option>
+            <option value="bank_statement">Estado de cuenta bancario</option>
+            <option value="contract">Contrato</option>
+            <option value="other">Otro</option>
+          </select>
+        </div>
+        <div class="file-meta-field hidden" id="fileCreditPartyWrap">
+          <label for="fileCreditParty">La deuda corresponde a</label>
+          <select id="fileCreditParty">
+            <option value="">Seleccionar parte...</option>
+            <option value="applicant">Applicant</option>
+            <option value="coapp">Co-Applicant</option>
+          </select>
+        </div>
+        <div class="file-meta-modal-actions">
+          <button type="button" class="file-meta-modal-btn" id="fileMetaCancelBtn">Cancelar</button>
+          <button type="submit" class="file-meta-modal-btn primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal para visualizar archivos -->
   <div id="fileViewerModal" class="file-viewer-modal hidden" aria-hidden="true">
     <div class="file-viewer-modal-backdrop" onclick="closeFileViewer()"></div>
@@ -6039,7 +6730,7 @@
         </button>
       </div>
       <div class="file-viewer-modal-body" id="fileViewerBody">
-        <!-- El contenido se carga dinámicamente -->
+        <!-- El contenido se carga dinÃ¡micamente -->
       </div>
       <div class="file-viewer-modal-footer">
         <button id="fileViewerDownloadBtn" class="file-viewer-btn primary">
@@ -6054,10 +6745,17 @@
     </div>
   </div>
 
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/tesseract.min.js"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260216q"></script>
+  <script src="client.js?v=20260217a"></script>
   <script src="quick-actions.js?v=20260216c"></script>
+  <script src="creditors-redesign.js?v=20260217k"></script>
 </body>
 </html>
+
+
+
+
 
 

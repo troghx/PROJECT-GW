@@ -670,6 +670,33 @@ BEGIN
   ALTER TABLE note_templates ALTER COLUMN content SET NOT NULL;
 END $$;
 -- Índices
+-- Creditors por lead (deudas importadas/manuales)
+CREATE TABLE IF NOT EXISTS lead_creditors (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  source_report VARCHAR(180),
+  creditor_name VARCHAR(180) NOT NULL,
+  original_creditor VARCHAR(180),
+  account_number VARCHAR(80),
+  account_status VARCHAR(80),
+  account_type VARCHAR(80),
+  debtor_party VARCHAR(16) NOT NULL DEFAULT 'applicant',
+  monthly_payment NUMERIC(12,2) NOT NULL DEFAULT 0,
+  balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  past_due NUMERIC(12,2) NOT NULL DEFAULT 0,
+  unpaid_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  credit_limit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  high_credit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  debt_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  is_included BOOLEAN NOT NULL DEFAULT TRUE,
+  notes TEXT,
+  raw_snapshot TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_creditors_lead_id ON lead_creditors (lead_id);
+CREATE INDEX IF NOT EXISTS idx_lead_creditors_lead_id_included ON lead_creditors (lead_id, is_included);
 CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_case_id ON leads (case_id);
 CREATE INDEX IF NOT EXISTS idx_leads_is_test ON leads (is_test);
@@ -685,6 +712,24 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'leads_case_id_seq') THEN
     CREATE SEQUENCE leads_case_id_seq START WITH 10001;
   END IF;
+END $$;
+
+DO $$
+BEGIN
+  -- Agregar debtor_party si no existe
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_creditors' AND column_name = 'debtor_party'
+  ) THEN
+    ALTER TABLE lead_creditors ADD COLUMN debtor_party VARCHAR(16) NOT NULL DEFAULT 'applicant';
+  END IF;
+
+  -- Normalizar valores posibles
+  UPDATE lead_creditors
+  SET debtor_party = CASE
+    WHEN lower(coalesce(debtor_party, '')) IN ('coapp', 'co-app', 'co_applicant', 'coapplicant') THEN 'coapp'
+    ELSE 'applicant'
+  END;
 END $$;
 
 
@@ -962,3 +1007,25 @@ INSERT INTO bank_routing_numbers (routing_number, bank_name, city, state) VALUES
 ('114000686', 'Wells Fargo Bank', 'Minneapolis', 'MN'),
 ('113000023', 'Bank of America', 'Houston', 'TX')
 ON CONFLICT (routing_number) DO NOTHING;
+
+-- ============================================
+-- MIGRACIONES: Nuevos campos para lead_creditors (Responsibility, Months Reviewed)
+-- ============================================
+DO $$
+BEGIN
+  -- Agregar responsibility si no existe
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'lead_creditors' AND column_name = 'responsibility'
+  ) THEN
+    ALTER TABLE lead_creditors ADD COLUMN responsibility VARCHAR(60);
+  END IF;
+
+  -- Agregar months_reviewed si no existe
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'lead_creditors' AND column_name = 'months_reviewed'
+  ) THEN
+    ALTER TABLE lead_creditors ADD COLUMN months_reviewed INTEGER;
+  END IF;
+END $$;

@@ -1,0 +1,703 @@
+/* ============================================
+   CREDITORS COMPACT - VERSIÃ“N CORREGIDA
+   Orden: Nombre | Deuda | Cuenta | Resp | Status | Tipo | Meses | Vencido
+   ============================================ */
+
+.creditors-glass-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+/* Header compacto */
+.creditors-header-glass {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  backdrop-filter: blur(45px);
+}
+
+/* Summary chips */
+.creditors-summary-cards {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1 1 620px;
+}
+
+.creditor-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.creditor-summary-card.debt-total {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.06));
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.creditor-summary-card.included-amount {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(22, 163, 74, 0.04));
+  border-color: rgba(34, 197, 94, 0.15);
+}
+
+.creditor-summary-card.applicant-debt {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.11), rgba(2, 132, 199, 0.04));
+  border-color: rgba(14, 165, 233, 0.22);
+}
+
+.creditor-summary-card.coapp-debt {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.11), rgba(217, 119, 6, 0.04));
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.creditor-summary-card.past-due {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.03));
+  border-color: rgba(239, 68, 68, 0.12);
+}
+
+.summary-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.summary-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.creditor-summary-card.debt-total .summary-value { color: rgba(126, 234, 252, 0.95); }
+.creditor-summary-card.included-amount .summary-value { color: rgba(74, 222, 128, 0.95); }
+.creditor-summary-card.applicant-debt .summary-value { color: rgba(103, 232, 249, 0.95); }
+.creditor-summary-card.coapp-debt .summary-value { color: rgba(253, 224, 71, 0.95); }
+.creditor-summary-card.past-due .summary-value { color: rgba(248, 113, 113, 0.95); }
+
+/* Import area */
+.creditors-import-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+/* Tabs */
+.import-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.import-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.import-tab svg { width: 14px; height: 14px; }
+.import-tab:hover { color: rgba(255, 255, 255, 0.8); }
+.import-tab.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: rgba(126, 234, 252, 0.95);
+}
+
+.import-panel.hidden { display: none; }
+
+/* Upload zone */
+.upload-zone {
+  position: relative;
+  padding: 28px 20px;
+  border: 1px dashed rgba(126, 234, 252, 0.2);
+  border-radius: 10px;
+  background: rgba(126, 234, 252, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-zone:hover {
+  border-color: rgba(126, 234, 252, 0.4);
+  background: rgba(126, 234, 252, 0.04);
+}
+
+.upload-zone-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.upload-icon { width: 22px; height: 22px; color: rgba(126, 234, 252, 0.7); }
+.upload-text { margin: 0; font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); }
+.upload-link { color: rgba(126, 234, 252, 0.9); }
+.upload-hint { display: none; }
+
+/* Text input */
+.text-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.creditors-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  resize: vertical;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.analyze-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9));
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.analyze-btn svg { width: 14px; height: 14px; }
+
+/* Manual form */
+.manual-form {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.form-field label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.form-field input,
+.form-field select {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Status bar */
+.creditors-status-bar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  flex: 0 1 420px;
+  min-height: 0;
+}
+
+.status-text {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.status-text.success { color: rgba(74, 222, 128, 0.9); }
+.status-text.error { color: rgba(248, 113, 113, 0.9); }
+.status-text.loading { color: rgba(126, 234, 252, 0.9); }
+
+.status-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Buttons */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.85), rgba(37, 99, 235, 0.9));
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary svg { width: 12px; height: 12px; }
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-ghost svg { width: 12px; height: 12px; }
+
+/* Preview/Saved sections */
+.creditors-preview-section,
+.creditors-saved-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.creditors-preview-section.hidden { display: none; }
+
+.preview-header,
+.saved-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.preview-header h4,
+.saved-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.select-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.select-all-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== TABLA CON NUEVO ORDEN ===== */
+.creditors-table-container {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.creditors-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.creditors-table th {
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.creditors-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  vertical-align: middle;
+}
+
+.creditors-table tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.creditors-table tr.included {
+  background: rgba(34, 197, 94, 0.03);
+}
+
+.creditors-table tr.excluded {
+  opacity: 0.4;
+}
+
+/* ===== COLUMNAS - NUEVO ORDEN ===== */
+/* 1. Checkbox */
+.col-checkbox {
+  width: 32px;
+  text-align: center;
+  padding-left: 12px !important;
+}
+
+/* 2. NÃºmero */
+.col-num {
+  width: 28px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.7rem;
+}
+
+/* 3. Nombre del acreedor - PRIMERA IMPORTANTE */
+.col-name {
+  min-width: 180px;
+  max-width: 280px;
+}
+
+.creditor-name {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.82rem;
+}
+
+/* 4. Deuda - SEGUNDA IMPORTANTE */
+.col-debt {
+  width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: rgba(126, 234, 252, 0.95);
+  font-size: 0.85rem;
+}
+
+/* 5. Cuenta - TERCERA IMPORTANTE */
+.col-account {
+  width: 110px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.col-party {
+  width: 95px;
+  text-align: center;
+}
+
+/* 6. Responsibility */
+.col-resp {
+  width: 70px;
+  text-align: center;
+}
+
+/* 7. Status */
+.col-status {
+  width: 75px;
+  text-align: center;
+}
+
+/* 8. Tipo */
+.col-type {
+  width: 100px;
+}
+
+/* 9. Meses */
+.col-months {
+  width: 55px;
+  text-align: center;
+}
+
+/* 10. Vencido */
+.col-past-due {
+  width: 75px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(248, 113, 113, 0.8);
+  font-size: 0.75rem;
+}
+
+/* 11. Acciones */
+.col-actions {
+  width: 40px;
+  text-align: center;
+  padding-right: 12px !important;
+}
+
+/* Checkbox custom */
+.row-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: rgba(59, 130, 246, 0.8);
+  cursor: pointer;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1;
+}
+
+.badge-status-open {
+  background: rgba(34, 197, 94, 0.2);
+  color: rgba(74, 222, 128, 0.95);
+}
+
+.badge-status-closed {
+  background: rgba(148, 163, 184, 0.15);
+  color: rgba(203, 213, 225, 0.85);
+}
+
+.badge-status-chargeoff {
+  background: rgba(239, 68, 68, 0.2);
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.badge-status-collection {
+  background: rgba(249, 115, 22, 0.2);
+  color: rgba(251, 146, 60, 0.95);
+}
+
+.badge-type {
+  background: rgba(126, 234, 252, 0.12);
+  color: rgba(126, 234, 252, 0.9);
+}
+
+.badge-resp {
+  background: rgba(168, 85, 247, 0.15);
+  color: rgba(192, 132, 252, 0.9);
+}
+
+.badge-months {
+  background: rgba(245, 158, 11, 0.15);
+  color: rgba(251, 191, 36, 0.95);
+}
+
+.badge-party-applicant {
+  background: rgba(14, 165, 233, 0.2);
+  color: rgba(103, 232, 249, 0.95);
+}
+
+.badge-party-coapp {
+  background: rgba(245, 158, 11, 0.22);
+  color: rgba(254, 240, 138, 0.95);
+}
+
+/* BotÃ³n delete */
+.btn-delete {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.15);
+  color: rgba(248, 113, 113, 0.9);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* Empty status row */
+.empty-cell {
+  padding: 0 !important;
+}
+
+.creditors-empty-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.creditors-empty-status .status-text {
+  display: block;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .creditors-header-glass {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .creditors-summary-cards {
+    justify-content: flex-start;
+  }
+  
+  .manual-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .col-type,
+  .col-months {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .col-account,
+  .col-party,
+  .col-resp {
+    display: none;
+  }
+  
+  .manual-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tema claro */
+body.theme-light .creditors-header-glass,
+body.theme-light .creditors-import-area,
+body.theme-light .creditors-table-container {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .creditor-name {
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.theme-light .col-debt {
+  color: rgba(37, 99, 235, 0.95);
+}
+
+body.theme-light .creditors-table th {
+  background: rgba(241, 245, 249, 0.9);
+  color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .creditors-table td {
+  color: rgba(15, 23, 42, 0.8);
+  border-bottom-color: rgba(15, 23, 42, 0.06);
+}
+
+body.theme-light .col-account,
+body.theme-light .col-num {
+  color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .col-past-due {
+  color: rgba(220, 38, 38, 0.85);
+}
+
+body.theme-light .import-tab {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .import-tab.active {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+body.theme-light .form-field input,
+body.theme-light .form-field select,
+body.theme-light .creditors-textarea {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.85);
+}
+
+body.theme-light .upload-zone {
+  background: rgba(59, 130, 246, 0.02);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+body.theme-light .btn-secondary {
+  background: rgba(15, 23, 42, 0.05);
+  color: rgba(15, 23, 42, 0.75);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+body.theme-light .btn-ghost {
+  color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .status-text {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+

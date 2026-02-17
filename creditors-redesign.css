@@ -1,0 +1,891 @@
+/* ============================================
+   CREDITORS REDISEÑO - LIQUID GLASS UI
+   ============================================ */
+
+/* Contenedor principal */
+.creditors-glass-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+}
+
+/* Header glass */
+.creditors-header-glass {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: start;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  backdrop-filter: blur(45px);
+  -webkit-backdrop-filter: blur(45px);
+}
+
+.creditors-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.creditors-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.creditors-title svg {
+  width: 28px;
+  height: 28px;
+  color: rgba(126, 234, 252, 0.9);
+}
+
+.creditors-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Summary Cards */
+.creditors-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  min-width: 480px;
+}
+
+.creditor-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  transition: all 0.25s ease;
+}
+
+.creditor-summary-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(126, 234, 252, 0.3);
+  transform: translateY(-2px);
+}
+
+.creditor-summary-card.debt-total {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.08));
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.creditor-summary-card.included-amount {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(22, 163, 74, 0.06));
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.creditor-summary-card.past-due {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.summary-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.summary-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.creditor-summary-card.debt-total .summary-value {
+  color: rgba(126, 234, 252, 0.95);
+}
+
+.creditor-summary-card.included-amount .summary-value {
+  color: rgba(74, 222, 128, 0.95);
+}
+
+.creditor-summary-card.past-due .summary-value {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+/* Área de importación */
+.creditors-import-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+}
+
+/* Tabs */
+.import-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 14px;
+  width: fit-content;
+}
+
+.import-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.import-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.import-tab:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.import-tab.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: rgba(126, 234, 252, 0.95);
+  border: 1px solid rgba(126, 234, 252, 0.3);
+}
+
+/* Panels */
+.import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.import-panel.hidden {
+  display: none;
+}
+
+/* Upload Zone */
+.upload-zone {
+  position: relative;
+  padding: 48px 32px;
+  border: 2px dashed rgba(126, 234, 252, 0.25);
+  border-radius: 16px;
+  background: rgba(126, 234, 252, 0.03);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.upload-zone:hover {
+  border-color: rgba(126, 234, 252, 0.5);
+  background: rgba(126, 234, 252, 0.06);
+}
+
+.upload-zone.dragover {
+  border-color: rgba(126, 234, 252, 0.8);
+  background: rgba(126, 234, 252, 0.1);
+  transform: scale(1.01);
+}
+
+.upload-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.upload-icon {
+  width: 48px;
+  height: 48px;
+  color: rgba(126, 234, 252, 0.7);
+}
+
+.upload-text {
+  margin: 0;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.upload-link {
+  color: rgba(126, 234, 252, 0.9);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.upload-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Text Input Area */
+.text-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.creditors-textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  transition: all 0.2s ease;
+}
+
+.creditors-textarea:focus {
+  outline: none;
+  border-color: rgba(126, 234, 252, 0.5);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.creditors-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.analyze-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9));
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.analyze-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
+}
+
+.analyze-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Form Manual */
+.manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+
+.form-field input,
+.form-field select {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: rgba(126, 234, 252, 0.5);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.form-field input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Status Bar */
+.creditors-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+}
+
+.status-text {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.status-text.success {
+  color: rgba(74, 222, 128, 0.9);
+}
+
+.status-text.error {
+  color: rgba(248, 113, 113, 0.9);
+}
+
+.status-text.loading {
+  color: rgba(126, 234, 252, 0.9);
+}
+
+.status-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Botones */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.85), rgba(37, 99, 235, 0.9));
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.btn-ghost svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Preview Section */
+.creditors-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.creditors-preview-section.hidden {
+  display: none;
+}
+
+.preview-header,
+.saved-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.preview-header h4,
+.saved-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.select-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.select-all-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: rgba(59, 130, 246, 0.8);
+  cursor: pointer;
+}
+
+/* Grid de Cards */
+.creditors-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.creditors-cards-grid.saved {
+  min-height: 200px;
+}
+
+/* Creditor Card */
+.creditor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.creditor-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(126, 234, 252, 0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.creditor-card.included {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(22, 163, 74, 0.02));
+}
+
+.creditor-card.excluded {
+  opacity: 0.65;
+}
+
+.creditor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.creditor-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.creditor-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.creditor-account {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.creditor-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.active {
+  background: rgba(34, 197, 94, 0.6);
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.active::after {
+  transform: translateX(20px);
+}
+
+.creditor-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-status-open {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgba(74, 222, 128, 0.9);
+}
+
+.badge-status-closed {
+  background: rgba(148, 163, 184, 0.15);
+  color: rgba(203, 213, 225, 0.9);
+}
+
+.badge-status-chargeoff {
+  background: rgba(239, 68, 68, 0.15);
+  color: rgba(248, 113, 113, 0.9);
+}
+
+.badge-status-collection {
+  background: rgba(249, 115, 22, 0.15);
+  color: rgba(251, 146, 60, 0.9);
+}
+
+.badge-type {
+  background: rgba(126, 234, 252, 0.12);
+  color: rgba(126, 234, 252, 0.85);
+}
+
+.badge-responsibility {
+  background: rgba(168, 85, 247, 0.12);
+  color: rgba(192, 132, 252, 0.85);
+}
+
+.badge-months {
+  background: rgba(245, 158, 11, 0.12);
+  color: rgba(251, 191, 36, 0.85);
+}
+
+.creditor-amounts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+}
+
+.amount-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.amount-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.amount-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-value.debt {
+  color: rgba(126, 234, 252, 0.95);
+}
+
+.amount-value.past-due {
+  color: rgba(248, 113, 113, 0.9);
+}
+
+.creditor-card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.btn-card {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-card.delete {
+  border-color: rgba(239, 68, 68, 0.2);
+  color: rgba(248, 113, 113, 0.85);
+}
+
+.btn-card.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px;
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+}
+
+.empty-state svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.4;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.empty-state span {
+  font-size: 0.85rem;
+}
+
+/* Saved Section */
+.creditors-saved-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+}
+
+.saved-header {
+  padding: 0;
+}
+
+.saved-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .creditors-header-glass {
+    grid-template-columns: 1fr;
+  }
+  
+  .creditors-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+    min-width: unset;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .creditors-glass-container {
+    padding: 16px;
+  }
+  
+  .creditors-summary-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .creditors-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .status-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .creditors-status-bar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+}
+
+/* Tema Claro */
+body.theme-light .creditors-header-glass,
+body.theme-light .creditors-import-area,
+body.theme-light .creditors-saved-section,
+body.theme-light .creditor-card,
+body.theme-light .creditors-status-bar {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .creditors-title,
+body.theme-light .creditor-name {
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.theme-light .creditors-subtitle,
+body.theme-light .amount-label,
+body.theme-light .creditor-account {
+  color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .summary-label {
+  color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .summary-value {
+  color: rgba(15, 23, 42, 0.95);
+}
+
+body.theme-light .import-tab {
+  color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .import-tab.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+body.theme-light .form-field input,
+body.theme-light .form-field select,
+body.theme-light .creditors-textarea {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.theme-light .upload-zone {
+  background: rgba(59, 130, 246, 0.03);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+body.theme-light .btn-secondary {
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.8);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+body.theme-light .btn-ghost {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .empty-state {
+  color: rgba(15, 23, 42, 0.4);
+}
+
+body.theme-light .empty-state p {
+  color: rgba(15, 23, 42, 0.6);
+}

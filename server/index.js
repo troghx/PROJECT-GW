@@ -15,7 +15,7 @@ const ADMIN_USER = 'admin';
 const ADMIN_PASSWORD = '1234';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '4mb' }));
 app.use(express.static(ROOT_DIR));
 
 // Lista de estados Green (los demas son Red)
@@ -36,6 +36,9 @@ const VALID_STATE_CODES = new Set([
 const ZIP_LOOKUP_TIMEOUT_MS = 5000;
 const ZIP_LOOKUP_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 const zipLookupCache = new Map();
+const CREDIT_REPORT_AI_TIMEOUT_MS = 25000;
+const CREDIT_REPORT_AI_MAX_TEXT_CHARS = 120000;
+const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
 
 const LEAD_SELECT_COLUMNS = `
   id, case_id, full_name, co_applicant_name, co_applicant_email, co_applicant_home_phone, co_applicant_cell_phone, co_applicant_dob, co_applicant_ssn,
@@ -581,6 +584,379 @@ function parseLeadPatchBody(body = {}) {
   }
 
   return { ok: true, changes };
+}
+
+function parsePositiveInteger(value) {
+  const normalized = Number(value);
+  if (!Number.isInteger(normalized) || normalized <= 0) return null;
+  return normalized;
+}
+
+function normalizeOptionalMoney(value, fieldName) {
+  if (value === undefined) return { ok: true, provided: false, value: 0 };
+  const normalized = normalizeMoney(value, fieldName);
+  if (!normalized.ok) return normalized;
+  return { ok: true, provided: true, value: normalized.value };
+}
+
+function normalizeOptionalBoolean(value, fieldName) {
+  if (value === undefined) return { ok: true, provided: false, value: false };
+  const normalized = normalizeBoolean(value, fieldName);
+  if (!normalized.ok) return normalized;
+  return { ok: true, provided: true, value: normalized.value };
+}
+
+function computeCreditorDebtAmount({ debtAmount, unpaidBalance, pastDue, balance }) {
+  if (Number.isFinite(debtAmount) && debtAmount >= 0) {
+    return Number(debtAmount.toFixed(2));
+  }
+  const candidates = [unpaidBalance, pastDue, balance]
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  if (!candidates.length) return 0;
+  return Number(Math.max(...candidates).toFixed(2));
+}
+
+function normalizeMonthsReviewed(value) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { ok: true, value: null };
+  }
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0 || num > 999) {
+    return { ok: false, message: 'monthsReviewed debe ser un entero entre 0 y 999.' };
+  }
+  return { ok: true, value: num };
+}
+
+function normalizeResponsibility(value) {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  const text = String(value).trim();
+  if (!text) return { ok: true, value: null };
+  const normalized = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+  return { ok: true, value: normalized.slice(0, 60) };
+}
+
+function extractFirstJsonBlock(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch && fencedMatch[1]) return fencedMatch[1].trim();
+
+  const arrayStart = raw.indexOf('[');
+  const objectStart = raw.indexOf('{');
+
+  let start = -1;
+  if (arrayStart >= 0 && objectStart >= 0) start = Math.min(arrayStart, objectStart);
+  else if (arrayStart >= 0) start = arrayStart;
+  else if (objectStart >= 0) start = objectStart;
+  if (start < 0) return raw;
+
+  let end = Math.max(raw.lastIndexOf(']'), raw.lastIndexOf('}'));
+  if (end <= start) return raw.slice(start);
+
+  return raw.slice(start, end + 1).trim();
+}
+
+function parseAiJsonResponse(text) {
+  const candidate = extractFirstJsonBlock(text);
+  if (!candidate) return null;
+
+  try {
+    return JSON.parse(candidate);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function normalizeAiMoneyValue(value) {
+  if (value === undefined || value === null) return 0;
+  const normalized = Number(String(value).replace(/[^0-9.-]/g, ''));
+  if (!Number.isFinite(normalized) || normalized < 0) return 0;
+  return Number(normalized.toFixed(2));
+}
+
+function normalizeAiMonthsReviewed(value) {
+  if (value === undefined || value === null) return null;
+
+  const candidates = [];
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      const num = Number(item);
+      if (Number.isInteger(num) && num >= 0 && num <= 999) candidates.push(num);
+    });
+  } else {
+    const text = String(value);
+    const matches = text.match(/\d+/g) || [];
+    matches.forEach((match) => {
+      const num = Number(match);
+      if (Number.isInteger(num) && num >= 0 && num <= 999) candidates.push(num);
+    });
+  }
+
+  if (!candidates.length) return null;
+  return Math.min(...candidates);
+}
+
+function normalizeAiCreditorEntry(entry, sourceReport) {
+  if (!entry || typeof entry !== 'object') return null;
+
+  const creditorName = toNullableText(
+    pickFirstDefined(entry, ['creditorName', 'creditor', 'name', 'creditor_name']),
+    180
+  );
+  if (!creditorName) return null;
+
+  const debtAmount = normalizeAiMoneyValue(
+    pickFirstDefined(entry, ['debtAmount', 'latestDebt', 'recentDebt', 'balance', 'debt_amount'])
+  );
+
+  return {
+    sourceReport,
+    creditorName,
+    accountNumber: toNullableText(pickFirstDefined(entry, ['accountNumber', 'account', 'accountNo', 'account_number']), 80),
+    accountStatus: toNullableText(pickFirstDefined(entry, ['accountStatus', 'status', 'account_status']), 80),
+    accountType: toNullableText(pickFirstDefined(entry, ['accountType', 'type', 'account_type']), 80),
+    responsibility: toNullableText(pickFirstDefined(entry, ['responsibility', 'responsability']), 60),
+    monthsReviewed: normalizeAiMonthsReviewed(pickFirstDefined(entry, ['monthsReviewed', 'months_reviewed', 'months'])),
+    debtAmount,
+    pastDue: normalizeAiMoneyValue(pickFirstDefined(entry, ['pastDue', 'past_due'])),
+    isIncluded: debtAmount > 0
+  };
+}
+
+async function analyzeCreditReportWithGemini({ text, sourceReport }) {
+  const apiKey = toNullableText(process.env.GEMINI_API_KEY, 300);
+  if (!apiKey) {
+    const error = new Error('GEMINI_API_KEY no esta configurada.');
+    error.code = 'AI_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const boundedText = String(text || '').slice(0, CREDIT_REPORT_AI_MAX_TEXT_CHARS);
+  const prompt = [
+    'Extrae cuentas de un reporte de credito y responde SOLO JSON valido.',
+    'Devuelve este formato exacto:',
+    '{"creditors":[{"creditorName":"","debtAmount":0,"accountNumber":"","accountStatus":"","accountType":"","responsibility":"","monthsReviewed":null,"pastDue":0}]}',
+    '',
+    'Reglas:',
+    '- No inventes datos. Si falta algo usa null o "".',
+    '- debtAmount = deuda mas reciente/actual para esa cuenta (current balance, unpaid balance, amount due o equivalente).',
+    '- monthsReviewed: si hay multiples valores posibles para la misma cuenta, usar SIEMPRE el menor entero.',
+    '- Debe salir una fila por cuenta detectada.',
+    '- Mantener texto original para accountStatus/accountType/responsibility, sin traducir ni expandir.',
+    '',
+    `sourceReport: ${sourceReport || 'Reporte'}`,
+    '--- BEGIN CREDIT REPORT TEXT ---',
+    boundedText,
+    '--- END CREDIT REPORT TEXT ---'
+  ].join('\n');
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(CREDIT_REPORT_AI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CREDIT_REPORT_AI_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json'
+        }
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('La solicitud a IA excedio el tiempo limite.');
+      timeoutError.code = 'AI_TIMEOUT';
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const details = payload?.error?.message || `HTTP ${response.status}`;
+    throw new Error(`Fallo IA: ${details}`);
+  }
+
+  const candidateText = (payload?.candidates || [])
+    .flatMap((candidate) => candidate?.content?.parts || [])
+    .map((part) => part?.text || '')
+    .find((value) => String(value || '').trim().length > 0) || '';
+
+  const parsed = parseAiJsonResponse(candidateText);
+  if (!parsed) {
+    throw new Error('La IA no devolvio JSON valido para creditors.');
+  }
+
+  const rawEntries = Array.isArray(parsed?.creditors)
+    ? parsed.creditors
+    : (Array.isArray(parsed) ? parsed : []);
+
+  return rawEntries
+    .map((entry) => normalizeAiCreditorEntry(entry, sourceReport))
+    .filter(Boolean);
+}
+
+function normalizeDebtorParty(value) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { ok: true, value: 'applicant' };
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['applicant', 'main', 'primary'].includes(normalized)) {
+    return { ok: true, value: 'applicant' };
+  }
+
+  if (['coapp', 'co-app', 'co_applicant', 'coapplicant', 'co applicant', 'co'].includes(normalized)) {
+    return { ok: true, value: 'coapp' };
+  }
+
+  return { ok: false, message: 'debtorParty debe ser applicant o coapp.' };
+}
+
+function normalizeCreditorPayload(body = {}) {
+  const creditorName = toNullableText(pickFirstDefined(body, ['creditorName', 'creditor_name']), 180);
+  if (!creditorName) {
+    return { ok: false, message: 'creditorName es obligatorio.' };
+  }
+
+  const monthlyPayment = normalizeMoney(pickFirstDefined(body, ['monthlyPayment', 'monthly_payment']), 'monthlyPayment');
+  if (!monthlyPayment.ok) return monthlyPayment;
+  const balance = normalizeMoney(pickFirstDefined(body, ['balance']), 'balance');
+  if (!balance.ok) return balance;
+  const pastDue = normalizeMoney(pickFirstDefined(body, ['pastDue', 'past_due']), 'pastDue');
+  if (!pastDue.ok) return pastDue;
+  const unpaidBalance = normalizeMoney(pickFirstDefined(body, ['unpaidBalance', 'unpaid_balance']), 'unpaidBalance');
+  if (!unpaidBalance.ok) return unpaidBalance;
+  const creditLimit = normalizeMoney(pickFirstDefined(body, ['creditLimit', 'credit_limit']), 'creditLimit');
+  if (!creditLimit.ok) return creditLimit;
+  const highCredit = normalizeMoney(pickFirstDefined(body, ['highCredit', 'high_credit']), 'highCredit');
+  if (!highCredit.ok) return highCredit;
+
+  const debtAmountInput = normalizeOptionalMoney(pickFirstDefined(body, ['debtAmount', 'debt_amount']), 'debtAmount');
+  if (!debtAmountInput.ok) return debtAmountInput;
+
+  const included = normalizeOptionalBoolean(pickFirstDefined(body, ['isIncluded', 'is_included']), 'isIncluded');
+  if (!included.ok) return included;
+  
+  const monthsReviewed = normalizeMonthsReviewed(pickFirstDefined(body, ['monthsReviewed', 'months_reviewed']));
+  if (!monthsReviewed.ok) return monthsReviewed;
+  
+  const responsibility = normalizeResponsibility(pickFirstDefined(body, ['responsibility']));
+  if (!responsibility.ok) return responsibility;
+
+  const debtorParty = normalizeDebtorParty(pickFirstDefined(body, ['debtorParty', 'debtor_party']));
+  if (!debtorParty.ok) return debtorParty;
+
+  return {
+    ok: true,
+    value: {
+      source_report: toNullableText(pickFirstDefined(body, ['sourceReport', 'source_report']), 180),
+      creditor_name: creditorName,
+      original_creditor: toNullableText(pickFirstDefined(body, ['originalCreditor', 'original_creditor']), 180),
+      account_number: toNullableText(pickFirstDefined(body, ['accountNumber', 'account_number']), 80),
+      account_status: toNullableText(pickFirstDefined(body, ['accountStatus', 'account_status']), 80),
+      account_type: toNullableText(pickFirstDefined(body, ['accountType', 'account_type']), 80),
+      debtor_party: debtorParty.value,
+      responsibility: responsibility.value,
+      months_reviewed: monthsReviewed.value,
+      monthly_payment: monthlyPayment.value,
+      balance: balance.value,
+      past_due: pastDue.value,
+      unpaid_balance: unpaidBalance.value,
+      credit_limit: creditLimit.value,
+      high_credit: highCredit.value,
+      debt_amount: computeCreditorDebtAmount({
+        debtAmount: debtAmountInput.provided ? debtAmountInput.value : undefined,
+        unpaidBalance: unpaidBalance.value,
+        pastDue: pastDue.value,
+        balance: balance.value
+      }),
+      is_included: included.provided ? included.value : true,
+      notes: toNullableText(pickFirstDefined(body, ['notes']), 3000),
+      raw_snapshot: toNullableText(pickFirstDefined(body, ['rawSnapshot', 'raw_snapshot']), 12000)
+    }
+  };
+}
+
+function parseDbMoney(value) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return 0;
+  return Number(normalized.toFixed(2));
+}
+
+function mapCreditorRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    monthly_payment: parseDbMoney(row.monthly_payment),
+    balance: parseDbMoney(row.balance),
+    past_due: parseDbMoney(row.past_due),
+    unpaid_balance: parseDbMoney(row.unpaid_balance),
+    credit_limit: parseDbMoney(row.credit_limit),
+    high_credit: parseDbMoney(row.high_credit),
+    debt_amount: parseDbMoney(row.debt_amount),
+    is_included: Boolean(row.is_included),
+    debtor_party: normalizeDebtorParty(row.debtor_party).value,
+    responsibility: row.responsibility || null,
+    months_reviewed: row.months_reviewed !== null ? parseInt(row.months_reviewed, 10) : null
+  };
+}
+
+async function ensureLeadExists(leadId) {
+  const { rows } = await pool.query(
+    'SELECT id FROM leads WHERE id = $1 LIMIT 1',
+    [leadId]
+  );
+  return rows.length > 0;
+}
+
+async function getLeadCreditorsSummary(leadId) {
+  const { rows } = await pool.query(
+    `SELECT
+       COUNT(*)::INTEGER AS total_count,
+       COUNT(*) FILTER (WHERE is_included)::INTEGER AS included_count,
+       COALESCE(SUM(debt_amount), 0) AS total_debt,
+       COALESCE(SUM(debt_amount) FILTER (WHERE is_included), 0) AS included_debt,
+       COALESCE(SUM(past_due) FILTER (WHERE is_included), 0) AS included_past_due
+     FROM lead_creditors
+     WHERE lead_id = $1`,
+    [leadId]
+  );
+
+  const summary = rows[0] || {};
+  return {
+    totalCount: Number(summary.total_count || 0),
+    includedCount: Number(summary.included_count || 0),
+    totalDebt: parseDbMoney(summary.total_debt),
+    includedDebt: parseDbMoney(summary.included_debt),
+    includedPastDue: parseDbMoney(summary.included_past_due)
+  };
+}
+
+function buildCreditorFingerprint(creditor) {
+  const debtorParty = normalizeDebtorParty(creditor.debtor_party).value;
+  const creditorName = String(creditor.creditor_name || '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  const accountNumber = String(creditor.account_number || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/X+/g, '');
+  const debt = parseDbMoney(creditor.debt_amount).toFixed(2);
+  return `${debtorParty}|${creditorName}|${accountNumber}|${debt}`;
 }
 
 async function runMigrations() {
@@ -1247,6 +1623,463 @@ app.delete('/api/leads/:id', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: AI CREDIT REPORT ANALYZER
+// ============================================
+
+app.post('/api/creditors/analyze-report', async (req, res) => {
+  const sourceReport = toNullableText(req.body?.sourceReport || req.body?.sourceName, 180) || 'Reporte';
+  const reportText = String(req.body?.text || '');
+
+  if (reportText.trim().length < 80) {
+    return res.status(400).json({ message: 'El texto del reporte es insuficiente para analisis.' });
+  }
+
+  try {
+    const creditors = await analyzeCreditReportWithGemini({
+      text: reportText,
+      sourceReport
+    });
+
+    return res.json({
+      creditors,
+      count: creditors.length,
+      source: 'gemini'
+    });
+  } catch (error) {
+    if (error.code === 'AI_NOT_CONFIGURED') {
+      return res.status(503).json({ message: 'IA no configurada: falta GEMINI_API_KEY.' });
+    }
+    if (error.code === 'AI_TIMEOUT') {
+      return res.status(504).json({ message: error.message || 'Tiempo de espera agotado en analisis IA.' });
+    }
+
+    console.error('Error analizando reporte de credito con IA:', error);
+    return res.status(500).json({ message: error.message || 'Error analizando reporte con IA.' });
+  }
+});
+
+// ============================================
+// ENDPOINTS: CREDITORS
+// ============================================
+
+app.get('/api/leads/:id/creditors', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  try {
+    const leadExists = await ensureLeadExists(leadId);
+    if (!leadExists) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         id, lead_id, source_report, creditor_name, original_creditor, account_number,
+         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         monthly_payment, balance, past_due, unpaid_balance,
+         credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
+         created_at, updated_at
+       FROM lead_creditors
+       WHERE lead_id = $1
+       ORDER BY created_at DESC, id DESC`,
+      [leadId]
+    );
+
+    const summary = await getLeadCreditorsSummary(leadId);
+    return res.json({ creditors: rows.map(mapCreditorRow), summary });
+  } catch (error) {
+    console.error('Error al obtener creditors:', error);
+    return res.status(500).json({ message: 'Error al obtener creditors.' });
+  }
+});
+
+app.post('/api/leads/:id/creditors', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  const normalizedCreditor = normalizeCreditorPayload(req.body || {});
+  if (!normalizedCreditor.ok) {
+    return res.status(400).json({ message: normalizedCreditor.message });
+  }
+
+  try {
+    const leadExists = await ensureLeadExists(leadId);
+    if (!leadExists) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const payload = normalizedCreditor.value;
+    const { rows } = await pool.query(
+      `INSERT INTO lead_creditors (
+         lead_id, source_report, creditor_name, original_creditor, account_number,
+         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         monthly_payment, balance, past_due, unpaid_balance,
+         credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
+       ) VALUES (
+         $1, $2, $3, $4, $5,
+         $6, $7, $8, $9, $10,
+         $11, $12, $13, $14,
+         $15, $16, $17, $18, $19, $20
+       )
+       RETURNING
+         id, lead_id, source_report, creditor_name, original_creditor, account_number,
+         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         monthly_payment, balance, past_due, unpaid_balance,
+         credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
+         created_at, updated_at`,
+      [
+        leadId,
+        payload.source_report,
+        payload.creditor_name,
+        payload.original_creditor,
+        payload.account_number,
+        payload.account_status,
+        payload.account_type,
+        payload.debtor_party,
+        payload.responsibility,
+        payload.months_reviewed,
+        payload.monthly_payment,
+        payload.balance,
+        payload.past_due,
+        payload.unpaid_balance,
+        payload.credit_limit,
+        payload.high_credit,
+        payload.debt_amount,
+        payload.is_included,
+        payload.notes,
+        payload.raw_snapshot
+      ]
+    );
+
+    const summary = await getLeadCreditorsSummary(leadId);
+    return res.status(201).json({
+      creditor: mapCreditorRow(rows[0]),
+      summary,
+      message: 'Creditor agregado correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al crear creditor:', error);
+    return res.status(500).json({ message: 'Error al crear creditor.' });
+  }
+});
+
+app.post('/api/leads/:id/creditors/import', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  const entries = Array.isArray(req.body?.entries) ? req.body.entries : null;
+  if (!entries || entries.length === 0) {
+    return res.status(400).json({ message: 'entries debe contener al menos un registro.' });
+  }
+  if (entries.length > 500) {
+    return res.status(400).json({ message: 'entries excede el maximo permitido (500).' });
+  }
+
+  const replaceExisting = req.body?.replaceExisting === true;
+  const normalizedEntries = [];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const normalized = normalizeCreditorPayload(entries[index] || {});
+    if (!normalized.ok) {
+      return res.status(400).json({ message: `Registro ${index + 1}: ${normalized.message}` });
+    }
+    normalizedEntries.push(normalized.value);
+  }
+
+  try {
+    const leadExists = await ensureLeadExists(leadId);
+    if (!leadExists) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    await pool.query('BEGIN');
+
+    if (replaceExisting) {
+      await pool.query('DELETE FROM lead_creditors WHERE lead_id = $1', [leadId]);
+    }
+
+    const existingFingerprintSet = new Set();
+    if (!replaceExisting) {
+      const { rows: existingRows } = await pool.query(
+        `SELECT creditor_name, account_number, debt_amount, debtor_party
+         FROM lead_creditors
+         WHERE lead_id = $1`,
+        [leadId]
+      );
+      existingRows.forEach((row) => existingFingerprintSet.add(buildCreditorFingerprint(row)));
+    }
+
+    const insertedRows = [];
+    let skippedCount = 0;
+
+    for (const entry of normalizedEntries) {
+      const fingerprint = buildCreditorFingerprint(entry);
+      if (existingFingerprintSet.has(fingerprint)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const { rows } = await pool.query(
+        `INSERT INTO lead_creditors (
+           lead_id, source_report, creditor_name, original_creditor, account_number,
+           account_status, account_type, debtor_party, responsibility, months_reviewed,
+           monthly_payment, balance, past_due, unpaid_balance,
+           credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
+         ) VALUES (
+           $1, $2, $3, $4, $5,
+           $6, $7, $8, $9, $10,
+           $11, $12, $13, $14,
+           $15, $16, $17, $18, $19, $20
+         )
+         RETURNING
+           id, lead_id, source_report, creditor_name, original_creditor, account_number,
+           account_status, account_type, debtor_party, responsibility, months_reviewed,
+           monthly_payment, balance, past_due, unpaid_balance,
+           credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
+           created_at, updated_at`,
+        [
+          leadId,
+          entry.source_report,
+          entry.creditor_name,
+          entry.original_creditor,
+          entry.account_number,
+          entry.account_status,
+          entry.account_type,
+          entry.debtor_party,
+          entry.responsibility,
+          entry.months_reviewed,
+          entry.monthly_payment,
+          entry.balance,
+          entry.past_due,
+          entry.unpaid_balance,
+          entry.credit_limit,
+          entry.high_credit,
+          entry.debt_amount,
+          entry.is_included,
+          entry.notes,
+          entry.raw_snapshot
+        ]
+      );
+
+      insertedRows.push(rows[0]);
+      existingFingerprintSet.add(fingerprint);
+    }
+
+    await pool.query('COMMIT');
+    const summary = await getLeadCreditorsSummary(leadId);
+
+    return res.status(201).json({
+      created: insertedRows.map(mapCreditorRow),
+      createdCount: insertedRows.length,
+      skippedCount,
+      summary,
+      message: 'Importacion de creditors completada.'
+    });
+  } catch (error) {
+    try {
+      await pool.query('ROLLBACK');
+    } catch (_rollbackError) {
+      // ignore rollback secondary errors
+    }
+    console.error('Error al importar creditors:', error);
+    return res.status(500).json({ message: 'Error al importar creditors.' });
+  }
+});
+
+app.patch('/api/leads/:id/creditors/:creditorId', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  const creditorId = parsePositiveInteger(req.params.creditorId);
+  if (!leadId || !creditorId) {
+    return res.status(400).json({ message: 'ID invalido.' });
+  }
+
+  try {
+    const { rows: existingRows } = await pool.query(
+      `SELECT
+         id, lead_id, source_report, creditor_name, original_creditor, account_number,
+         account_status, account_type, debtor_party, monthly_payment, balance, past_due, unpaid_balance,
+         credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
+       FROM lead_creditors
+       WHERE id = $1 AND lead_id = $2
+       LIMIT 1`,
+      [creditorId, leadId]
+    );
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({ message: 'Creditor no encontrado para este lead.' });
+    }
+
+    const existing = mapCreditorRow(existingRows[0]);
+    const body = req.body || {};
+    const updates = [];
+    const values = [];
+
+    function pushUpdate(column, value) {
+      updates.push(`${column} = $${updates.length + 1}`);
+      values.push(value);
+    }
+
+    const textFieldMappings = [
+      { keys: ['sourceReport', 'source_report'], column: 'source_report', maxLength: 180 },
+      { keys: ['creditorName', 'creditor_name'], column: 'creditor_name', maxLength: 180 },
+      { keys: ['originalCreditor', 'original_creditor'], column: 'original_creditor', maxLength: 180 },
+      { keys: ['accountNumber', 'account_number'], column: 'account_number', maxLength: 80 },
+      { keys: ['accountStatus', 'account_status'], column: 'account_status', maxLength: 80 },
+      { keys: ['accountType', 'account_type'], column: 'account_type', maxLength: 80 },
+      { keys: ['responsibility'], column: 'responsibility', maxLength: 60 },
+      { keys: ['notes'], column: 'notes', maxLength: 3000 },
+      { keys: ['rawSnapshot', 'raw_snapshot'], column: 'raw_snapshot', maxLength: 12000 }
+    ];
+
+    for (const mapping of textFieldMappings) {
+      const rawValue = pickFirstDefined(body, mapping.keys);
+      if (rawValue !== undefined) {
+        const normalizedValue = toNullableText(rawValue, mapping.maxLength);
+        if (mapping.column === 'creditor_name' && !normalizedValue) {
+          return res.status(400).json({ message: 'creditorName no puede estar vacio.' });
+        }
+        pushUpdate(mapping.column, normalizedValue);
+      }
+    }
+
+    const debtorPartyRaw = pickFirstDefined(body, ['debtorParty', 'debtor_party']);
+    if (debtorPartyRaw !== undefined) {
+      const debtorParty = normalizeDebtorParty(debtorPartyRaw);
+      if (!debtorParty.ok) return res.status(400).json({ message: debtorParty.message });
+      pushUpdate('debtor_party', debtorParty.value);
+    }
+
+    const nextAmounts = {
+      balance: existing.balance,
+      past_due: existing.past_due,
+      unpaid_balance: existing.unpaid_balance
+    };
+    let amountFieldUpdated = false;
+
+    const monthlyPayment = normalizeOptionalMoney(pickFirstDefined(body, ['monthlyPayment', 'monthly_payment']), 'monthlyPayment');
+    if (!monthlyPayment.ok) return res.status(400).json({ message: monthlyPayment.message });
+    if (monthlyPayment.provided) pushUpdate('monthly_payment', monthlyPayment.value);
+
+    const balance = normalizeOptionalMoney(pickFirstDefined(body, ['balance']), 'balance');
+    if (!balance.ok) return res.status(400).json({ message: balance.message });
+    if (balance.provided) {
+      nextAmounts.balance = balance.value;
+      amountFieldUpdated = true;
+      pushUpdate('balance', balance.value);
+    }
+
+    const pastDue = normalizeOptionalMoney(pickFirstDefined(body, ['pastDue', 'past_due']), 'pastDue');
+    if (!pastDue.ok) return res.status(400).json({ message: pastDue.message });
+    if (pastDue.provided) {
+      nextAmounts.past_due = pastDue.value;
+      amountFieldUpdated = true;
+      pushUpdate('past_due', pastDue.value);
+    }
+
+    const unpaidBalance = normalizeOptionalMoney(pickFirstDefined(body, ['unpaidBalance', 'unpaid_balance']), 'unpaidBalance');
+    if (!unpaidBalance.ok) return res.status(400).json({ message: unpaidBalance.message });
+    if (unpaidBalance.provided) {
+      nextAmounts.unpaid_balance = unpaidBalance.value;
+      amountFieldUpdated = true;
+      pushUpdate('unpaid_balance', unpaidBalance.value);
+    }
+
+    const creditLimit = normalizeOptionalMoney(pickFirstDefined(body, ['creditLimit', 'credit_limit']), 'creditLimit');
+    if (!creditLimit.ok) return res.status(400).json({ message: creditLimit.message });
+    if (creditLimit.provided) pushUpdate('credit_limit', creditLimit.value);
+
+    const highCredit = normalizeOptionalMoney(pickFirstDefined(body, ['highCredit', 'high_credit']), 'highCredit');
+    if (!highCredit.ok) return res.status(400).json({ message: highCredit.message });
+    if (highCredit.provided) pushUpdate('high_credit', highCredit.value);
+
+    const isIncluded = normalizeOptionalBoolean(pickFirstDefined(body, ['isIncluded', 'is_included']), 'isIncluded');
+    if (!isIncluded.ok) return res.status(400).json({ message: isIncluded.message });
+    if (isIncluded.provided) pushUpdate('is_included', isIncluded.value);
+    
+    const monthsReviewed = normalizeMonthsReviewed(pickFirstDefined(body, ['monthsReviewed', 'months_reviewed']));
+    if (!monthsReviewed.ok) return res.status(400).json({ message: monthsReviewed.message });
+    if (monthsReviewed.provided) pushUpdate('months_reviewed', monthsReviewed.value);
+
+    const debtAmount = normalizeOptionalMoney(pickFirstDefined(body, ['debtAmount', 'debt_amount']), 'debtAmount');
+    if (!debtAmount.ok) return res.status(400).json({ message: debtAmount.message });
+
+    if (debtAmount.provided) {
+      pushUpdate('debt_amount', debtAmount.value);
+    } else if (amountFieldUpdated) {
+      const computedDebtAmount = computeCreditorDebtAmount({
+        unpaidBalance: nextAmounts.unpaid_balance,
+        pastDue: nextAmounts.past_due,
+        balance: nextAmounts.balance
+      });
+      pushUpdate('debt_amount', computedDebtAmount);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(creditorId);
+    values.push(leadId);
+
+    const { rows } = await pool.query(
+      `UPDATE lead_creditors
+       SET ${updates.join(', ')}
+       WHERE id = $${values.length - 1} AND lead_id = $${values.length}
+       RETURNING
+         id, lead_id, source_report, creditor_name, original_creditor, account_number,
+         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         monthly_payment, balance, past_due, unpaid_balance,
+         credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
+         created_at, updated_at`,
+      values
+    );
+
+    const summary = await getLeadCreditorsSummary(leadId);
+    return res.json({
+      creditor: mapCreditorRow(rows[0]),
+      summary,
+      message: 'Creditor actualizado correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al actualizar creditor:', error);
+    return res.status(500).json({ message: 'Error al actualizar creditor.' });
+  }
+});
+
+app.delete('/api/leads/:id/creditors/:creditorId', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  const creditorId = parsePositiveInteger(req.params.creditorId);
+  if (!leadId || !creditorId) {
+    return res.status(400).json({ message: 'ID invalido.' });
+  }
+
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM lead_creditors
+       WHERE id = $1 AND lead_id = $2`,
+      [creditorId, leadId]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Creditor no encontrado para este lead.' });
+    }
+
+    const summary = await getLeadCreditorsSummary(leadId);
+    return res.json({ summary, message: 'Creditor eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar creditor:', error);
+    return res.status(500).json({ message: 'Error al eliminar creditor.' });
+  }
+});
+
+// ============================================
 // ENDPOINTS: BANKING INFORMATION
 // ============================================
 
@@ -1625,3 +2458,4 @@ startServer().catch((error) => {
   console.error('Error de arranque:', error.message);
   process.exit(1);
 });
+
