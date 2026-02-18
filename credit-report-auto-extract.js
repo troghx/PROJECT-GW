@@ -611,9 +611,17 @@
   // ============================================
   // INTEGRATION - Hook al sistema de archivos
   // ============================================
+  function shouldSkipLegacyPipeline() {
+    return window.__creditorsPipeline === 'redesign' || typeof window.initCreditorsRedesign === 'function';
+  }
+
   function initIntegration() {
     // Escuchar evento de archivo subido
     window.addEventListener('lead:file-uploaded', async (e) => {
+      if (shouldSkipLegacyPipeline()) {
+        return;
+      }
+
       const { storedFile, metadata, leadId } = e.detail;
       
       // Solo procesar si es reporte de crédito

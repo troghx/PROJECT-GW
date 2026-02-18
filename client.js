@@ -67,6 +67,111 @@
       return parsed.toLocaleString('es-ES');
     }
 
+    function normalizeCreditScore(value) {
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed)) return null;
+      if (parsed < 300 || parsed > 850) return null;
+      return parsed;
+    }
+
+    function resolveLeadSnapshot(sourceLead) {
+      if (sourceLead && typeof sourceLead === 'object') return sourceLead;
+      const sourceId = Number(sourceLead || 0);
+      const currentSnapshot = window.currentLeadData && typeof window.currentLeadData === 'object'
+        ? window.currentLeadData
+        : null;
+      if (currentSnapshot && Number(currentSnapshot.id || 0) === sourceId) {
+        return currentSnapshot;
+      }
+      return null;
+    }
+
+    function normalizePersonName(value) {
+      const source = String(value || '')
+        .trim()
+        .replace(/\s+/g, ' ');
+      if (!source) return '';
+
+      return source
+        .split(' ')
+        .map((word) => word
+          .split(/([-'])/)
+          .map((part) => {
+            if (!part || part === '-' || part === "'") return part;
+            const lower = part.toLowerCase();
+            return lower.charAt(0).toUpperCase() + lower.slice(1);
+          })
+          .join(''))
+        .join(' ');
+    }
+
+    function readLeadFicoScore(sourceLead) {
+      const lead = resolveLeadSnapshot(sourceLead);
+      if (!lead) return null;
+      const applicant = normalizeCreditScore(lead.fico_score_applicant);
+      const coapp = normalizeCreditScore(lead.fico_score_coapp);
+      const values = [applicant, coapp].filter((value) => value !== null);
+      if (!values.length) return null;
+      return Math.max(...values);
+    }
+
+    function readCoappIncludeContractFlag(sourceLead) {
+      const lead = resolveLeadSnapshot(sourceLead);
+      if (!lead) return false;
+      return Boolean(lead.include_coapp_in_contract);
+    }
+
+    function normalizeBestTimeValue(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (!normalized) return '';
+      if (normalized.includes('morn')) return 'Morning';
+      if (normalized.includes('after')) return 'Afternoon';
+      if (normalized.includes('even')) return 'Evening';
+      return '';
+    }
+
+    function renderBestTimeSelectOptions(selectedValue) {
+      const selected = normalizeBestTimeValue(selectedValue);
+      const options = ['', 'Morning', 'Afternoon', 'Evening'];
+      return options.map((option) => {
+        const label = option || 'Seleccionar';
+        const isSelected = option === selected ? ' selected' : '';
+        return `<option value="${option}"${isSelected}>${label}</option>`;
+      }).join('');
+    }
+
+    function syncBestTimeSelectValue(sourceLead = currentLeadData) {
+      const bestTimeSelect = document.getElementById('bestTimeSelect');
+      if (!bestTimeSelect) return;
+      bestTimeSelect.value = normalizeBestTimeValue(sourceLead?.best_time);
+    }
+
+    function updateIncludeCoappToggleVisual(isChecked) {
+      const includeToggleWrapper = document.getElementById('includeCoAppToggleWrapper');
+      const includeToggleStatus = document.getElementById('includeToggleStatus');
+      if (!includeToggleWrapper || !includeToggleStatus) return;
+      includeToggleWrapper.classList.toggle('active', Boolean(isChecked));
+      includeToggleStatus.textContent = isChecked ? 'ON' : 'OFF';
+    }
+
+    function applyStoredCoappIncludeContractFlag(sourceLead, options = {}) {
+      const { emitEvent = false } = options;
+      const includeToggle = document.getElementById('includeCoAppToggle');
+      if (!includeToggle) return false;
+
+      const enabled = readCoappIncludeContractFlag(sourceLead);
+      includeToggle.checked = enabled;
+      updateIncludeCoappToggleVisual(enabled);
+
+      if (emitEvent) {
+        window.dispatchEvent(new CustomEvent('lead:coapp-include-toggle-changed', {
+          detail: { enabled }
+        }));
+      }
+
+      return enabled;
+    }
+
     function getStateName(code) {
       if (crmHelpers.getStateName) return crmHelpers.getStateName(code);
       return code || '';
@@ -667,7 +772,7 @@
       if (!lead) return;
 
       applicantData = {
-        fullName: lead.full_name || '',
+        fullName: normalizePersonName(lead.full_name || ''),
         homePhone: lead.home_phone || lead.phone || '',
         cellPhone: lead.cell_phone || lead.phone || '',
         email: lead.email || '',
@@ -680,7 +785,7 @@
       };
 
       coApplicantData = {
-        fullName: lead.co_applicant_name || '',
+        fullName: normalizePersonName(lead.co_applicant_name || ''),
         homePhone: lead.co_applicant_home_phone || '',
         cellPhone: lead.co_applicant_cell_phone || '',
         email: lead.co_applicant_email || '',
@@ -698,7 +803,9 @@
     function syncLeadDataState(lead) {
       if (!lead) return;
       currentLeadData = lead;
+      window.currentLeadData = currentLeadData;
       syncPartyDataFromLead(lead);
+      syncBestTimeSelectValue(lead);
     }
 
     function setPartyFieldDisplay(fieldElement, value) {
@@ -754,6 +861,7 @@
         const displayValue = getLeadFieldValueForDisplay(lead, fieldName);
         setPartyFieldDisplay(fieldElement, displayValue);
       });
+      syncBestTimeSelectValue(lead);
     }
     
     const applicantToggleBtn = document.getElementById('applicantToggleBtn');
@@ -764,14 +872,12 @@
       const includeToggleWrapper = document.getElementById('includeCoAppToggleWrapper');
       const includeToggle = document.getElementById('includeCoAppToggle');
       const includeToggleStatus = document.getElementById('includeToggleStatus');
+      window.isCoappIncludedInContract = () => Boolean(includeToggle && includeToggle.checked);
       
       // Función para actualizar el estado visual del toggle
       function updateToggleVisualState() {
-        if (includeToggleWrapper && includeToggle && includeToggleStatus) {
-          const isChecked = includeToggle.checked;
-          includeToggleWrapper.classList.toggle('active', isChecked);
-          includeToggleStatus.textContent = isChecked ? 'ON' : 'OFF';
-        }
+        if (!includeToggle) return;
+        updateIncludeCoappToggleVisual(includeToggle.checked);
       }
       
       applicantToggleBtn.addEventListener('click', () => {
@@ -812,14 +918,33 @@
       
       // Event listener para el toggle "Incluir en contrato"
       if (includeToggle) {
-        includeToggle.addEventListener('change', () => {
-          updateToggleVisualState();
-          showToast(
-            includeToggle.checked 
-              ? 'Co-Applicant será incluido en el contrato' 
-              : 'Co-Applicant no será incluido en el contrato', 
-            includeToggle.checked ? 'success' : 'info'
-          );
+        includeToggle.addEventListener('change', async () => {
+          const requestedValue = Boolean(includeToggle.checked);
+          const previousValue = readCoappIncludeContractFlag(currentLeadData);
+          updateIncludeCoappToggleVisual(requestedValue);
+
+          try {
+            const updatedLead = await patchLead({ includeCoappInContract: requestedValue });
+            const persistedValue = readCoappIncludeContractFlag(updatedLead || currentLeadData || { include_coapp_in_contract: requestedValue });
+            includeToggle.checked = persistedValue;
+            updateIncludeCoappToggleVisual(persistedValue);
+            window.dispatchEvent(new CustomEvent('lead:coapp-include-toggle-changed', {
+              detail: { enabled: persistedValue }
+            }));
+            showToast(
+              persistedValue
+                ? 'Co-Applicant será incluido en el contrato'
+                : 'Co-Applicant no será incluido en el contrato',
+              persistedValue ? 'success' : 'info'
+            );
+          } catch (error) {
+            includeToggle.checked = previousValue;
+            updateIncludeCoappToggleVisual(previousValue);
+            window.dispatchEvent(new CustomEvent('lead:coapp-include-toggle-changed', {
+              detail: { enabled: previousValue }
+            }));
+            showToast(error.message || 'No se pudo guardar el cambio en base de datos.', 'error');
+          }
         });
       }
     }
@@ -863,8 +988,11 @@
       leadNameEl.contentEditable = 'false';
       leadNameEl.classList.remove('editing');
       
-      const newName = leadNameEl.textContent.trim();
-      const currentOriginal = getCurrentPartyData().fullName || '';
+      const newName = normalizePersonName(leadNameEl.textContent);
+      if (newName) {
+        leadNameEl.textContent = newName;
+      }
+      const currentOriginal = normalizePersonName(getCurrentPartyData().fullName || '');
       
       if (newName && newName !== currentOriginal) {
         try {
@@ -878,8 +1006,14 @@
           else coApplicantData.fullName = newName;
 
           const payload = isApplicant
-            ? { fullName: newName, coApplicantName: coApplicantData.fullName || '' }
-            : { fullName: applicantData.fullName || originalName, coApplicantName: newName };
+            ? {
+              fullName: newName,
+              coApplicantName: normalizePersonName(coApplicantData.fullName || '')
+            }
+            : {
+              fullName: normalizePersonName(applicantData.fullName || originalName),
+              coApplicantName: newName
+            };
           const updatedLead = await patchLead(payload);
           syncLeadDataState(updatedLead);
           refreshPartyContactView();
@@ -1609,7 +1743,7 @@
       const totalDebtInput = document.getElementById('calcTotalDebt');
       if (!totalDebtInput) return;
 
-      totalDebtInput.value = Number(totalIncludedDebt.toFixed(2)).toFixed(2);
+      totalDebtInput.value = formatMoneyInput(totalIncludedDebt);
       calculateAll();
       if (persist) queuePersistCalculatorConfig();
       if (toast) {
@@ -2966,12 +3100,39 @@
         city: targetLead.city,
         zip_code: targetLead.zip_code,
         state: targetLead.state_code ? `${getStateName(targetLead.state_code)} (${targetLead.state_code})` : null,
-        best_time: targetLead.best_time,
+        best_time: normalizeBestTimeValue(targetLead.best_time),
         currently_employed: targetLead[currentlyEmployedKey],
         employer_name: targetLead[employerNameKey],
         occupation: targetLead[occupationKey]
       };
       return valueByField[fieldName] || EMPTY_FIELD_LABEL;
+    }
+
+    function initBestTimeSelect() {
+      const bestTimeSelect = document.getElementById('bestTimeSelect');
+      if (!bestTimeSelect || bestTimeSelect.dataset.ready === 'true') return;
+
+      bestTimeSelect.dataset.ready = 'true';
+      syncBestTimeSelectValue(currentLeadData);
+
+      bestTimeSelect.addEventListener('change', async () => {
+        const previousValue = normalizeBestTimeValue(currentLeadData?.best_time);
+        const nextValue = normalizeBestTimeValue(bestTimeSelect.value);
+        if (nextValue === previousValue) return;
+
+        try {
+          setElementSavingState(bestTimeSelect, true);
+          const updatedLead = await patchLead({ bestTime: nextValue });
+          syncLeadDataState(updatedLead);
+          bestTimeSelect.value = normalizeBestTimeValue(updatedLead?.best_time);
+          showToast('Best time to call actualizado', 'success');
+        } catch (error) {
+          bestTimeSelect.value = previousValue;
+          showToast(error.message || 'No se pudo actualizar Best time to call.', 'error');
+        } finally {
+          setElementSavingState(bestTimeSelect, false);
+        }
+      });
     }
 
     function updateStateBadge(lead) {
@@ -3772,9 +3933,9 @@
     
     const DEFAULT_CALC_CONFIG = Object.freeze({
       totalDebt: 0,
-      settlementPercent: 0,
-      programFeePercent: 0,
-      bankFee: 0,
+      settlementPercent: 55,
+      programFeePercent: 25,
+      bankFee: 9.95,
       months: 48,
       legalPlanEnabled: false
     });
@@ -3793,6 +3954,15 @@
       return normalized.toFixed(decimals);
     }
 
+    function formatMoneyInput(value) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return '0.00';
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(normalized);
+    }
+
     function normalizeCalcConfig(config) {
       const totalDebt = Number(config?.totalDebt ?? DEFAULT_CALC_CONFIG.totalDebt);
       const settlementPercent = Number(config?.settlementPercent ?? DEFAULT_CALC_CONFIG.settlementPercent);
@@ -3803,9 +3973,13 @@
 
       return {
         totalDebt: Number.isFinite(totalDebt) && totalDebt >= 0 ? Number(totalDebt.toFixed(2)) : DEFAULT_CALC_CONFIG.totalDebt,
-        settlementPercent: Number.isFinite(settlementPercent) ? Math.min(100, Math.max(0, Number(settlementPercent.toFixed(2)))) : DEFAULT_CALC_CONFIG.settlementPercent,
-        programFeePercent: Number.isFinite(programFeePercent) ? Math.min(100, Math.max(0, Number(programFeePercent.toFixed(2)))) : DEFAULT_CALC_CONFIG.programFeePercent,
-        bankFee: Number.isFinite(bankFee) && bankFee >= 0 ? Number(bankFee.toFixed(2)) : DEFAULT_CALC_CONFIG.bankFee,
+        settlementPercent: Number.isFinite(settlementPercent) && settlementPercent > 0
+          ? Math.min(100, Math.max(0, Number(settlementPercent.toFixed(2))))
+          : DEFAULT_CALC_CONFIG.settlementPercent,
+        programFeePercent: Number.isFinite(programFeePercent) && programFeePercent > 0
+          ? Math.min(100, Math.max(0, Number(programFeePercent.toFixed(2))))
+          : DEFAULT_CALC_CONFIG.programFeePercent,
+        bankFee: Number.isFinite(bankFee) && bankFee > 0 ? Number(bankFee.toFixed(2)) : DEFAULT_CALC_CONFIG.bankFee,
         months: Number.isInteger(months) ? Math.min(120, Math.max(6, months)) : DEFAULT_CALC_CONFIG.months,
         legalPlanEnabled
       };
@@ -3831,6 +4005,18 @@
           ? getStateBasedDefaultLegalPlan(lead)
           : Boolean(legalPlanFromLead)
       });
+    }
+
+    function leadNeedsProtectedCalcDefaults(lead) {
+      const settlementPercent = Number(lead?.calc_settlement_percent);
+      const programFeePercent = Number(lead?.calc_program_fee_percent);
+      const bankFee = Number(lead?.calc_bank_fee);
+
+      return !(
+        Number.isFinite(settlementPercent) && settlementPercent > 0 &&
+        Number.isFinite(programFeePercent) && programFeePercent > 0 &&
+        Number.isFinite(bankFee) && bankFee > 0
+      );
     }
 
     function getCalcConfigSignature(config) {
@@ -3911,10 +4097,10 @@
       const hiddenMonths = document.getElementById('calcMonths');
       const legalSwitch = document.getElementById('calcLegalPlanSwitch');
 
-      if (totalDebtInput) totalDebtInput.value = formatFixedNumber(normalized.totalDebt, 2);
+      if (totalDebtInput) totalDebtInput.value = formatMoneyInput(normalized.totalDebt);
       if (settlementInput) settlementInput.value = formatFixedNumber(normalized.settlementPercent, 2).replace(/\.00$/, '');
       if (programFeeInput) programFeeInput.value = formatFixedNumber(normalized.programFeePercent, 2).replace(/\.00$/, '');
-      if (bankFeeInput) bankFeeInput.value = formatFixedNumber(normalized.bankFee, 2);
+      if (bankFeeInput) bankFeeInput.value = formatMoneyInput(normalized.bankFee);
       if (hiddenMonths) hiddenMonths.value = String(normalized.months);
 
       currentMonths = normalized.months;
@@ -3954,10 +4140,15 @@
     }
 
     function hydrateCalculatorFromLead(lead) {
+      const needsProtectedDefaultsSync = leadNeedsProtectedCalcDefaults(lead);
       suppressCalculatorAutoSave = true;
       applyCalculatorConfigToUI(readCalcConfigFromLead(lead));
       syncCalcConfigSnapshotFromLead(lead);
       suppressCalculatorAutoSave = false;
+      if (needsProtectedDefaultsSync) {
+        lastSavedCalcConfigSignature = '';
+        queuePersistCalculatorConfig();
+      }
     }
     
     function initCalculator() {
@@ -3971,7 +4162,6 @@
       
       // Todos los inputs de configuración
       const configInputs = [
-        'calcTotalDebt',
         'calcSettlementPercent',
         'calcProgramFeePercent',
         'calcBankFee'
@@ -3981,8 +4171,28 @@
         if (input) {
           input.addEventListener('input', debounce(calculateAll, 300));
           input.addEventListener('change', calculateAll);
+          input.addEventListener('blur', () => {
+            if (id === 'calcBankFee') {
+              const normalizedBankFee = Math.max(0, parseCurrency(input.value));
+              input.value = formatMoneyInput(normalizedBankFee > 0 ? normalizedBankFee : DEFAULT_CALC_CONFIG.bankFee);
+            } else {
+              const normalizedPercent = Math.min(100, Math.max(0, parsePercent(input.value)));
+              const fallbackValue = id === 'calcSettlementPercent'
+                ? DEFAULT_CALC_CONFIG.settlementPercent
+                : DEFAULT_CALC_CONFIG.programFeePercent;
+              const safePercent = normalizedPercent > 0 ? normalizedPercent : fallbackValue;
+              input.value = Number(safePercent.toFixed(2)).toString();
+            }
+          });
         }
       });
+
+      const totalDebtInput = document.getElementById('calcTotalDebt');
+      if (totalDebtInput) {
+        totalDebtInput.readOnly = true;
+        totalDebtInput.tabIndex = -1;
+        totalDebtInput.style.pointerEvents = 'none';
+      }
       
       // Campos protegidos con doble-click
       initProtectedFields();
@@ -4008,7 +4218,7 @@
       if (copyTotalDebt) {
         copyTotalDebt.addEventListener('click', () => {
           const value = document.getElementById('calcTotalDebt').value;
-          const formattedValue = '$' + value;
+          const formattedValue = '$' + formatMoneyInput(parseCurrency(value));
           navigator.clipboard.writeText(formattedValue).then(() => {
             copyTotalDebt.classList.add('copied');
             showToast('Total Debt copiado: ' + formattedValue, 'success');
@@ -4535,13 +4745,36 @@
     }
 
     function calculateAll() {
+      const totalDebtInput = document.getElementById('calcTotalDebt');
+      const settlementInput = document.getElementById('calcSettlementPercent');
+      const programFeeInput = document.getElementById('calcProgramFeePercent');
+      const bankFeeInput = document.getElementById('calcBankFee');
+      const legalPlanSwitch = document.getElementById('calcLegalPlanSwitch');
+      const resultSettlementEl = document.getElementById('resultSettlement');
+      const resultProgramFeesEl = document.getElementById('resultProgramFees');
+      const resultLegalFeesEl = document.getElementById('resultLegalFees');
+      const resultBankFeesEl = document.getElementById('resultBankFees');
+      const resultMonthlyPaymentEl = document.getElementById('resultMonthlyPayment');
+      const resultTotalProgramEl = document.getElementById('resultTotalProgram');
+      const resultSavingsEl = document.getElementById('resultSavings');
+
+      if (
+        !totalDebtInput || !settlementInput || !programFeeInput || !bankFeeInput ||
+        !legalPlanSwitch || !resultSettlementEl || !resultProgramFeesEl || !resultLegalFeesEl ||
+        !resultBankFeesEl || !resultMonthlyPaymentEl || !resultTotalProgramEl || !resultSavingsEl
+      ) {
+        return;
+      }
+
       // Obtener valores
-      const totalDebt = parseCurrency(document.getElementById('calcTotalDebt').value);
-      const settlementPercent = parsePercent(document.getElementById('calcSettlementPercent').value);
-      const programFeePercent = parsePercent(document.getElementById('calcProgramFeePercent').value);
-      const monthlyBankFee = parseCurrency(document.getElementById('calcBankFee').value);
-      const months = currentMonths;
-      const hasLegalPlan = document.getElementById('calcLegalPlanSwitch').classList.contains('active');
+      const totalDebt = Math.max(0, parseCurrency(totalDebtInput.value));
+      const settlementPercent = Math.min(100, Math.max(0, parsePercent(settlementInput.value)));
+      const programFeePercent = Math.min(100, Math.max(0, parsePercent(programFeeInput.value)));
+      const monthlyBankFee = Math.max(0, parseCurrency(bankFeeInput.value));
+      const months = Number.isFinite(currentMonths) && currentMonths > 0 ? currentMonths : 48;
+      const hasLegalPlan = legalPlanSwitch.classList.contains('active');
+
+      totalDebtInput.value = formatMoneyInput(totalDebt);
       
       // Cálculos principales
       const estimatedSettlement = totalDebt * (settlementPercent / 100);
@@ -4565,13 +4798,13 @@
       const monthlySavings = totalSavings / months;
       
       // Actualizar resultados en UI
-      document.getElementById('resultSettlement').textContent = formatCurrency(estimatedSettlement);
-      document.getElementById('resultProgramFees').textContent = formatCurrency(programFees);
-      document.getElementById('resultLegalFees').textContent = formatCurrency(totalLegalFees);
-      document.getElementById('resultBankFees').textContent = formatCurrency(totalBankFees);
-      document.getElementById('resultMonthlyPayment').textContent = formatCurrency(monthlyPayment);
-      document.getElementById('resultTotalProgram').textContent = formatCurrency(totalProgram);
-      document.getElementById('resultSavings').textContent = formatCurrency(totalSavings);
+      resultSettlementEl.textContent = formatCurrency(estimatedSettlement);
+      resultProgramFeesEl.textContent = formatCurrency(programFees);
+      resultLegalFeesEl.textContent = formatCurrency(totalLegalFees);
+      resultBankFeesEl.textContent = formatCurrency(totalBankFees);
+      resultMonthlyPaymentEl.textContent = formatCurrency(monthlyPayment);
+      resultTotalProgramEl.textContent = formatCurrency(totalProgram);
+      resultSavingsEl.textContent = formatCurrency(totalSavings);
       
       // Sincronizar con Banking: Initial Payment Amount
       const bankInitialPayment = document.getElementById('bankInitialPayment');
@@ -4583,6 +4816,9 @@
       generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings);
       queuePersistCalculatorConfig();
     }
+
+    window.calculateAll = calculateAll;
+    window.queuePersistCalculatorConfig = queuePersistCalculatorConfig;
     
     function generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings) {
       const tbody = document.getElementById('scheduleTableBody');
@@ -4962,6 +5198,7 @@
         
         const data = await response.json();
         const lead = data.lead;
+        const storedFicoScore = readLeadFicoScore(lead);
 
         const backendFirstDepositDate = parseISODate(lead.first_deposit_date);
         const firstDepositInput = document.getElementById('calcFirstDepositDate');
@@ -4979,8 +5216,16 @@
         
         // Guardar valores originales
         syncLeadDataState(lead);
+        if (typeof window.syncLeadFilesFromServer === 'function') {
+          try {
+            await window.syncLeadFilesFromServer(lead.id, { silent: true });
+          } catch (_error) {
+            // Si falla la sincronizacion de archivos, no detenemos la carga del lead.
+          }
+        }
         prepareNotesForLead(lead.id);
         hydrateCalculatorFromLead(lead);
+        applyStoredCoappIncludeContractFlag(lead, { emitEvent: false });
         initCreditorsSection();
         await loadCreditorsData({ silent: true });
         caseIdValue = String(lead.case_id);
@@ -5092,7 +5337,11 @@
             </div>
             <div class="info-row">
               <span class="info-row-label">Best time to call</span>
-              <span class="info-row-value editable" data-field="best_time" data-copy="true" tabindex="0">${escapeHtml(getLeadFieldValueForDisplay(lead, 'best_time'))}</span>
+              <div class="lead-best-time-select-wrap">
+                <select class="lead-best-time-select" id="bestTimeSelect" data-field="best_time" aria-label="Best time to call">
+                  ${renderBestTimeSelectOptions(lead.best_time)}
+                </select>
+              </div>
             </div>
           </div>
           
@@ -5195,7 +5444,7 @@
                 </div>
                 <div class="info-row">
                   <span class="info-row-label">FICO Score</span>
-                  <span class="info-row-value fico-score" id="ficoScore">Pendiente</span>
+                  <span class="info-row-value fico-score ${storedFicoScore === null ? 'pendiente' : ''}" id="ficoScore">${storedFicoScore === null ? 'Pendiente' : storedFicoScore}</span>
                 </div>
               </div>
             </div>
@@ -5207,6 +5456,7 @@
         
         // Inicializar campos editables
         initEditableFields();
+        initBestTimeSelect();
         
         // Inicializar calendario DOB
         initDOBCalendar();
@@ -5264,6 +5514,441 @@
 
       let uploadPreviewContainer = null;
       let resolveMetaSelection = null;
+      const FILE_DB_NAME = 'projectgw_files_db';
+      const FILE_DB_VERSION = 1;
+      const FILE_DB_STORE = 'files_payloads';
+      let filesDbPromise = null;
+      const inMemoryPayloads = new Map();
+
+      function isQuotaExceededError(error) {
+        if (!error) return false;
+        return error.name === 'QuotaExceededError'
+          || error.code === 22
+          || error.code === 1014;
+      }
+
+      function getLeadFilesStorageKey(leadId) {
+        return `lead_files_${leadId}`;
+      }
+
+      function openFilesDb() {
+        if (filesDbPromise) return filesDbPromise;
+        if (!window.indexedDB) {
+          filesDbPromise = Promise.resolve(null);
+          return filesDbPromise;
+        }
+
+        filesDbPromise = new Promise((resolve) => {
+          try {
+            const request = window.indexedDB.open(FILE_DB_NAME, FILE_DB_VERSION);
+
+            request.onupgradeneeded = () => {
+              const db = request.result;
+              if (!db.objectStoreNames.contains(FILE_DB_STORE)) {
+                db.createObjectStore(FILE_DB_STORE, { keyPath: 'id' });
+              }
+            };
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => {
+              console.warn('No se pudo abrir IndexedDB para archivos.', request.error);
+              resolve(null);
+            };
+          } catch (error) {
+            console.warn('IndexedDB no disponible para archivos.', error);
+            resolve(null);
+          }
+        });
+
+        return filesDbPromise;
+      }
+
+      async function saveFilePayload(fileId, dataUrl) {
+        if (!fileId || !dataUrl) return false;
+
+        inMemoryPayloads.set(fileId, dataUrl);
+        const db = await openFilesDb();
+        if (!db) return false;
+
+        return new Promise((resolve) => {
+          try {
+            const tx = db.transaction(FILE_DB_STORE, 'readwrite');
+            const store = tx.objectStore(FILE_DB_STORE);
+            store.put({
+              id: fileId,
+              data: dataUrl,
+              updatedAt: new Date().toISOString()
+            });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch (_error) {
+            resolve(false);
+          }
+        });
+      }
+
+      async function getFilePayload(fileId, fallbackData = '', options = {}) {
+        const { fetchRemote = false, leadId = currentLeadId } = options;
+        if (!fileId) return '';
+        if (inMemoryPayloads.has(fileId)) return inMemoryPayloads.get(fileId) || '';
+
+        const db = await openFilesDb();
+        if (db) {
+          const stored = await new Promise((resolve) => {
+            try {
+              const tx = db.transaction(FILE_DB_STORE, 'readonly');
+              const store = tx.objectStore(FILE_DB_STORE);
+              const request = store.get(fileId);
+              request.onsuccess = () => resolve(request.result || null);
+              request.onerror = () => resolve(null);
+            } catch (_error) {
+              resolve(null);
+            }
+          });
+
+          if (stored?.data) {
+            inMemoryPayloads.set(fileId, stored.data);
+            return stored.data;
+          }
+        }
+
+        if (fallbackData) {
+          inMemoryPayloads.set(fileId, fallbackData);
+          saveFilePayload(fileId, fallbackData).catch(() => {});
+          return fallbackData;
+        }
+
+        if (fetchRemote && leadId) {
+          try {
+            const dataUrl = await fetchLeadFileContentFromServer(leadId, fileId);
+            if (dataUrl) {
+              await saveFilePayload(fileId, dataUrl);
+              return dataUrl;
+            }
+          } catch (_error) {
+            // Si falla backend, retornamos vacio para mantener control del flujo.
+          }
+        }
+
+        return '';
+      }
+
+      async function deleteFilePayload(fileId) {
+        if (!fileId) return false;
+        inMemoryPayloads.delete(fileId);
+
+        const db = await openFilesDb();
+        if (!db) return false;
+
+        return new Promise((resolve) => {
+          try {
+            const tx = db.transaction(FILE_DB_STORE, 'readwrite');
+            const store = tx.objectStore(FILE_DB_STORE);
+            store.delete(fileId);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch (_error) {
+            resolve(false);
+          }
+        });
+      }
+
+      function compactLeadFilesStorageForAllLeads() {
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith('lead_files_')) continue;
+
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+            if (!Array.isArray(parsed)) continue;
+
+            let changed = false;
+            const compacted = parsed.map((entry) => {
+              if (!entry || typeof entry !== 'object') return null;
+              if (!entry.data) return entry;
+              changed = true;
+              const { data, ...rest } = entry;
+              return rest;
+            }).filter(Boolean);
+
+            if (changed) {
+              localStorage.setItem(key, JSON.stringify(compacted));
+            }
+          } catch (_error) {
+            // Ignoramos claves corruptas.
+          }
+        }
+      }
+
+      function persistFilesMetadata(leadId, files) {
+        if (!leadId) return false;
+        const storageKey = getLeadFilesStorageKey(leadId);
+        const safeFiles = Array.isArray(files)
+          ? files.map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const { data, ...rest } = entry;
+            return rest;
+          }).filter(Boolean)
+          : [];
+
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(safeFiles));
+          return true;
+        } catch (error) {
+          if (!isQuotaExceededError(error)) return false;
+
+          compactLeadFilesStorageForAllLeads();
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(safeFiles));
+            return true;
+          } catch (_retryError) {
+            return false;
+          }
+        }
+      }
+
+      function readStoredFilesMetadata(leadId) {
+        if (!leadId) return [];
+        const storageKey = getLeadFilesStorageKey(leadId);
+
+        try {
+          const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+          if (!Array.isArray(parsed)) return [];
+
+          let shouldCompact = false;
+          const normalized = parsed.map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+
+            const fileId = String(entry.id || `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+            const normalizedEntry = {
+              id: fileId,
+              leadId: Number(entry.leadId || leadId),
+              name: String(entry.name || 'Archivo'),
+              type: String(entry.type || ''),
+              size: Number(entry.size || 0),
+              documentCategory: entry.documentCategory || null,
+              creditReportParty: entry.creditReportParty || null,
+              uploadedAt: entry.uploadedAt || new Date().toISOString()
+            };
+
+            if (typeof entry.data === 'string' && entry.data) {
+              shouldCompact = true;
+              normalizedEntry.data = entry.data;
+              saveFilePayload(fileId, entry.data).catch(() => {});
+            }
+
+            return normalizedEntry;
+          }).filter(Boolean);
+
+          if (shouldCompact) {
+            persistFilesMetadata(leadId, normalized);
+          }
+
+          return normalized;
+        } catch (_error) {
+          return [];
+        }
+      }
+
+      function normalizeFileMetadataEntry(entry, fallbackLeadId = currentLeadId) {
+        if (!entry || typeof entry !== 'object') return null;
+        return {
+          id: String(entry.id || ''),
+          leadId: Number(entry.leadId || entry.lead_id || fallbackLeadId || 0),
+          name: String(entry.name || entry.fileName || entry.file_name || 'Archivo'),
+          type: String(entry.type || entry.mimeType || entry.mime_type || ''),
+          size: Number(entry.size || entry.fileSize || entry.file_size || 0),
+          documentCategory: entry.documentCategory || entry.document_category || null,
+          creditReportParty: entry.creditReportParty || entry.credit_report_party || null,
+          uploadedAt: entry.uploadedAt || entry.created_at || new Date().toISOString(),
+          updatedAt: entry.updatedAt || entry.updated_at || null
+        };
+      }
+
+      function getSharedFilesStore() {
+        if (!window.__sharedLeadFilesByLeadId || typeof window.__sharedLeadFilesByLeadId !== 'object') {
+          window.__sharedLeadFilesByLeadId = {};
+        }
+        return window.__sharedLeadFilesByLeadId;
+      }
+
+      function cacheSharedLeadFiles(leadId, files) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return;
+        const store = getSharedFilesStore();
+        store[normalizedLeadId] = Array.isArray(files) ? files.map((entry) => ({ ...entry })) : [];
+      }
+
+      async function fetchFilesMetadataFromServer(leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return [];
+
+        const response = await fetch(`/api/leads/${normalizedLeadId}/files`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudieron cargar los archivos del lead.');
+        }
+
+        const files = Array.isArray(data.files) ? data.files : [];
+        return files
+          .map((entry) => normalizeFileMetadataEntry(entry, normalizedLeadId))
+          .filter(Boolean);
+      }
+
+      async function uploadFileToServer(leadId, payload) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) {
+          throw new Error('No hay lead seleccionado.');
+        }
+
+        const response = await fetch(`/api/leads/${normalizedLeadId}/files`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload || {})
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo guardar el archivo en base de datos.');
+        }
+
+        const normalizedFile = normalizeFileMetadataEntry(data.file || {}, normalizedLeadId);
+        if (!normalizedFile) {
+          throw new Error('Respuesta invalida del servidor al guardar archivo.');
+        }
+        return normalizedFile;
+      }
+
+      async function deleteFileFromServer(leadId, fileId) {
+        const normalizedLeadId = Number(leadId || 0);
+        const normalizedFileId = Number(fileId);
+        if (!normalizedLeadId || !Number.isInteger(normalizedFileId) || normalizedFileId <= 0) {
+          throw new Error('ID de archivo invalido.');
+        }
+
+        const response = await fetch(`/api/leads/${normalizedLeadId}/files/${normalizedFileId}`, {
+          method: 'DELETE'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo eliminar el archivo en base de datos.');
+        }
+
+        return normalizeFileMetadataEntry(data.file || {}, normalizedLeadId);
+      }
+
+      async function fetchLeadFileContentFromServer(leadId, fileId) {
+        const normalizedLeadId = Number(leadId || 0);
+        const normalizedFileId = Number(fileId);
+        if (!normalizedLeadId || !Number.isInteger(normalizedFileId) || normalizedFileId <= 0) {
+          return '';
+        }
+
+        const response = await fetch(`/api/leads/${normalizedLeadId}/files/${normalizedFileId}/content`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo leer el archivo desde base de datos.');
+        }
+
+        return String(data.dataUrl || '');
+      }
+
+      function areEquivalentFiles(a, b) {
+        if (!a || !b) return false;
+        return String(a.name || '').trim() === String(b.name || '').trim()
+          && String(a.type || '').trim().toLowerCase() === String(b.type || '').trim().toLowerCase()
+          && Number(a.size || 0) === Number(b.size || 0)
+          && String(a.documentCategory || '').trim().toLowerCase() === String(b.documentCategory || '').trim().toLowerCase()
+          && String(a.creditReportParty || '').trim().toLowerCase() === String(b.creditReportParty || '').trim().toLowerCase();
+      }
+
+      async function backfillLegacyLocalFilesToServer(leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return;
+
+        const localFiles = readStoredFilesMetadata(normalizedLeadId);
+        const legacyFiles = localFiles.filter((entry) => !/^\d+$/.test(String(entry.id || '')));
+        if (!legacyFiles.length) return;
+
+        let remoteFiles = [];
+        try {
+          remoteFiles = await fetchFilesMetadataFromServer(normalizedLeadId);
+        } catch (_error) {
+          return;
+        }
+
+        let changed = false;
+        const mergedRemote = [...remoteFiles];
+
+        for (const legacy of legacyFiles) {
+          const payloadData = await getFilePayload(legacy.id, legacy.data, {
+            fetchRemote: false,
+            leadId: normalizedLeadId
+          });
+          if (!payloadData) continue;
+
+          const duplicate = mergedRemote.find((remoteEntry) => areEquivalentFiles(remoteEntry, legacy));
+          if (duplicate) {
+            await saveFilePayload(duplicate.id, payloadData);
+            changed = true;
+            continue;
+          }
+
+          try {
+            const created = await uploadFileToServer(normalizedLeadId, {
+              name: legacy.name,
+              type: legacy.type,
+              size: legacy.size,
+              data: payloadData,
+              documentCategory: legacy.documentCategory || 'other',
+              creditReportParty: legacy.creditReportParty || null
+            });
+            await saveFilePayload(created.id, payloadData);
+            mergedRemote.unshift(created);
+            changed = true;
+          } catch (_error) {
+            // Si una subida legacy falla, seguimos con las demas.
+          }
+        }
+
+        if (changed) {
+          persistFilesMetadata(normalizedLeadId, mergedRemote);
+          cacheSharedLeadFiles(normalizedLeadId, mergedRemote);
+        }
+      }
+
+      async function syncFilesMetadataFromServer(leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return [];
+
+        await backfillLegacyLocalFilesToServer(normalizedLeadId);
+        const files = await fetchFilesMetadataFromServer(normalizedLeadId);
+        persistFilesMetadata(normalizedLeadId, files);
+        cacheSharedLeadFiles(normalizedLeadId, files);
+        return files;
+      }
+
+      window.syncLeadFilesFromServer = async function(leadId = currentLeadId, options = {}) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return [];
+
+        const { silent = true } = options;
+        try {
+          return await syncFilesMetadataFromServer(normalizedLeadId);
+        } catch (error) {
+          if (!silent) {
+            showToast(error.message || 'No se pudieron sincronizar los archivos.', 'error');
+          }
+          throw error;
+        }
+      };
+
+      window.getLeadFilesMetadata = function(leadId = currentLeadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return [];
+        return readStoredFilesMetadata(normalizedLeadId);
+      };
 
       filesBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -5276,7 +5961,9 @@
         if (isHidden) {
           filesPanel.classList.remove('hidden');
           filesBtn.setAttribute('aria-expanded', 'true');
-          loadFilesList();
+          loadFilesList({ forceServer: true }).catch((error) => {
+            console.error('Error cargando archivos:', error);
+          });
         } else {
           filesPanel.classList.add('hidden');
           filesBtn.setAttribute('aria-expanded', 'false');
@@ -5577,33 +6264,39 @@
 
         try {
           const dataUrl = await readFileAsDataUrl(file);
-          const fileData = {
-            id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
-            leadId: currentLeadId,
+          const fileData = await uploadFileToServer(currentLeadId, {
             name: file.name,
             type: mimeType,
             size: file.size,
             data: dataUrl,
             documentCategory: metadata.documentCategory,
-            creditReportParty: metadata.creditReportParty || null,
-            uploadedAt: new Date().toISOString()
-          };
+            creditReportParty: metadata.creditReportParty || null
+          });
 
           showUploadPreview(file, dataUrl);
+          await saveFilePayload(fileData.id, dataUrl);
 
-          const filesKey = `lead_files_${currentLeadId}`;
-          const existingFiles = JSON.parse(localStorage.getItem(filesKey) || '[]');
-          existingFiles.push(fileData);
-          localStorage.setItem(filesKey, JSON.stringify(existingFiles));
+          const existingFiles = readStoredFilesMetadata(currentLeadId)
+            .filter((entry) => String(entry.id) !== String(fileData.id));
+          existingFiles.unshift(fileData);
 
-          loadFilesList();
+          const persisted = persistFilesMetadata(currentLeadId, existingFiles);
+          if (!persisted) {
+            throw new Error('No se pudo guardar el archivo localmente por limite de almacenamiento.');
+          }
+          cacheSharedLeadFiles(currentLeadId, existingFiles);
+
+          await loadFilesList({ forceServer: true, silent: true });
           showToast(`Archivo subido: ${file.name}`, 'success');
 
           window.dispatchEvent(new CustomEvent('lead:file-uploaded', {
             detail: {
               leadId: currentLeadId,
               file,
-              storedFile: fileData,
+              storedFile: {
+                ...fileData,
+                data: dataUrl
+              },
               metadata
             }
           }));
@@ -5633,27 +6326,24 @@
         return badges.join('');
       }
 
-      function loadFilesList() {
-        if (!filesList || !currentLeadId) return;
+      function renderFilesList(files) {
+        const safeFiles = Array.isArray(files) ? files : [];
 
-        const filesKey = `lead_files_${currentLeadId}`;
-        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-
-        if (!files.length) {
+        if (!safeFiles.length) {
           filesList.innerHTML = `
             <div class="files-empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14,2 14,8 20,8"/>
               </svg>
-              <p>No hay archivos a�n</p>
-              <span>Los archivos subidos aparecer�n aqu�</span>
+              <p>No hay archivos aun</p>
+              <span>Los archivos subidos apareceran aqui</span>
             </div>
           `;
           return;
         }
 
-        filesList.innerHTML = files.map((file) => {
+        filesList.innerHTML = safeFiles.map((file) => {
           const size = formatFileSize(Number(file.size || 0));
           const date = new Date(file.uploadedAt).toLocaleDateString('es-ES');
           const fileType = String(file.type || '').toLowerCase();
@@ -5662,16 +6352,14 @@
           const clickableClass = isImage || isPdf ? 'clickable' : '';
           const safeName = escapeUnsafeHtml(file.name);
           const metadataBadges = buildFileMetadataBadges(file);
-          const thumbnail = isImage && file.data
-            ? `<img src="${file.data}" class="file-thumbnail" alt="${safeName}" onclick="openFile('${file.id}')">`
-            : `<div class="file-icon" onclick="openFile('${file.id}')">${getFileIcon(fileType)}</div>`;
+          const thumbnail = `<div class="file-icon" onclick="openFile('${file.id}')">${getFileIcon(fileType)}</div>`;
 
           return `
             <div class="file-item ${clickableClass}" data-file-id="${file.id}">
               ${thumbnail}
               <div class="file-info" onclick="${isImage || isPdf ? `openFile('${file.id}')` : ''}">
                 <div class="file-name" title="${safeName}">${safeName}</div>
-                <div class="file-meta">${size} � ${date}</div>
+                <div class="file-meta">${size} - ${date}</div>
                 <div class="file-meta-row">${metadataBadges}</div>
               </div>
               <div class="file-actions">
@@ -5700,29 +6388,68 @@
         }).join('');
       }
 
-      window.downloadFile = function(fileId) {
-        const filesKey = `lead_files_${currentLeadId}`;
-        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const file = files.find((item) => item.id === fileId);
+      async function loadFilesList(options = {}) {
+        const { forceServer = false, silent = false } = options;
+        if (!filesList || !currentLeadId) return;
 
-        if (file?.data) {
-          const link = document.createElement('a');
-          link.href = file.data;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+        const cachedFiles = readStoredFilesMetadata(currentLeadId);
+        if (!forceServer) {
+          renderFilesList(cachedFiles);
         }
+
+        try {
+          const remoteFiles = await syncFilesMetadataFromServer(currentLeadId);
+          renderFilesList(remoteFiles);
+        } catch (error) {
+          if (forceServer) {
+            renderFilesList(cachedFiles);
+          }
+          if (!silent) {
+            showToast(error.message || 'No se pudieron sincronizar los archivos.', 'error');
+          }
+        }
+      }
+
+      window.downloadFile = async function(fileId) {
+        const files = readStoredFilesMetadata(currentLeadId);
+        const file = files.find((item) => String(item.id) === String(fileId));
+        if (!file) return;
+
+        const dataUrl = await getFilePayload(file.id, file.data, {
+          fetchRemote: true,
+          leadId: currentLeadId
+        });
+        if (!dataUrl) {
+          showToast('No se encontro el contenido del archivo.', 'error');
+          return;
+        }
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       };
 
-      window.deleteFile = function(fileId) {
-        if (!confirm('�Eliminar este archivo?')) return;
+      window.deleteFile = async function(fileId) {
+        if (!confirm('Eliminar este archivo?')) return;
 
-        const filesKey = `lead_files_${currentLeadId}`;
-        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const deletedFile = files.find((item) => item.id === fileId) || null;
-        const updatedFiles = files.filter((item) => item.id !== fileId);
-        localStorage.setItem(filesKey, JSON.stringify(updatedFiles));
+        const files = readStoredFilesMetadata(currentLeadId);
+        const deletedFile = files.find((item) => String(item.id) === String(fileId)) || null;
+        if (!deletedFile) return;
+
+        try {
+          await deleteFileFromServer(currentLeadId, deletedFile.id);
+        } catch (error) {
+          showToast(error.message || 'No se pudo eliminar el archivo.', 'error');
+          return;
+        }
+
+        const updatedFiles = files.filter((item) => String(item.id) !== String(fileId));
+        persistFilesMetadata(currentLeadId, updatedFiles);
+        cacheSharedLeadFiles(currentLeadId, updatedFiles);
+        await deleteFilePayload(String(fileId));
 
         window.dispatchEvent(new CustomEvent('lead:file-deleted', {
           detail: {
@@ -5733,15 +6460,18 @@
         }));
 
         showToast('Archivo eliminado', 'success');
-        loadFilesList();
+        await loadFilesList({ forceServer: true, silent: true });
       };
 
-      window.openFile = function(fileId) {
-        const filesKey = `lead_files_${currentLeadId}`;
-        const files = JSON.parse(localStorage.getItem(filesKey) || '[]');
-        const file = files.find((item) => item.id === fileId);
+      window.openFile = async function(fileId) {
+        const files = readStoredFilesMetadata(currentLeadId);
+        const file = files.find((item) => String(item.id) === String(fileId));
+        const dataUrl = await getFilePayload(file?.id, file?.data, {
+          fetchRemote: true,
+          leadId: currentLeadId
+        });
 
-        if (!file?.data) {
+        if (!file || !dataUrl) {
           showToast('Archivo no encontrado', 'error');
           return;
         }
@@ -5762,12 +6492,12 @@
 
         if (isImage) {
           const img = document.createElement('img');
-          img.src = file.data;
+          img.src = dataUrl;
           img.alt = file.name;
           body.appendChild(img);
         } else if (isPdf) {
           const iframe = document.createElement('iframe');
-          iframe.src = file.data;
+          iframe.src = dataUrl;
           body.appendChild(iframe);
         } else {
           body.innerHTML = `
@@ -5783,7 +6513,6 @@
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
       };
-
       window.closeFileViewer = function() {
         const modal = document.getElementById('fileViewerModal');
         const body = document.getElementById('fileViewerBody');
@@ -5891,7 +6620,7 @@
       setValue('bankHolderAddress2', data.address2);
       
       // Configuración de pagos
-      setValue('bankInitialPayment', formatMoneyInput(data.initial_payment_amount));
+      setValue('bankInitialPayment', formatBankingMoneyInput(data.initial_payment_amount));
       setValue('bankPaymentDay', data.payment_day_of_month);
       
       // Si hay datos expandidos, mostrar indicadores
@@ -5919,7 +6648,7 @@
       }
     }
     
-    function formatMoneyInput(value) {
+    function formatBankingMoneyInput(value) {
       if (!value || value === 0) return '';
       return parseFloat(value).toFixed(2);
     }
@@ -6161,4 +6890,3 @@
       }
     `;
     document.head.appendChild(bankingStyles);
-

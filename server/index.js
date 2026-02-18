@@ -16,7 +16,7 @@ const ADMIN_USER = 'admin';
 const ADMIN_PASSWORD = '1234';
 
 app.use(cors());
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static(ROOT_DIR));
 
 // Lista de estados Green (los demas son Red)
@@ -26,6 +26,23 @@ const GREEN_STATES = [
   'IA', 'AK', 'SD'
 ];
 const NOTE_COLOR_TAGS = new Set(['yellow', 'red', 'green', 'blue', 'gray']);
+const FILE_DOCUMENT_CATEGORIES = new Set([
+  'official_document',
+  'credit_report',
+  'income_proof',
+  'bank_statement',
+  'contract',
+  'other'
+]);
+const FILE_ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+]);
+const FILE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 const VALID_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -44,6 +61,7 @@ const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
 const LEAD_SELECT_COLUMNS = `
   id, case_id, full_name, co_applicant_name, co_applicant_email, co_applicant_home_phone, co_applicant_cell_phone, co_applicant_dob, co_applicant_ssn,
   co_applicant_currently_employed, co_applicant_employer_name, co_applicant_occupation, co_applicant_self_employed,
+  include_coapp_in_contract, fico_score_applicant, fico_score_coapp,
   calc_total_debt, calc_settlement_percent, calc_program_fee_percent, calc_bank_fee, calc_months, calc_legal_plan_enabled,
   email, phone, home_phone, cell_phone,
   source, state_code, dob, ssn, address_street, city, zip_code, best_time,
@@ -134,6 +152,21 @@ function normalizeBoolean(value, fieldName) {
     if (['false', '0', 'no', 'off'].includes(normalized)) return { ok: true, value: false };
   }
   return { ok: false, message: `${fieldName} debe ser booleano.` };
+}
+
+function normalizeNullableCreditScore(value, fieldName) {
+  if (value === undefined) return { ok: true, provided: false, value: null };
+  if (value === null) return { ok: true, provided: true, value: null };
+
+  const raw = String(value).trim();
+  if (!raw) return { ok: true, provided: true, value: null };
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 300 || parsed > 850) {
+    return { ok: false, message: `${fieldName} debe ser un entero entre 300 y 850.` };
+  }
+
+  return { ok: true, provided: true, value: parsed };
 }
 
 function normalizeMoney(value, fieldName) {
@@ -473,6 +506,27 @@ function parseLeadPatchBody(body = {}) {
     changes.calc_legal_plan_enabled = normalizedCalcLegalPlanEnabled.value;
   }
 
+  const includeCoappInContract = pickFirstDefined(body, ['includeCoappInContract', 'include_coapp_in_contract']);
+  if (includeCoappInContract !== undefined) {
+    const normalizedIncludeCoapp = normalizeBoolean(includeCoappInContract, 'includeCoappInContract');
+    if (!normalizedIncludeCoapp.ok) return normalizedIncludeCoapp;
+    changes.include_coapp_in_contract = normalizedIncludeCoapp.value;
+  }
+
+  const ficoScoreApplicant = pickFirstDefined(body, ['ficoScoreApplicant', 'fico_score_applicant']);
+  if (ficoScoreApplicant !== undefined) {
+    const normalizedFicoScoreApplicant = normalizeNullableCreditScore(ficoScoreApplicant, 'ficoScoreApplicant');
+    if (!normalizedFicoScoreApplicant.ok) return normalizedFicoScoreApplicant;
+    changes.fico_score_applicant = normalizedFicoScoreApplicant.value;
+  }
+
+  const ficoScoreCoapp = pickFirstDefined(body, ['ficoScoreCoapp', 'fico_score_coapp']);
+  if (ficoScoreCoapp !== undefined) {
+    const normalizedFicoScoreCoapp = normalizeNullableCreditScore(ficoScoreCoapp, 'ficoScoreCoapp');
+    if (!normalizedFicoScoreCoapp.ok) return normalizedFicoScoreCoapp;
+    changes.fico_score_coapp = normalizedFicoScoreCoapp.value;
+  }
+
   const homePhone = pickFirstDefined(body, ['homePhone', 'home_phone']);
   if (homePhone !== undefined) {
     const normalizedHomePhone = normalizePhone(homePhone, 'homePhone');
@@ -635,6 +689,17 @@ function normalizeResponsibility(value) {
   if (!text) return { ok: true, value: null };
   const normalized = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
   return { ok: true, value: normalized.slice(0, 60) };
+}
+
+function normalizeDebtSourceRank(value) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { ok: true, value: 0 };
+  }
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0 || num > 10) {
+    return { ok: false, message: 'debtSourceRank debe ser un entero entre 0 y 10.' };
+  }
+  return { ok: true, value: num };
 }
 
 function extractFirstJsonBlock(text) {
@@ -825,6 +890,79 @@ function normalizeDebtorParty(value) {
   return { ok: false, message: 'debtorParty debe ser applicant o coapp.' };
 }
 
+function normalizeFileDocumentCategory(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return { ok: false, message: 'documentCategory es obligatorio.' };
+  }
+  if (!FILE_DOCUMENT_CATEGORIES.has(normalized)) {
+    return { ok: false, message: 'documentCategory no es valido.' };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeFileMimeType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return { ok: false, message: 'type es obligatorio.' };
+  }
+  if (!FILE_ALLOWED_MIME_TYPES.has(normalized)) {
+    return { ok: false, message: `Tipo de archivo no permitido: ${normalized}` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeFileSize(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return { ok: false, message: 'size debe ser un entero valido.' };
+  }
+  if (parsed > FILE_MAX_SIZE_BYTES) {
+    return { ok: false, message: 'Archivo muy grande (max 10MB).' };
+  }
+  return { ok: true, value: parsed };
+}
+
+function normalizeFileDataUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return { ok: false, message: 'data es obligatorio.' };
+  }
+
+  const match = raw.match(/^data:([a-z0-9.+/-]+);base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) {
+    return { ok: false, message: 'data debe estar en formato Data URL base64.' };
+  }
+
+  const mimeType = String(match[1] || '').toLowerCase();
+  if (!FILE_ALLOWED_MIME_TYPES.has(mimeType)) {
+    return { ok: false, message: `Tipo de archivo no permitido: ${mimeType}` };
+  }
+
+  const base64Payload = String(match[2] || '').replace(/\s+/g, '');
+  const estimatedBytes = Math.floor((base64Payload.length * 3) / 4);
+  if (estimatedBytes > FILE_MAX_SIZE_BYTES) {
+    return { ok: false, message: 'Archivo muy grande (max 10MB).' };
+  }
+
+  return { ok: true, value: raw, mimeType, estimatedBytes };
+}
+
+function mapLeadFileRow(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    leadId: Number(row.lead_id),
+    name: row.file_name || '',
+    type: row.mime_type || '',
+    size: Number(row.file_size || 0),
+    documentCategory: row.document_category || null,
+    creditReportParty: row.credit_report_party || null,
+    uploadedAt: row.created_at || null,
+    updatedAt: row.updated_at || null
+  };
+}
+
 function normalizeCreditorPayload(body = {}) {
   const creditorName = toNullableText(pickFirstDefined(body, ['creditorName', 'creditor_name']), 180);
   if (!creditorName) {
@@ -859,6 +997,9 @@ function normalizeCreditorPayload(body = {}) {
   const debtorParty = normalizeDebtorParty(pickFirstDefined(body, ['debtorParty', 'debtor_party']));
   if (!debtorParty.ok) return debtorParty;
 
+  const debtSourceRank = normalizeDebtSourceRank(pickFirstDefined(body, ['debtSourceRank', 'debt_source_rank']));
+  if (!debtSourceRank.ok) return debtSourceRank;
+
   return {
     ok: true,
     value: {
@@ -883,6 +1024,7 @@ function normalizeCreditorPayload(body = {}) {
         pastDue: pastDue.value,
         balance: balance.value
       }),
+      debt_source_rank: debtSourceRank.value,
       is_included: included.provided ? included.value : true,
       notes: toNullableText(pickFirstDefined(body, ['notes']), 3000),
       raw_snapshot: toNullableText(pickFirstDefined(body, ['rawSnapshot', 'raw_snapshot']), 12000)
@@ -945,16 +1087,108 @@ async function getLeadCreditorsSummary(leadId) {
   };
 }
 
+function normalizeCreditorNameKey(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeAccountToken(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9X*]/g, '');
+}
+
+function getAccountQualityScore(value) {
+  const token = normalizeAccountToken(value);
+  if (!token) return -1;
+
+  const compact = token.replace(/[X*]/g, '');
+  const digits = compact.replace(/[^0-9]/g, '');
+  const hasMask = /[X*]/.test(token);
+
+  let score = 0;
+  score += compact.length * 4;
+  score += digits.length * 6;
+  if (!hasMask) score += 50;
+  if (hasMask) score -= 20;
+  return score;
+}
+
+function choosePreferredAccountNumber(currentValue, candidateValue) {
+  const current = String(currentValue || '').trim();
+  const candidate = String(candidateValue || '').trim();
+  if (!candidate) return current;
+  if (!current) return candidate;
+
+  const currentScore = getAccountQualityScore(current);
+  const candidateScore = getAccountQualityScore(candidate);
+
+  if (candidateScore > currentScore) return candidate;
+  if (candidateScore < currentScore) return current;
+  return candidate.length > current.length ? candidate : current;
+}
+
+function accountTokensLikelySame(tokenA, tokenB) {
+  const a = normalizeAccountToken(tokenA);
+  const b = normalizeAccountToken(tokenB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const compactA = a.replace(/[X*]/g, '');
+  const compactB = b.replace(/[X*]/g, '');
+  if (!compactA || !compactB) return false;
+  if (compactA === compactB) return true;
+
+  if (
+    compactA.length >= 6 &&
+    compactB.length >= 6 &&
+    (compactA.includes(compactB) || compactB.includes(compactA))
+  ) {
+    return true;
+  }
+
+  const lastA = compactA.slice(-4);
+  const lastB = compactB.slice(-4);
+  if (lastA && lastB && lastA.length === 4 && lastA === lastB) {
+    const firstA = compactA.slice(0, 6);
+    const firstB = compactB.slice(0, 6);
+    if (firstA && firstB && firstA === firstB) return true;
+  }
+
+  return false;
+}
+
+function isLikelyDuplicateCreditorEntry(entry, existing) {
+  const entryParty = normalizeDebtorParty(entry.debtor_party).value;
+  const existingParty = normalizeDebtorParty(existing.debtor_party).value;
+  if (entryParty !== existingParty) return false;
+
+  if (normalizeCreditorNameKey(entry.creditor_name) !== normalizeCreditorNameKey(existing.creditor_name)) {
+    return false;
+  }
+
+  const entryStatus = String(entry.account_status || '').trim().toLowerCase();
+  const existingStatus = String(existing.account_status || '').trim().toLowerCase();
+  if (entryStatus && existingStatus && entryStatus !== existingStatus) {
+    return false;
+  }
+
+  const entryAccount = String(entry.account_number || '').trim();
+  const existingAccount = String(existing.account_number || '').trim();
+  if (entryAccount && existingAccount) {
+    return accountTokensLikelySame(entryAccount, existingAccount);
+  }
+
+  const entryDebt = parseDbMoney(entry.debt_amount);
+  const existingDebt = parseDbMoney(existing.debt_amount);
+  return Math.abs(entryDebt - existingDebt) <= 0.01;
+}
+
 function buildCreditorFingerprint(creditor) {
   const debtorParty = normalizeDebtorParty(creditor.debtor_party).value;
-  const creditorName = String(creditor.creditor_name || '')
-    .toUpperCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-  const accountNumber = String(creditor.account_number || '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .replace(/X+/g, '');
+  const creditorName = normalizeCreditorNameKey(creditor.creditor_name);
+  const accountNumber = normalizeAccountToken(creditor.account_number).replace(/[X*]/g, '');
   const debt = parseDbMoney(creditor.debt_amount).toFixed(2);
   return `${debtorParty}|${creditorName}|${accountNumber}|${debt}`;
 }
@@ -1328,6 +1562,203 @@ app.delete('/api/leads/:id/notes/:noteId', async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar nota del lead:', error);
     return res.status(500).json({ message: 'No se pudo eliminar la nota.' });
+  }
+});
+
+app.get('/api/leads/:id/files', async (req, res) => {
+  const leadId = Number(req.params.id);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  try {
+    const leadExists = await ensureLeadExists(leadId);
+    if (!leadExists) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, lead_id, file_name, mime_type, file_size, document_category, credit_report_party, created_at, updated_at
+       FROM lead_files
+       WHERE lead_id = $1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 500`,
+      [leadId]
+    );
+
+    return res.json({ files: rows.map(mapLeadFileRow).filter(Boolean) });
+  } catch (error) {
+    console.error('Error al listar archivos del lead:', error);
+    return res.status(500).json({ message: 'No se pudieron cargar los archivos.' });
+  }
+});
+
+app.post('/api/leads/:id/files', async (req, res) => {
+  const leadId = Number(req.params.id);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  const fileName = cleanText(pickFirstDefined(req.body || {}, ['name', 'fileName', 'file_name']), 255);
+  if (!fileName) {
+    return res.status(400).json({ message: 'name es obligatorio.' });
+  }
+
+  const normalizedCategory = normalizeFileDocumentCategory(
+    pickFirstDefined(req.body || {}, ['documentCategory', 'document_category'])
+  );
+  if (!normalizedCategory.ok) {
+    return res.status(400).json({ message: normalizedCategory.message });
+  }
+
+  const normalizedData = normalizeFileDataUrl(pickFirstDefined(req.body || {}, ['data', 'dataUrl', 'data_url']));
+  if (!normalizedData.ok) {
+    return res.status(400).json({ message: normalizedData.message });
+  }
+
+  const providedMime = normalizeFileMimeType(pickFirstDefined(req.body || {}, ['type', 'mimeType', 'mime_type']));
+  if (!providedMime.ok) {
+    return res.status(400).json({ message: providedMime.message });
+  }
+
+  if (providedMime.value !== normalizedData.mimeType) {
+    return res.status(400).json({ message: 'type no coincide con el contenido real del archivo.' });
+  }
+
+  const sizeInput = pickFirstDefined(req.body || {}, ['size', 'fileSize', 'file_size']);
+  const resolvedSize = sizeInput === undefined ? normalizedData.estimatedBytes : sizeInput;
+  const normalizedSize = normalizeFileSize(resolvedSize);
+  if (!normalizedSize.ok) {
+    return res.status(400).json({ message: normalizedSize.message });
+  }
+
+  if (Math.abs(normalizedSize.value - normalizedData.estimatedBytes) > 1024) {
+    return res.status(400).json({ message: 'size no coincide con el contenido del archivo.' });
+  }
+
+  let creditReportParty = null;
+  if (normalizedCategory.value === 'credit_report') {
+    const normalizedParty = normalizeDebtorParty(
+      pickFirstDefined(req.body || {}, ['creditReportParty', 'credit_report_party', 'debtorParty', 'debtor_party'])
+    );
+    if (!normalizedParty.ok) {
+      return res.status(400).json({ message: 'creditReportParty debe ser applicant o coapp.' });
+    }
+    creditReportParty = normalizedParty.value;
+  }
+
+  const uploadedBy = resolveRequestUsername(req, 'Sistema');
+
+  try {
+    const leadExists = await ensureLeadExists(leadId);
+    if (!leadExists) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO lead_files (
+         lead_id, file_name, mime_type, file_size, document_category, credit_report_party, file_data_url, uploaded_by
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, lead_id, file_name, mime_type, file_size, document_category, credit_report_party, created_at, updated_at`,
+      [
+        leadId,
+        fileName,
+        providedMime.value,
+        normalizedSize.value,
+        normalizedCategory.value,
+        creditReportParty,
+        normalizedData.value,
+        cleanText(uploadedBy, 120) || 'Sistema'
+      ]
+    );
+
+    await pool.query(
+      `UPDATE leads
+       SET updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [leadId]
+    );
+
+    return res.status(201).json({ file: mapLeadFileRow(rows[0]) });
+  } catch (error) {
+    console.error('Error al guardar archivo del lead:', error);
+    return res.status(500).json({ message: 'No se pudo guardar el archivo.' });
+  }
+});
+
+app.get('/api/leads/:id/files/:fileId/content', async (req, res) => {
+  const leadId = Number(req.params.id);
+  const fileId = Number(req.params.fileId);
+
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+  if (!Number.isInteger(fileId) || fileId <= 0) {
+    return res.status(400).json({ message: 'ID de archivo invalido.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, lead_id, file_name, mime_type, file_size, document_category, credit_report_party, file_data_url, created_at, updated_at
+       FROM lead_files
+       WHERE id = $1 AND lead_id = $2
+       LIMIT 1`,
+      [fileId, leadId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Archivo no encontrado.' });
+    }
+
+    const row = rows[0];
+    return res.json({
+      file: mapLeadFileRow(row),
+      dataUrl: row.file_data_url || ''
+    });
+  } catch (error) {
+    console.error('Error al obtener contenido del archivo:', error);
+    return res.status(500).json({ message: 'No se pudo leer el archivo.' });
+  }
+});
+
+app.delete('/api/leads/:id/files/:fileId', async (req, res) => {
+  const leadId = Number(req.params.id);
+  const fileId = Number(req.params.fileId);
+
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+  if (!Number.isInteger(fileId) || fileId <= 0) {
+    return res.status(400).json({ message: 'ID de archivo invalido.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM lead_files
+       WHERE id = $1 AND lead_id = $2
+       RETURNING id, lead_id, file_name, mime_type, file_size, document_category, credit_report_party, created_at, updated_at`,
+      [fileId, leadId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Archivo no encontrado.' });
+    }
+
+    await pool.query(
+      `UPDATE leads
+       SET updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [leadId]
+    );
+
+    return res.json({
+      message: 'Archivo eliminado correctamente.',
+      file: mapLeadFileRow(rows[0])
+    });
+  } catch (error) {
+    console.error('Error al eliminar archivo del lead:', error);
+    return res.status(500).json({ message: 'No se pudo eliminar el archivo.' });
   }
 });
 
@@ -1804,23 +2235,75 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
       await pool.query('DELETE FROM lead_creditors WHERE lead_id = $1', [leadId]);
     }
 
-    const existingFingerprintSet = new Set();
+    const existingEntries = [];
     if (!replaceExisting) {
       const { rows: existingRows } = await pool.query(
-        `SELECT creditor_name, account_number, debt_amount, debtor_party
+        `SELECT id, creditor_name, account_number, account_status, debt_amount, debtor_party
          FROM lead_creditors
          WHERE lead_id = $1`,
         [leadId]
       );
-      existingRows.forEach((row) => existingFingerprintSet.add(buildCreditorFingerprint(row)));
+      existingRows.forEach((row) => existingEntries.push(row));
     }
 
     const insertedRows = [];
     let skippedCount = 0;
+    const sortedEntries = [...normalizedEntries].sort((a, b) => (
+      getAccountQualityScore(b.account_number) - getAccountQualityScore(a.account_number)
+    ));
 
-    for (const entry of normalizedEntries) {
-      const fingerprint = buildCreditorFingerprint(entry);
-      if (existingFingerprintSet.has(fingerprint)) {
+    for (const entry of sortedEntries) {
+      const duplicate = existingEntries.find((existing) => isLikelyDuplicateCreditorEntry(entry, existing));
+      if (duplicate) {
+        const preferredAccount = choosePreferredAccountNumber(duplicate.account_number, entry.account_number);
+        const updateFields = [];
+        const updateValues = [];
+
+        if (preferredAccount && preferredAccount !== duplicate.account_number) {
+          updateFields.push(`account_number = $${updateValues.length + 1}`);
+          updateValues.push(preferredAccount);
+          duplicate.account_number = preferredAccount;
+        }
+
+        const existingDebt = parseDbMoney(duplicate.debt_amount);
+        const incomingDebt = parseDbMoney(entry.debt_amount);
+        const incomingPastDue = parseDbMoney(entry.past_due);
+        const incomingRank = Number(entry.debt_source_rank || 0);
+        const debtLooksCurrent = incomingDebt > 0 && incomingPastDue > 0 && Math.abs(incomingDebt - incomingPastDue) <= 0.01;
+        const debtGap = Math.abs(incomingDebt - existingDebt);
+        const debtRatio = (incomingDebt > 0 && existingDebt > 0)
+          ? (Math.max(incomingDebt, existingDebt) / Math.max(1, Math.min(incomingDebt, existingDebt)))
+          : Infinity;
+        const highConfidenceReparse = incomingRank >= 3 && debtGap >= 50 && debtRatio >= 1.25;
+        const shouldReplaceDebt =
+          incomingDebt > 0 &&
+          (
+            existingDebt <= 0 ||
+            (debtLooksCurrent && incomingDebt < existingDebt) ||
+            highConfidenceReparse
+          );
+
+        if (shouldReplaceDebt) {
+          updateFields.push(`debt_amount = $${updateValues.length + 1}`);
+          updateValues.push(incomingDebt);
+          duplicate.debt_amount = incomingDebt;
+
+          if (incomingPastDue > 0) {
+            updateFields.push(`past_due = $${updateValues.length + 1}`);
+            updateValues.push(incomingPastDue);
+          }
+        }
+
+        if (duplicate.id && updateFields.length > 0) {
+          updateFields.push('updated_at = CURRENT_TIMESTAMP');
+          updateValues.push(duplicate.id);
+          await pool.query(
+            `UPDATE lead_creditors
+             SET ${updateFields.join(', ')}
+             WHERE id = $${updateValues.length}`,
+            updateValues
+          );
+        }
         skippedCount += 1;
         continue;
       }
@@ -1868,7 +2351,7 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
       );
 
       insertedRows.push(rows[0]);
-      existingFingerprintSet.add(fingerprint);
+      existingEntries.push(rows[0]);
     }
 
     await pool.query('COMMIT');

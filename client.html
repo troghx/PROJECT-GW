@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260216e">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
-  <link rel="stylesheet" href="creditors-final.css?v=20260217m">
+  <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <style>
     :root {
       --lead-viewport-height: 100vh;
@@ -2105,6 +2105,11 @@
     .calc-input-field:read-only:focus {
       border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
     }
+
+    #calcTotalDebt {
+      pointer-events: none;
+      user-select: none;
+    }
     
     .calc-input-prefix,
     .calc-input-suffix {
@@ -3566,6 +3571,32 @@
       text-align: right;
       outline: none;
     }
+
+    .lead-best-time-select-wrap {
+      display: flex;
+      justify-content: flex-end;
+      min-width: 170px;
+    }
+
+    .lead-best-time-select {
+      min-width: 170px;
+      max-width: 220px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-align: left;
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .lead-best-time-select:focus {
+      border-color: var(--accent, #7eeafc);
+      background: rgba(255, 255, 255, 0.12);
+    }
     
     /* Copy icon */
     .copy-icon {
@@ -4380,6 +4411,17 @@
     
     body.home-active.theme-light .info-row-value {
       color: #1a1a1a;
+    }
+
+    body.home-active.theme-light .lead-best-time-select {
+      border-color: rgba(0, 0, 0, 0.18);
+      background: rgba(0, 0, 0, 0.04);
+      color: #1a1a1a;
+    }
+
+    body.home-active.theme-light .lead-best-time-select:focus {
+      border-color: #2563eb;
+      background: rgba(0, 0, 0, 0.08);
     }
     
     body.home-active.theme-light .date-input {
@@ -6110,7 +6152,7 @@
                         <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
                       </svg>
                     </button>
-                    <input type="text" class="calc-input-field percent" id="calcSettlementPercent" value="0" readonly>
+                    <input type="text" class="calc-input-field percent" id="calcSettlementPercent" value="55" readonly>
                     <span class="calc-input-suffix">%</span>
                   </div>
                 </div>
@@ -6128,7 +6170,7 @@
                         <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
                       </svg>
                     </button>
-                    <input type="text" class="calc-input-field percent" id="calcProgramFeePercent" value="0" readonly>
+                    <input type="text" class="calc-input-field percent" id="calcProgramFeePercent" value="25" readonly>
                     <span class="calc-input-suffix">%</span>
                   </div>
                 </div>
@@ -6147,7 +6189,7 @@
                       </svg>
                     </button>
                     <span class="calc-input-prefix">$</span>
-                    <input type="text" class="calc-input-field" id="calcBankFee" value="0.00" readonly>
+                    <input type="text" class="calc-input-field" id="calcBankFee" value="9.95" readonly>
                   </div>
                 </div>
                 
@@ -6574,19 +6616,44 @@
             
             <!-- Resumen compacto + Botón -->
             <div class="creditors-summary-inline">
-              <div class="summary-badges">
-                <span class="summary-badge total">
-                  <small>TOTAL</small> <strong id="creditorsTotalDebt">$0.00</strong>
-                </span>
-                <span class="summary-badge count">
-                  <small>CUENTAS</small> <strong id="creditorsAccountsCount">0</strong>
-                </span>
-                <span class="summary-badge included">
-                  <small>INCLUIDAS</small> <strong id="creditorsIncludedAmount">$0.00</strong>
-                </span>
-                <span class="summary-badge pastdue">
-                  <small>VENCIDO</small> <strong id="creditorsPastDueTotal">$0.00</strong>
-                </span>
+              <div class="summary-badges-wrap">
+                <div class="summary-badges" id="creditorsMainSummaryBadges">
+                  <span class="summary-badge total">
+                    <small>TOTAL</small> <strong id="creditorsTotalDebt">$0.00</strong>
+                  </span>
+                  <span class="summary-badge count">
+                    <small>CUENTAS</small> <strong id="creditorsAccountsCount">0</strong>
+                  </span>
+                  <span class="summary-badge included">
+                    <small>INCLUIDAS</small> <strong id="creditorsIncludedAmount">$0.00</strong>
+                  </span>
+                  <span class="summary-badge pastdue">
+                    <small>VENCIDO</small> <strong id="creditorsPastDueTotal">$0.00</strong>
+                  </span>
+                  <span class="summary-badge fico">
+                    <small>FICO</small> <strong id="creditorsFicoScore">Pendiente</strong>
+                  </span>
+                </div>
+                <div class="summary-badges summary-badges-party hidden" id="creditorsPartySummaryBadges" hidden>
+                  <span class="summary-badge total">
+                    <small>TOTAL</small> <strong id="creditorsPartyTotalDebt">$0.00</strong>
+                  </span>
+                  <span class="summary-badge count">
+                    <small>CUENTAS</small> <strong id="creditorsPartyAccountsCount">0</strong>
+                  </span>
+                  <span class="summary-badge party-applicant-debt">
+                    <small>APP TOTAL</small> <strong id="creditorsApplicantDebt">$0.00</strong>
+                  </span>
+                  <span class="summary-badge party-applicant-fico">
+                    <small>APP FICO</small> <strong id="creditorsApplicantFico">Pendiente</strong>
+                  </span>
+                  <span class="summary-badge party-coapp-debt">
+                    <small>COAPP TOTAL</small> <strong id="creditorsCoappDebt">$0.00</strong>
+                  </span>
+                  <span class="summary-badge party-coapp-fico">
+                    <small>COAPP FICO</small> <strong id="creditorsCoappFico">Pendiente</strong>
+                  </span>
+                </div>
               </div>
               <button class="btn-apply-calc" id="creditorsApplyTotalBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -6718,11 +6785,11 @@
 
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/tesseract.min.js"></script>
-  <script src="credit-report-auto-extract.js?v=20260217b"></script>
+  <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260217k"></script>
+  <script src="client.js?v=20260218j"></script>
   <script src="quick-actions.js?v=20260216c"></script>
-  <script src="creditors-redesign.js?v=20260217k"></script>
+  <script src="creditors-redesign.js?v=20260218o"></script>
 </body>
 </html>
 

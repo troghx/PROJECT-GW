@@ -13,10 +13,13 @@ CREATE TABLE IF NOT EXISTS leads (
   co_applicant_employer_name VARCHAR(120),
   co_applicant_occupation VARCHAR(120),
   co_applicant_self_employed BOOLEAN NOT NULL DEFAULT FALSE,
+  include_coapp_in_contract BOOLEAN NOT NULL DEFAULT FALSE,
+  fico_score_applicant INTEGER,
+  fico_score_coapp INTEGER,
   calc_total_debt NUMERIC(12,2) NOT NULL DEFAULT 0,
-  calc_settlement_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
-  calc_program_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
-  calc_bank_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
+  calc_settlement_percent NUMERIC(5,2) NOT NULL DEFAULT 55,
+  calc_program_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 25,
+  calc_bank_fee NUMERIC(10,2) NOT NULL DEFAULT 9.95,
   calc_months INTEGER NOT NULL DEFAULT 48,
   calc_legal_plan_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   email VARCHAR(160),
@@ -295,8 +298,11 @@ BEGIN
     ALTER TABLE leads ADD COLUMN calc_settlement_percent NUMERIC(5,2);
   END IF;
 
-  UPDATE leads SET calc_settlement_percent = 0 WHERE calc_settlement_percent IS NULL;
-  ALTER TABLE leads ALTER COLUMN calc_settlement_percent SET DEFAULT 0;
+  UPDATE leads
+  SET calc_settlement_percent = 55
+  WHERE calc_settlement_percent IS NULL
+    OR calc_settlement_percent <= 0;
+  ALTER TABLE leads ALTER COLUMN calc_settlement_percent SET DEFAULT 55;
   ALTER TABLE leads ALTER COLUMN calc_settlement_percent SET NOT NULL;
 END $$;
 
@@ -310,8 +316,11 @@ BEGIN
     ALTER TABLE leads ADD COLUMN calc_program_fee_percent NUMERIC(5,2);
   END IF;
 
-  UPDATE leads SET calc_program_fee_percent = 0 WHERE calc_program_fee_percent IS NULL;
-  ALTER TABLE leads ALTER COLUMN calc_program_fee_percent SET DEFAULT 0;
+  UPDATE leads
+  SET calc_program_fee_percent = 25
+  WHERE calc_program_fee_percent IS NULL
+    OR calc_program_fee_percent <= 0;
+  ALTER TABLE leads ALTER COLUMN calc_program_fee_percent SET DEFAULT 25;
   ALTER TABLE leads ALTER COLUMN calc_program_fee_percent SET NOT NULL;
 END $$;
 
@@ -325,8 +334,11 @@ BEGIN
     ALTER TABLE leads ADD COLUMN calc_bank_fee NUMERIC(10,2);
   END IF;
 
-  UPDATE leads SET calc_bank_fee = 0 WHERE calc_bank_fee IS NULL;
-  ALTER TABLE leads ALTER COLUMN calc_bank_fee SET DEFAULT 0;
+  UPDATE leads
+  SET calc_bank_fee = 9.95
+  WHERE calc_bank_fee IS NULL
+    OR calc_bank_fee <= 0;
+  ALTER TABLE leads ALTER COLUMN calc_bank_fee SET DEFAULT 9.95;
   ALTER TABLE leads ALTER COLUMN calc_bank_fee SET NOT NULL;
 END $$;
 
@@ -358,6 +370,73 @@ BEGIN
   UPDATE leads SET calc_legal_plan_enabled = FALSE WHERE calc_legal_plan_enabled IS NULL;
   ALTER TABLE leads ALTER COLUMN calc_legal_plan_enabled SET DEFAULT FALSE;
   ALTER TABLE leads ALTER COLUMN calc_legal_plan_enabled SET NOT NULL;
+END $$;
+
+-- Migracion: Agregar y normalizar include_coapp_in_contract
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'include_coapp_in_contract'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN include_coapp_in_contract BOOLEAN;
+  END IF;
+
+  UPDATE leads SET include_coapp_in_contract = FALSE WHERE include_coapp_in_contract IS NULL;
+  ALTER TABLE leads ALTER COLUMN include_coapp_in_contract SET DEFAULT FALSE;
+  ALTER TABLE leads ALTER COLUMN include_coapp_in_contract SET NOT NULL;
+END $$;
+
+-- Migracion: Agregar fico_score_applicant y fico_score_coapp
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'fico_score_applicant'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN fico_score_applicant INTEGER;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'fico_score_coapp'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN fico_score_coapp INTEGER;
+  END IF;
+
+  UPDATE leads
+  SET fico_score_applicant = NULL
+  WHERE fico_score_applicant IS NOT NULL
+    AND (fico_score_applicant < 300 OR fico_score_applicant > 850);
+
+  UPDATE leads
+  SET fico_score_coapp = NULL
+  WHERE fico_score_coapp IS NOT NULL
+    AND (fico_score_coapp < 300 OR fico_score_coapp > 850);
+END $$;
+
+-- Migracion: Asegurar checks de rango para FICO
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'leads_fico_score_applicant_range_chk'
+  ) THEN
+    ALTER TABLE leads
+    ADD CONSTRAINT leads_fico_score_applicant_range_chk
+    CHECK (fico_score_applicant IS NULL OR (fico_score_applicant BETWEEN 300 AND 850));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'leads_fico_score_coapp_range_chk'
+  ) THEN
+    ALTER TABLE leads
+    ADD CONSTRAINT leads_fico_score_coapp_range_chk
+    CHECK (fico_score_coapp IS NULL OR (fico_score_coapp BETWEEN 300 AND 850));
+  END IF;
 END $$;
 
 -- Migracion: Agregar home_phone si no existe
@@ -670,6 +749,83 @@ BEGIN
   ALTER TABLE note_templates ALTER COLUMN content SET NOT NULL;
 END $$;
 -- Índices
+-- Archivos por lead (compartidos para todos los usuarios)
+CREATE TABLE IF NOT EXISTS lead_files (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  file_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  file_size INTEGER NOT NULL DEFAULT 0 CHECK (file_size >= 0 AND file_size <= 10485760),
+  document_category VARCHAR(40) NOT NULL DEFAULT 'other',
+  credit_report_party VARCHAR(16),
+  file_data_url TEXT NOT NULL,
+  uploaded_by VARCHAR(120) NOT NULL DEFAULT 'Sistema',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_files_lead_id_created_at ON lead_files (lead_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_files_lead_id_category ON lead_files (lead_id, document_category);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'document_category'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN document_category VARCHAR(40) NOT NULL DEFAULT 'other';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'credit_report_party'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN credit_report_party VARCHAR(16);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'file_data_url'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN file_data_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'uploaded_by'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN uploaded_by VARCHAR(120) NOT NULL DEFAULT 'Sistema';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_files' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE lead_files ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  UPDATE lead_files
+  SET document_category = CASE
+    WHEN lower(coalesce(document_category, '')) IN ('official_document', 'credit_report', 'income_proof', 'bank_statement', 'contract', 'other')
+      THEN lower(document_category)
+    ELSE 'other'
+  END;
+
+  UPDATE lead_files
+  SET credit_report_party = CASE
+    WHEN lower(coalesce(credit_report_party, '')) IN ('coapp', 'co-app', 'co_applicant', 'coapplicant', 'co applicant', 'co') THEN 'coapp'
+    WHEN lower(coalesce(credit_report_party, '')) IN ('applicant', 'main', 'primary', 'app') THEN 'applicant'
+    ELSE NULL
+  END;
+END $$;
+
 -- Creditors por lead (deudas importadas/manuales)
 CREATE TABLE IF NOT EXISTS lead_creditors (
   id BIGSERIAL PRIMARY KEY,
