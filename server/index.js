@@ -12,8 +12,10 @@ const { pool } = require('./db');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = path.join(__dirname, '..');
-const ADMIN_USER = 'admin';
-const ADMIN_PASSWORD = '1234';
+const AUTH_USERS = [
+  { username: 'admin', password: '1234', displayName: 'Admin', role: 'Administrador' },
+  { username: 'elliot', password: '1234', displayName: 'Elliot', role: 'Agente' }
+];
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
@@ -69,9 +71,26 @@ const LEAD_SELECT_COLUMNS = `
   status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, created_at, updated_at
 `;
 
+function getStateTypeFromCode(stateCode) {
+  return GREEN_STATES.includes(String(stateCode || '').toUpperCase()) ? 'Green' : 'Red';
+}
+
+function getProgramFeePercentForState(stateCode) {
+  return getStateTypeFromCode(stateCode) === 'Green' ? 25 : 29.5;
+}
+
 function cleanText(value, maxLength) {
   const text = String(value || '').trim();
   return text.slice(0, maxLength);
+}
+
+function findAuthUser(username, password) {
+  const normalizedUsername = cleanText(username, 64).toLowerCase();
+  const rawPassword = String(password || '');
+  if (!normalizedUsername || !rawPassword) return null;
+  return AUTH_USERS.find(
+    (user) => user.username === normalizedUsername && user.password === rawPassword
+  ) || null;
 }
 
 function toNullableText(value, maxLength) {
@@ -213,6 +232,144 @@ function normalizeRelatedLeadId(value, fieldName = 'relatedLeadId') {
   }
 
   return { ok: true, value: normalized };
+}
+
+const BUDGET_MONEY_PATHS = [
+  ['budgetItems', 'housing', 'housingPayment'],
+  ['budgetItems', 'housing', 'homeOwnersInsurance'],
+  ['budgetItems', 'housing', 'secondaryHousePayment'],
+  ['budgetItems', 'transportation', 'autoPayments'],
+  ['budgetItems', 'transportation', 'autoInsurance'],
+  ['budgetItems', 'transportation', 'repairsMaintenance'],
+  ['budgetItems', 'transportation', 'gasoline'],
+  ['budgetItems', 'transportation', 'parking'],
+  ['budgetItems', 'transportation', 'commuting'],
+  ['budgetItems', 'food', 'groceries'],
+  ['budgetItems', 'food', 'eatingOut'],
+  ['budgetItems', 'utilities', 'averageEnergy'],
+  ['budgetItems', 'utilities', 'averagePhone'],
+  ['budgetItems', 'utilities', 'averageWater'],
+  ['budgetItems', 'utilities', 'averageInternet'],
+  ['budgetItems', 'otherExpenses'],
+  ['income', 'applicant', 'netMonthlyIncome'],
+  ['income', 'applicant', 'socialSecurity'],
+  ['income', 'applicant', 'alimony'],
+  ['income', 'applicant', 'retirement'],
+  ['income', 'applicant', 'totalHouseholdIncome'],
+  ['income', 'applicant', 'fixedIncome'],
+  ['income', 'applicant', 'unemployment'],
+  ['income', 'applicant', 'childSupport'],
+  ['income', 'applicant', 'other'],
+  ['income', 'coapp', 'netMonthlyIncome'],
+  ['income', 'coapp', 'socialSecurity'],
+  ['income', 'coapp', 'alimony'],
+  ['income', 'coapp', 'retirement'],
+  ['income', 'coapp', 'totalHouseholdIncome'],
+  ['income', 'coapp', 'fixedIncome'],
+  ['income', 'coapp', 'unemployment'],
+  ['income', 'coapp', 'childSupport'],
+  ['income', 'coapp', 'other']
+];
+
+function createDefaultBudgetData() {
+  return {
+    budgetItems: {
+      housing: {
+        housingType: '',
+        housingPayment: 0,
+        homeOwnersInsurance: 0,
+        secondaryHousePayment: 0
+      },
+      transportation: {
+        autoPayments: 0,
+        autoInsurance: 0,
+        repairsMaintenance: 0,
+        gasoline: 0,
+        parking: 0,
+        commuting: 0
+      },
+      food: {
+        groceries: 0,
+        eatingOut: 0
+      },
+      utilities: {
+        averageEnergy: 0,
+        averagePhone: 0,
+        averageWater: 0,
+        averageInternet: 0
+      },
+      otherExpenses: 0
+    },
+    income: {
+      applicant: {
+        netMonthlyIncome: 0,
+        socialSecurity: 0,
+        alimony: 0,
+        retirement: 0,
+        totalHouseholdIncome: 0,
+        fixedIncome: 0,
+        unemployment: 0,
+        childSupport: 0,
+        other: 0
+      },
+      coapp: {
+        netMonthlyIncome: 0,
+        socialSecurity: 0,
+        alimony: 0,
+        retirement: 0,
+        totalHouseholdIncome: 0,
+        fixedIncome: 0,
+        unemployment: 0,
+        childSupport: 0,
+        other: 0
+      }
+    },
+    hardship: {
+      hardshipReason: '',
+      detailedReasonEs: '',
+      detailedReasonEn: ''
+    }
+  };
+}
+
+function getValueByPath(source, path, fallback = undefined) {
+  let cursor = source;
+  for (const key of path) {
+    if (!cursor || typeof cursor !== 'object' || !(key in cursor)) return fallback;
+    cursor = cursor[key];
+  }
+  return cursor;
+}
+
+function setValueByPath(target, path, value) {
+  let cursor = target;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const key = path[i];
+    if (!cursor[key] || typeof cursor[key] !== 'object') {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  }
+  cursor[path[path.length - 1]] = value;
+}
+
+function normalizeBudgetData(raw) {
+  const base = createDefaultBudgetData();
+  const source = raw && typeof raw === 'object' ? raw : {};
+
+  for (const path of BUDGET_MONEY_PATHS) {
+    const normalized = normalizeMoney(getValueByPath(source, path, 0), path.join('.'));
+    setValueByPath(base, path, normalized.ok ? normalized.value : 0);
+  }
+
+  const housingType = String(getValueByPath(source, ['budgetItems', 'housing', 'housingType'], '') || '').trim().toLowerCase();
+  base.budgetItems.housing.housingType = ['rent', 'own'].includes(housingType) ? housingType : '';
+
+  base.hardship.hardshipReason = cleanText(getValueByPath(source, ['hardship', 'hardshipReason'], ''), 80);
+  base.hardship.detailedReasonEs = cleanText(getValueByPath(source, ['hardship', 'detailedReasonEs'], ''), 5000);
+  base.hardship.detailedReasonEn = cleanText(getValueByPath(source, ['hardship', 'detailedReasonEn'], ''), 5000);
+
+  return base;
 }
 
 function normalizeTemplateName(value, fieldName = 'name') {
@@ -636,6 +793,16 @@ function parseLeadPatchBody(body = {}) {
     } else {
       changes.notes = cleanText(notes, 5000);
     }
+  }
+
+  const status = pickFirstDefined(body, ['status', 'leadStatus']);
+  if (status !== undefined) {
+    changes.status = toNullableText(status, 120);
+  }
+
+  const assignedTo = pickFirstDefined(body, ['assignedTo', 'assigned_to']);
+  if (assignedTo !== undefined) {
+    changes.assigned_to = toNullableText(assignedTo, 120);
   }
 
   return { ok: true, changes };
@@ -1763,7 +1930,7 @@ app.delete('/api/leads/:id/files/:fileId', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const username = cleanText(req.body?.username, 64).toLowerCase();
+  const username = cleanText(req.body?.username, 64);
   const password = String(req.body?.password || '');
 
   if (!username || !password) {
@@ -1776,7 +1943,8 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(500).json({ message: 'PostgreSQL no esta disponible.' });
   }
 
-  if (username !== ADMIN_USER || password !== ADMIN_PASSWORD) {
+  const authUser = findAuthUser(username, password);
+  if (!authUser) {
     return res.status(401).json({ message: 'Credenciales invalidas.' });
   }
 
@@ -1784,10 +1952,46 @@ app.post('/api/auth/login', async (req, res) => {
     ok: true,
     message: 'Acceso correcto.',
     user: {
-      username: 'Admin',
-      role: 'Administrador'
+      username: authUser.displayName,
+      role: authUser.role
     }
   });
+});
+
+app.get('/api/users', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT assigned_to AS username
+       FROM leads
+       WHERE assigned_to IS NOT NULL
+         AND btrim(assigned_to) <> ''
+       ORDER BY assigned_to ASC
+       LIMIT 500`
+    );
+
+    const userMap = new Map();
+    const pushUser = (value) => {
+      const normalized = cleanText(value, 120);
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (!userMap.has(key)) userMap.set(key, normalized);
+    };
+
+    AUTH_USERS.forEach((user) => {
+      pushUser(user.displayName);
+      pushUser(user.username);
+    });
+    rows.forEach((row) => pushUser(row.username));
+
+    const users = Array.from(userMap.values()).sort((a, b) =>
+      a.localeCompare(b, 'es', { sensitivity: 'base' })
+    );
+
+    return res.json({ users });
+  } catch (error) {
+    console.error('Error al obtener usuarios:', error);
+    return res.status(500).json({ message: 'No se pudieron cargar usuarios.' });
+  }
 });
 
 app.get('/api/leads', async (_req, res) => {
@@ -1871,6 +2075,7 @@ app.post('/api/leads', async (req, res) => {
   const relatedLeadId = normalizedRelatedLeadId.value;
   const isGreenState = GREEN_STATES.includes(stateCode?.toUpperCase?.());
   const calcLegalPlanEnabled = isGreenState;
+  const calcProgramFeePercent = getProgramFeePercentForState(stateCode);
 
   if (!fullName || !phone) {
     return res.status(400).json({ message: 'Nombre y telefono son obligatorios.' });
@@ -1901,7 +2106,7 @@ app.post('/api/leads', async (req, res) => {
        RETURNING ${LEAD_SELECT_COLUMNS}`,
       [
         caseId, fullName, phone, phone, phone, isTest, stateCode, assignedTo, isTest ? 'Test' : 'New Lead', notes || '', relatedLeadId,
-        0, 0, 0, 0, 48, calcLegalPlanEnabled
+        0, 0, calcProgramFeePercent, 0, 48, calcLegalPlanEnabled
       ]
     );
 
@@ -1915,7 +2120,7 @@ app.post('/api/leads', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red';
+    lead.state_type = getStateTypeFromCode(lead.state_code);
 
     res.status(201).json({ lead });
   } catch (error) {
@@ -1958,13 +2163,31 @@ app.patch('/api/leads/:id', async (req, res) => {
   }
 
   const changes = parsed.changes;
-  const entries = Object.entries(changes);
+  const incomingEntries = Object.entries(changes);
 
-  if (entries.length === 0) {
+  if (incomingEntries.length === 0) {
     return res.status(400).json({ message: 'No hay campos para actualizar.' });
   }
 
   try {
+    let effectiveStateCode = changes.state_code;
+    if (effectiveStateCode === undefined) {
+      const { rows: existingLeadRows } = await pool.query(
+        'SELECT state_code FROM leads WHERE id = $1 LIMIT 1',
+        [leadId]
+      );
+
+      if (existingLeadRows.length === 0) {
+        return res.status(404).json({ message: 'Lead no encontrado.' });
+      }
+
+      effectiveStateCode = existingLeadRows[0].state_code;
+    }
+
+    // Regla fija de calculator: Green=25%, Red=29.5%
+    changes.calc_program_fee_percent = getProgramFeePercentForState(effectiveStateCode);
+    const entries = Object.entries(changes);
+
     if (Object.prototype.hasOwnProperty.call(changes, 'related_lead_id')) {
       const nextRelatedLeadId = changes.related_lead_id;
       const normalizedLeadId = Number(leadId);
@@ -2007,7 +2230,7 @@ app.patch('/api/leads/:id', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red';
+    lead.state_type = getStateTypeFromCode(lead.state_code);
 
     res.json({ lead, message: 'Lead actualizado correctamente.' });
   } catch (error) {
@@ -2796,6 +3019,85 @@ app.patch('/api/leads/:id/banking', async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar información bancaria:', error);
     res.status(500).json({ message: 'Error al actualizar información bancaria.' });
+  }
+});
+
+// ============================================
+// ENDPOINTS: BUDGET
+// ============================================
+
+app.get('/api/leads/:id/budget', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID invalido.' });
+  }
+
+  try {
+    const { rows: leadRows } = await pool.query(
+      'SELECT id FROM leads WHERE id = $1 LIMIT 1',
+      [leadId]
+    );
+
+    if (leadRows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT data
+       FROM lead_budgets
+       WHERE lead_id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ budget: null, message: 'No hay budget guardado para este lead.' });
+    }
+
+    return res.json({ budget: normalizeBudgetData(rows[0].data) });
+  } catch (error) {
+    console.error('Error al obtener budget:', error);
+    return res.status(500).json({ message: 'Error al obtener budget.' });
+  }
+});
+
+app.put('/api/leads/:id/budget', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID invalido.' });
+  }
+
+  const payload = normalizeBudgetData(req.body || {});
+
+  try {
+    const { rows: leadRows } = await pool.query(
+      'SELECT id FROM leads WHERE id = $1 LIMIT 1',
+      [leadId]
+    );
+
+    if (leadRows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO lead_budgets (lead_id, data)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (lead_id)
+       DO UPDATE SET
+         data = EXCLUDED.data,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING data, updated_at`,
+      [leadId, JSON.stringify(payload)]
+    );
+
+    return res.json({
+      budget: normalizeBudgetData(rows[0].data),
+      updatedAt: rows[0].updated_at,
+      message: 'Budget guardado correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al guardar budget:', error);
+    return res.status(500).json({ message: 'Error al guardar budget.' });
   }
 });
 

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles.css?v=20260216e">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
+  <link rel="stylesheet" href="budget.css?v=20260219d">
   <style>
     :root {
       --lead-viewport-height: 100vh;
@@ -74,14 +75,14 @@
       border-radius: 8px;
     }
     
-    /* Toolbar en misma posiciÃ³n que dashboard */
+    /* Toolbar en misma posición que dashboard */
     .lead-floating .toolbar-wrap {
       grid-column: 2;
       grid-row: 1;
       justify-self: center;
     }
     
-    /* Home actions en misma posiciÃ³n */
+    /* Home actions en misma posición */
     .lead-floating .home-actions {
       grid-column: 3;
       grid-row: 1;
@@ -112,7 +113,7 @@
       flex-shrink: 0;
     }
     
-    /* SecciÃ³n del nombre */
+    /* Sección del nombre */
     .lead-title-section {
       display: flex;
       align-items: center;
@@ -161,7 +162,7 @@
       background: rgba(255, 255, 255, 0.1);
     }
     
-    /* BotÃ³n de cambio Applicant/Co-Applicant */
+    /* Botón de cambio Applicant/Co-Applicant */
     .applicant-toggle-btn {
       display: flex;
       align-items: center;
@@ -212,7 +213,7 @@
       color: #60a5fa;
     }
     
-    /* BotÃ³n de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
+    /* Botón de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
     .copy-btn {
       display: flex;
       align-items: center;
@@ -265,6 +266,95 @@
       background: rgba(239, 68, 68, 0.2);
       color: #f87171;
       border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .lead-status-badge-select {
+      appearance: none;
+      color-scheme: dark;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 26px 6px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(59, 130, 246, 0.34);
+      background:
+        linear-gradient(135deg, rgba(30, 64, 175, 0.25), rgba(30, 64, 175, 0.18)),
+        rgba(30, 64, 175, 0.14);
+      color: #bfdbfe;
+      letter-spacing: 0.2px;
+      min-width: 170px;
+      max-width: 220px;
+      cursor: pointer;
+      position: relative;
+      z-index: 4;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .lead-status-badge-select option {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    .lead-status-badge-select:hover {
+      transform: translateY(-1px);
+      border-color: rgba(96, 165, 250, 0.6);
+    }
+
+    .lead-status-badge-select:focus {
+      outline: none;
+      border-color: rgba(125, 211, 252, 0.7);
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.2);
+    }
+
+    .lead-status-badge-select:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      transform: none;
+    }
+
+    .lead-status-badge-select.new {
+      border-color: rgba(59, 130, 246, 0.34);
+      color: #bfdbfe;
+    }
+
+    .lead-status-badge-select.submitted {
+      border-color: rgba(16, 185, 129, 0.36);
+      background:
+        linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(16, 185, 129, 0.16)),
+        rgba(16, 185, 129, 0.12);
+      color: #a7f3d0;
+    }
+
+    .lead-status-badge-select.docs {
+      border-color: rgba(245, 158, 11, 0.36);
+      background:
+        linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(245, 158, 11, 0.16)),
+        rgba(245, 158, 11, 0.12);
+      color: #fde68a;
+    }
+
+    .lead-status-badge-select.manager {
+      border-color: rgba(139, 92, 246, 0.36);
+      background:
+        linear-gradient(135deg, rgba(139, 92, 246, 0.24), rgba(139, 92, 246, 0.16)),
+        rgba(139, 92, 246, 0.12);
+      color: #ddd6fe;
+    }
+
+    .lead-status-badge-select.callback {
+      border-color: rgba(236, 72, 153, 0.36);
+      background:
+        linear-gradient(135deg, rgba(236, 72, 153, 0.24), rgba(236, 72, 153, 0.16)),
+        rgba(236, 72, 153, 0.12);
+      color: #fbcfe8;
+    }
+
+    .lead-status-badge-select.negative {
+      border-color: rgba(239, 68, 68, 0.38);
+      background:
+        linear-gradient(135deg, rgba(239, 68, 68, 0.24), rgba(239, 68, 68, 0.16)),
+        rgba(239, 68, 68, 0.12);
+      color: #fecaca;
     }
     
     /* Badge de Test */
@@ -336,11 +426,154 @@
       font-weight: 600;
     }
     
-    /* Botones de acciÃ³n al lado del Case ID */
+    /* Botones de acción al lado del Case ID */
     .case-id-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .lead-assignee-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .lead-assignee-meta {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .lead-assignee-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: rgba(255, 255, 255, 0.45);
+      white-space: nowrap;
+    }
+
+    .lead-assignee-combo {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .lead-assignee-input {
+      width: 165px;
+      max-width: 190px;
+      border: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 0;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.9);
+      padding: 4px 0;
+      font-size: 0.78rem;
+      outline: none;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .lead-assignee-input:focus {
+      border-color: rgba(126, 234, 252, 0.7);
+      color: rgba(255, 255, 255, 1);
+    }
+
+    .lead-assignee-toggle {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.62);
+      padding: 0;
+      cursor: pointer;
+      transition: color 0.15s ease, transform 0.15s ease;
+    }
+
+    .lead-assignee-toggle:hover {
+      color: rgba(126, 234, 252, 0.9);
+      transform: translateY(-1px);
+    }
+
+    .lead-assignee-toggle svg {
+      width: 12px;
+      height: 12px;
+      pointer-events: none;
+    }
+
+    .lead-assignee-suggestions {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 220px;
+      max-height: 210px;
+      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+      padding: 4px;
+      z-index: 35;
+    }
+
+    .lead-assignee-option {
+      width: 100%;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.88);
+      text-align: left;
+      padding: 7px 9px;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .lead-assignee-option:hover,
+    .lead-assignee-option.active {
+      background: rgba(126, 234, 252, 0.14);
+      color: #e0f2fe;
+    }
+
+    .lead-assignee-empty {
+      padding: 8px 9px;
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .lead-assignee-confirm {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: rgba(74, 222, 128, 0.95);
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .lead-assignee-confirm:hover {
+      color: #86efac;
+      transform: translateY(-1px);
+    }
+
+    .lead-assignee-confirm svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .lead-assignee-confirm:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
     }
     
     .action-icon-btn {
@@ -664,7 +897,7 @@
       background: rgba(126, 234, 252, 0.1);
     }
 
-    /* Modal de visualizaciÃ³n de archivos */
+    /* Modal de visualización de archivos */
     .file-viewer-modal {
       position: fixed;
       inset: 0;
@@ -820,7 +1053,7 @@
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
 
-    /* Modal de clasificaciÃ³n de archivo */
+    /* Modal de clasificación de archivo */
     .file-meta-modal {
       position: fixed;
       inset: 0;
@@ -1518,7 +1751,7 @@
       border-color: rgba(248, 113, 113, 0.56);
     }
     
-    /* BotÃ³n de copiar para Case ID - solo icono, sin box */
+    /* Botón de copiar para Case ID - solo icono, sin box */
     .copy-icon-btn {
       display: flex;
       align-items: center;
@@ -1548,7 +1781,7 @@
       color: #4ade80;
     }
     
-    /* NavegaciÃ³n de pestaÃ±as */
+    /* Navegación de pestañas */
     .lead-tabs-nav {
       display: flex;
       align-items: center;
@@ -2118,7 +2351,7 @@
       font-family: 'Inter', monospace;
     }
     
-    /* BotÃ³n de candado toggle */
+    /* Botón de candado toggle */
     .lock-toggle-btn {
       background: transparent;
       border: none;
@@ -2299,7 +2532,7 @@
       font-weight: 600;
     }
     
-    /* SecciÃ³n de Meses y Monthly Payment - Minimalista */
+    /* Sección de Meses y Monthly Payment - Minimalista */
     .calc-months-section {
       display: flex;
       align-items: stretch;
@@ -2443,7 +2676,7 @@
       margin-left: 4px;
     }
     
-    /* Botones rÃ¡pidos debajo de la ruleta */
+    /* Botones rápidos debajo de la ruleta */
     .months-quick-buttons.minimal.under-wheel {
       display: flex;
       align-items: center;
@@ -2463,7 +2696,7 @@
       border: 1px solid rgba(126, 234, 252, 0.2);
     }
     
-    /* Botones rÃ¡pidos - sin cajas */
+    /* Botones rápidos - sin cajas */
     .months-quick-buttons {
       display: flex;
       gap: 12px;
@@ -3390,7 +3623,7 @@
       50% { transform: scale(1.2); opacity: 0.8; }
     }
     
-    /* DÃ­as deshabilitados en calendario */
+    /* Días deshabilitados en calendario */
     .calendar-day.disabled {
       opacity: 0.35;
       cursor: not-allowed;
@@ -3791,6 +4024,52 @@
       background: rgba(0, 0, 0, 0.1);
       border-color: rgba(0, 0, 0, 0.15);
       color: #1a1a1a;
+    }
+
+    body.home-active.theme-light .lead-assignee-label {
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .lead-assignee-input {
+      background: transparent;
+      border-color: rgba(15, 23, 42, 0.2);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .lead-assignee-input:focus {
+      border-color: rgba(37, 99, 235, 0.55);
+    }
+
+    body.home-active.theme-light .lead-assignee-confirm {
+      color: #166534;
+    }
+
+    body.home-active.theme-light .lead-assignee-toggle {
+      color: rgba(15, 23, 42, 0.58);
+    }
+
+    body.home-active.theme-light .lead-assignee-toggle:hover {
+      color: rgba(37, 99, 235, 0.85);
+    }
+
+    body.home-active.theme-light .lead-assignee-suggestions {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+    }
+
+    body.home-active.theme-light .lead-assignee-option {
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .lead-assignee-option:hover,
+    body.home-active.theme-light .lead-assignee-option.active {
+      background: rgba(37, 99, 235, 0.11);
+      color: #1d4ed8;
+    }
+
+    body.home-active.theme-light .lead-assignee-empty {
+      color: rgba(15, 23, 42, 0.58);
     }
 
     body.home-active.theme-light .notes-panel {
@@ -4359,6 +4638,65 @@
       background: rgba(239, 68, 68, 0.15);
       color: #b91c1c;
       border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select {
+      color-scheme: light;
+      border-color: rgba(59, 130, 246, 0.3);
+      background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.13), rgba(59, 130, 246, 0.08)),
+        rgba(255, 255, 255, 0.88);
+      color: #1d4ed8;
+    }
+
+    body.home-active.theme-light .lead-status-badge-select option {
+      background: #ffffff;
+      color: #0f172a;
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.new {
+      color: #1d4ed8;
+      border-color: rgba(59, 130, 246, 0.34);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.submitted {
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.36);
+      background:
+        linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.08)),
+        rgba(255, 255, 255, 0.9);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.docs {
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.36);
+      background:
+        linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.08)),
+        rgba(255, 255, 255, 0.9);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.manager {
+      color: #6d28d9;
+      border-color: rgba(139, 92, 246, 0.36);
+      background:
+        linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(139, 92, 246, 0.08)),
+        rgba(255, 255, 255, 0.9);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.callback {
+      color: #be185d;
+      border-color: rgba(236, 72, 153, 0.36);
+      background:
+        linear-gradient(135deg, rgba(236, 72, 153, 0.14), rgba(236, 72, 153, 0.08)),
+        rgba(255, 255, 255, 0.9);
+    }
+
+    body.home-active.theme-light .lead-status-badge-select.negative {
+      color: #b91c1c;
+      border-color: rgba(239, 68, 68, 0.36);
+      background:
+        linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.08)),
+        rgba(255, 255, 255, 0.9);
     }
     
     body.home-active.theme-light .lead-test-badge {
@@ -5169,7 +5507,7 @@
       border-color: rgba(126, 234, 252, 0.6);
     }
     
-    /* Expandibles mÃ¡s compactos */
+    /* Expandibles más compactos */
     .banking-expandable {
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
@@ -5256,7 +5594,7 @@
       border-color: rgba(59, 130, 246, 0.5);
     }
     
-    /* SecciÃ³n de guardar */
+    /* Sección de guardar */
     .banking-save-section {
       display: flex;
       align-items: center;
@@ -5322,7 +5660,7 @@
       color: #dc2626;
     }
     
-    /* TÃ­tulos de columna tipo lead-info-card */
+    /* Títulos de columna tipo lead-info-card */
     .banking-account-column .calc-column-title,
     .banking-holder-column .calc-column-title {
       margin: 0 0 12px 0;
@@ -5755,7 +6093,7 @@
         <img src="reference/CD logo.png" alt="Cero Deuda" />
       </button>
       
-      <!-- TOOLBAR - Copiado idÃ©ntico del dashboard -->
+      <!-- TOOLBAR - Copiado idéntico del dashboard -->
       <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
         <div id="toolbarShell" class="toolbar-shell">
           <div class="toolbar-glass-container">
@@ -5877,7 +6215,7 @@
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Cerrar sesiÃ³n</span>
+            <span>Cerrar sesión</span>
           </button>
         </div>
       </div>
@@ -5888,7 +6226,7 @@
           <div class="lead-title-section">
             <!-- Nombre editable -->
             <div class="lead-name-wrapper">
-              <!-- BotÃ³n de cambio Applicant/Co-Applicant -->
+              <!-- Botón de cambio Applicant/Co-Applicant -->
               <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M7 10h14l-4-4"/>
@@ -5899,7 +6237,7 @@
               
               <h1 id="leadName" class="lead-name-text" contenteditable="false" title="Click para editar"></h1>
               
-              <!-- BotÃ³n de copiar nombre - solo icono, sin box -->
+              <!-- Botón de copiar nombre - solo icono, sin box -->
               <button id="copyNameBtn" class="copy-btn" title="Copiar nombre">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -5910,11 +6248,13 @@
             
             <!-- Badge de State Type (Green/Red) -->
             <span id="stateBadge" class="lead-state-badge"></span>
+
+            <select id="leadStatusBadgeSelect" class="lead-status-badge-select" aria-label="Cambiar status del lead"></select>
             
             <!-- Badge de Test (si aplica) -->
             <span id="testBadge" class="lead-test-badge hidden">Test</span>
 
-            <!-- Badge de relaciÃ³n -->
+            <!-- Badge de relación -->
             <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
@@ -5924,7 +6264,7 @@
             </a>
           </div>
           
-          <!-- Case ID y botones de acciÃ³n -->
+          <!-- Case ID y botones de acción -->
           <div class="lead-case-id">
             <div class="case-id-left">
               <span class="case-label">Case ID:</span>
@@ -5948,9 +6288,29 @@
               </div>
             </div>
             
-            <!-- Botones de acciÃ³n al lado del Case ID -->
+            <!-- Botones de acción al lado del Case ID -->
             <div class="case-id-actions">
-              <!-- BotÃ³n de Archivos -->
+              <div class="lead-assignee-wrap">
+                <div class="lead-assignee-meta">
+                  <span class="lead-assignee-label">Assigned To</span>
+                  <div class="lead-assignee-combo">
+                    <input id="leadAssigneeInput" class="lead-assignee-input" type="search" placeholder="Buscar agente..." autocomplete="off" aria-label="Buscar agente para asignar" aria-haspopup="listbox" aria-expanded="false" aria-controls="leadAssigneeSuggestions" />
+                    <button id="leadAssigneeToggleBtn" class="lead-assignee-toggle" type="button" title="Ver agentes" aria-label="Ver agentes">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                  <div id="leadAssigneeSuggestions" class="lead-assignee-suggestions hidden" role="listbox" aria-label="Agentes disponibles"></div>
+                </div>
+                <button id="confirmAssigneeBtn" class="lead-assignee-confirm hidden" type="button" title="Confirmar asignación" aria-label="Confirmar asignación">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Botón de Archivos -->
               <div class="files-anchor">
                 <button class="action-icon-btn" id="filesBtn" title="Archivos" aria-controls="filesPanel" aria-expanded="false">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5974,7 +6334,7 @@
                         <polyline points="17,8 12,3 7,8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      <span class="files-upload-text">Arrastra archivos aquÃ­ o haz clic para seleccionar (requiere clasificaciï¿½n)</span>
+                      <span class="files-upload-text">Arrastra archivos aquí o haz clic para seleccionar (requiere clasificación)</span>
                       <input type="file" id="filesUploadInput" class="files-upload-input" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                     </div>
                     <!-- Files List -->
@@ -5984,8 +6344,8 @@
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                           <polyline points="14,2 14,8 20,8"/>
                         </svg>
-                        <p>No hay archivos aÃºn</p>
-                        <span>Los archivos subidos aparecerÃ¡n aquÃ­</span>
+                        <p>No hay archivos aún</p>
+                        <span>Los archivos subidos aparecerán aquí</span>
                       </div>
                     </div>
                   </div>
@@ -6040,9 +6400,10 @@
                 </section>
               </div>
             </div>
+
           </div>
-          
-          <!-- NavegaciÃ³n de pestaÃ±as -->
+
+          <!-- Navegación de pestañas -->
           <div class="lead-tabs-nav">
             <button class="lead-tab active" data-tab="lead">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6096,23 +6457,23 @@
 
         </header>
         
-        <!-- Contenido dinÃ¡mico -->
-        <!-- SecciÃ³n Lead (Detalles) - Visible por defecto -->
+        <!-- Contenido dinámico -->
+        <!-- Sección Lead (Detalles) - Visible por defecto -->
         <div id="leadSection" class="lead-content-grid">
           <div class="loading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
             </svg>
-            <p>Cargando informaciÃ³n del cliente...</p>
+            <p>Cargando información del cliente...</p>
           </div>
         </div>
         
-        <!-- SecciÃ³n Calculator -->
+        <!-- Sección Calculator -->
         <div id="calculatorSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <!-- Calculator Box - Estilo Tiempos y Fechas -->
           <div class="lead-info-card lead-info-card-wide calculator-main-card">
             <div class="two-column-layout calc-layout">
-              <!-- Columna Izquierda: ConfiguraciÃ³n -->
+              <!-- Columna Izquierda: Configuración -->
               <div class="info-column calc-config-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -6128,7 +6489,7 @@
                     <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"/>
                     <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.8"/>
                   </svg>
-                  ConfiguraciÃ³n
+                  Configuración
                 </h4>
                 
                 <div class="info-row calc-input-row">
@@ -6231,8 +6592,8 @@
                         </button>
                       </div>
                       <div class="calendar-weekdays">
-                        <span>Dom</span><span>Lun</span><span>Mar</span><span>MiÃ©</span>
-                        <span>Jue</span><span>Vie</span><span>SÃ¡b</span>
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span>
+                        <span>Jue</span><span>Vie</span><span>Sáb</span>
                       </div>
                       <div id="calcPaymentDayDays" class="calendar-days"></div>
                     </div>
@@ -6282,10 +6643,25 @@
                   <span class="info-row-label">Total Savings</span>
                   <span class="info-row-value mono" id="resultSavings">$0.00</span>
                 </div>
+
+                <div class="info-row">
+                  <span class="info-row-label">Monthly Legal Fee</span>
+                  <span class="info-row-value mono" id="resultMonthlyLegalFee">$0.00</span>
+                </div>
+
+                <div class="info-row">
+                  <span class="info-row-label">Total Estimated Savings</span>
+                  <span class="info-row-value mono" id="resultEstimatedSavings">$0.00</span>
+                </div>
+
+                <div class="info-row">
+                  <span class="info-row-label">Monthly Payment Savings</span>
+                  <span class="info-row-value mono" id="resultMonthlyPaymentSavings">$0.00</span>
+                </div>
               </div>
             </div>
             
-            <!-- SecciÃ³n especial: Meses y Monthly Payment - Compacto -->
+            <!-- Sección especial: Meses y Monthly Payment - Compacto -->
             <div class="calc-duration-payment-row">
               <!-- Program Duration -->
               <div class="calc-duration-compact">
@@ -6298,7 +6674,7 @@
                   </div>
                 </div>
                 
-                <!-- Botones rÃ¡pidos debajo de la ruleta -->
+                <!-- Botones rápidos debajo de la ruleta -->
                 <div class="months-quick-buttons minimal under-wheel">
                   <button class="months-quick-btn minimal" data-months="12">12</button>
                   <button class="months-quick-btn minimal" data-months="24">24</button>
@@ -6330,7 +6706,7 @@
           <div class="lead-info-card lead-info-card-wide payment-schedule-card">
             <div class="schedule-header">
               <h3 class="calculator-section-title" style="margin:0;padding:0;border:none;">Payment Schedule</h3>
-              <span class="plan-duration-badge" id="planDurationText">4 aÃ±os</span>
+              <span class="plan-duration-badge" id="planDurationText">4 años</span>
             </div>
             <div class="schedule-table-container">
               <table class="schedule-table">
@@ -6352,11 +6728,11 @@
           </div>
         </div>
         
-        <!-- SecciÃ³n Banking -->
+        <!-- Sección Banking -->
         <div id="bankingSection" class="lead-content-grid hidden">
           <div class="lead-info-card lead-info-card-wide banking-main-card">
             <div class="two-column-layout banking-layout">
-              <!-- Columna Izquierda: InformaciÃ³n de la Cuenta -->
+              <!-- Columna Izquierda: Información de la Cuenta -->
               <div class="info-column banking-account-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -6406,7 +6782,7 @@
                   </div>
                 </div>
                 
-                <!-- Campos expandibles - SecciÃ³n Bank Address -->
+                <!-- Campos expandibles - Sección Bank Address -->
                 <div class="banking-expandable">
                   <button class="banking-expand-btn" data-target="bankAddressFields">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -6449,7 +6825,7 @@
                   </div>
                 </div>
                 
-                <!-- BotÃ³n Get Bank Details -->
+                <!-- Botón Get Bank Details -->
                 <button class="banking-action-btn" id="btnGetBankDetails">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <circle cx="11" cy="11" r="8"/>
@@ -6459,7 +6835,7 @@
                 </button>
               </div>
               
-              <!-- Columna Derecha: InformaciÃ³n del Titular -->
+              <!-- Columna Derecha: Información del Titular -->
               <div class="info-column banking-holder-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -6587,7 +6963,7 @@
               </div>
             </div>
             
-            <!-- BotÃ³n de guardar -->
+            <!-- Botón de guardar -->
             <div class="banking-save-section">
               <button class="banking-save-btn" id="btnSaveBankingInfo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -6602,15 +6978,225 @@
           </div>
         </div>
         
-        <div id="budgetSection" class="hidden" style="padding:40px;text-align:center;color:rgba(255,255,255,0.5);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="margin-bottom:16px;opacity:0.5;">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M16 8h-6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"/>
-          </svg>
-          <h2>Budget</h2>
-          <p>SecciÃ³n en desarrollo</p>
+        <div id="budgetSection" class="lead-content-grid hidden budget-section">
+          <div class="lead-info-card lead-info-card-wide budget-main-card">
+            <div class="budget-toolbar">
+              <div class="budget-toolbar-left">
+                <h3 class="budget-toolbar-title">Budget Workspace</h3>
+                <div class="budget-subtabs" id="budgetSubtabs">
+                  <button type="button" class="budget-subtab active" data-budget-tab="items">Budget Items</button>
+                  <button type="button" class="budget-subtab" data-budget-tab="income">Income</button>
+                  <button type="button" class="budget-subtab" data-budget-tab="hardship">Hardship</button>
+                </div>
+              </div>
+              <div class="budget-toolbar-actions">
+                <span id="budgetSaveStatus" class="budget-save-status">Sin cambios</span>
+                <button id="budgetSaveBtn" type="button" class="budget-save-btn">Guardar Budget</button>
+              </div>
+            </div>
+
+            <div class="two-column-layout budget-layout">
+              <div class="info-column budget-form-column">
+                <div class="budget-panels">
+              <section class="budget-panel active" data-budget-panel="items">
+                <article class="budget-card-group budget-card-group-merged">
+                  <div class="budget-card-head">
+                    <h4>Budget Items</h4>
+                    <div class="budget-inner-tabs">
+                      <button type="button" class="budget-inner-tab active" data-budget-inner-group="items" data-budget-inner-tab="housing">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10.5V20h14v-9.5"/><path d="M10 20v-5h4v5"/></svg>
+                        <span>Housing</span>
+                      </button>
+                      <button type="button" class="budget-inner-tab" data-budget-inner-group="items" data-budget-inner-tab="transportation">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2-5h12l2 5"/><rect x="3" y="13" width="18" height="5" rx="1"/><circle cx="7" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>
+                        <span>Transportation</span>
+                      </button>
+                      <button type="button" class="budget-inner-tab" data-budget-inner-group="items" data-budget-inner-tab="food">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 8-8 8z"/><circle cx="12" cy="10" r="1.2"/><circle cx="9" cy="13" r="1.1"/><circle cx="14.5" cy="14.5" r="1"/></svg>
+                        <span>Food</span>
+                      </button>
+                      <button type="button" class="budget-inner-tab" data-budget-inner-group="items" data-budget-inner-tab="utilities">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
+                        <span>Utilities</span>
+                      </button>
+                      <button type="button" class="budget-inner-tab" data-budget-inner-group="items" data-budget-inner-tab="other">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12h7"/><path d="M12 8.5v7"/></svg>
+                        <span>Other</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="budget-inner-panels">
+                    <section class="budget-inner-panel active" data-budget-inner-group="items" data-budget-inner-panel="housing">
+                      <div class="budget-category-block">
+                        <h5>Housing</h5>
+                        <div class="budget-field">
+                          <label for="budgetHousingType">Rent / Own</label>
+                          <select id="budgetHousingType" class="budget-select">
+                            <option value="">Seleccionar</option>
+                            <option value="rent">Rent</option>
+                            <option value="own">Own</option>
+                          </select>
+                        </div>
+                        <div class="budget-field"><label for="budgetHousingPayment">Housing Payment</label><div class="budget-money"><span>$</span><input id="budgetHousingPayment" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetHomeInsurance">Home Owners Insurance</label><div class="budget-money"><span>$</span><input id="budgetHomeInsurance" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetSecondaryHousingPayment">Secondary House Payment</label><div class="budget-money"><span>$</span><input id="budgetSecondaryHousingPayment" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                    <section class="budget-inner-panel" data-budget-inner-group="items" data-budget-inner-panel="transportation">
+                      <div class="budget-category-block">
+                        <h5>Transportation</h5>
+                        <div class="budget-field"><label for="budgetAutoPayments">Auto Payments</label><div class="budget-money"><span>$</span><input id="budgetAutoPayments" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetAutoInsurance">Auto Insurance</label><div class="budget-money"><span>$</span><input id="budgetAutoInsurance" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetRepairsMaintenance">Repairs / Maintenance</label><div class="budget-money"><span>$</span><input id="budgetRepairsMaintenance" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetGasoline">Gasoline</label><div class="budget-money"><span>$</span><input id="budgetGasoline" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetParking">Parking</label><div class="budget-money"><span>$</span><input id="budgetParking" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetCommuting">Commuting</label><div class="budget-money"><span>$</span><input id="budgetCommuting" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                    <section class="budget-inner-panel" data-budget-inner-group="items" data-budget-inner-panel="food">
+                      <div class="budget-category-block">
+                        <h5>Food</h5>
+                        <div class="budget-field"><label for="budgetGroceries">Groceries</label><div class="budget-money"><span>$</span><input id="budgetGroceries" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetEatingOut">Eating Out</label><div class="budget-money"><span>$</span><input id="budgetEatingOut" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                    <section class="budget-inner-panel" data-budget-inner-group="items" data-budget-inner-panel="utilities">
+                      <div class="budget-category-block">
+                        <h5>Utilities</h5>
+                        <div class="budget-field"><label for="budgetUtilityEnergy">Average Gas / Electric / Oil</label><div class="budget-money"><span>$</span><input id="budgetUtilityEnergy" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetUtilityPhone">Average Phone Bill (including cell)</label><div class="budget-money"><span>$</span><input id="budgetUtilityPhone" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetUtilityWater">Average Water / Sewer / Garbage</label><div class="budget-money"><span>$</span><input id="budgetUtilityWater" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetUtilityInternet">Cable / Satellite / Internet Bill</label><div class="budget-money"><span>$</span><input id="budgetUtilityInternet" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                    <section class="budget-inner-panel" data-budget-inner-group="items" data-budget-inner-panel="other">
+                      <div class="budget-category-block">
+                        <h5>Other Expenses</h5>
+                        <div class="budget-field"><label for="budgetOtherExpenses">Other Expenses</label><div class="budget-money"><span>$</span><input id="budgetOtherExpenses" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                  </div>
+                </article>
+              </section>
+
+              <section class="budget-panel" data-budget-panel="income">
+                <article class="budget-card-group budget-card-group-merged budget-income-box">
+                  <div class="budget-card-head">
+                    <h4>Income</h4>
+                    <div class="budget-inner-tabs">
+                      <button type="button" class="budget-inner-tab active" data-budget-inner-group="income" data-budget-inner-tab="applicant">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-3.3 3.4-5 7-5s6.3 1.7 7 5"/></svg>
+                        <span>Applicant</span>
+                      </button>
+                      <button type="button" class="budget-inner-tab" data-budget-inner-group="income" data-budget-inner-tab="coapp">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M3.5 20c.6-3 2.9-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><path d="M14 19.6c.5-2.2 2.1-3.5 4.2-3.5 1 0 2 .3 2.8 1"/></svg>
+                        <span>Co-Applicant</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="budget-inner-panels">
+                    <section class="budget-inner-panel active" data-budget-inner-group="income" data-budget-inner-panel="applicant">
+                      <div class="budget-category-block">
+                        <h5>Applicant Income</h5>
+                        <div class="budget-field"><label for="budgetIncomeApplicantNetMonthly">Net Monthly Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantNetMonthly" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantSocialSecurity">Social Security</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantSocialSecurity" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantAlimony">Alimony</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantAlimony" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantRetirement">Retirement</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantRetirement" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantHouseholdTotal">Total HouseHold Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantHouseholdTotal" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantFixedIncome">Applicant Fixed Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantFixedIncome" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantUnemployment">Unemployment</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantUnemployment" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantChildSupport">Child Support</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantChildSupport" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeApplicantOther">Other</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantOther" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                    <section class="budget-inner-panel" data-budget-inner-group="income" data-budget-inner-panel="coapp">
+                      <div class="budget-category-block">
+                        <h5>Co-Applicant Income</h5>
+                        <div class="budget-field"><label for="budgetIncomeCoappNetMonthly">Net Monthly Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappNetMonthly" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappSocialSecurity">Social Security</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappSocialSecurity" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappAlimony">Alimony</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappAlimony" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappRetirement">Retirement</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappRetirement" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappHouseholdTotal">Total HouseHold Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappHouseholdTotal" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappFixedIncome">Applicant Fixed Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappFixedIncome" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappUnemployment">Unemployment</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappUnemployment" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappChildSupport">Child Support</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappChildSupport" type="text" inputmode="decimal" /></div></div>
+                        <div class="budget-field"><label for="budgetIncomeCoappOther">Other</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappOther" type="text" inputmode="decimal" /></div></div>
+                      </div>
+                    </section>
+                  </div>
+                </article>
+              </section>
+
+              <section class="budget-panel" data-budget-panel="hardship">
+                <article class="budget-card-group budget-card-group-merged">
+                  <div class="budget-card-head">
+                    <h4>Hardship</h4>
+                  </div>
+                  <div class="budget-hardship-grid">
+                    <div class="budget-field">
+                      <label for="budgetHardshipReason">Hardship Reason</label>
+                      <select id="budgetHardshipReason" class="budget-select budget-hardship-reason-select">
+                        <option value="">Seleccionar razón...</option>
+                        <option value="loss_of_income">Loss of Income</option>
+                        <option value="medical">Medical Issues</option>
+                        <option value="divorce">Divorce / Separation</option>
+                        <option value="inflation">Inflation / Cost of Living</option>
+                        <option value="business_failure">Business Failure</option>
+                        <option value="unexpected_expenses">Unexpected Expenses</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div class="budget-hardship-textareas">
+                      <div class="budget-field">
+                        <label for="budgetHardshipDetailEs">Detailed Hardship Reason (Español)</label>
+                        <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situación en español..."></textarea>
+                      </div>
+                      <div class="budget-field">
+                        <label for="budgetHardshipDetailEn">Detailed Hardship Reason (English)</label>
+                        <textarea id="budgetHardshipDetailEn" class="budget-textarea" rows="5" placeholder="Describe the situation in English..."></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </section>
+                </div>
+              </div>
+              <aside class="info-column budget-details-column" aria-label="Budget details">
+                <h4>Budget Details</h4>
+                <div class="info-row">
+                  <span class="info-row-label">Total Monthly Income</span>
+                  <span class="info-row-value mono" id="budgetDetailTotalIncome">$0.00</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Total HouseHold Expenses</span>
+                  <span class="info-row-value mono" id="budgetDetailTotalExpenses">$0.00</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Monthly debt-to-income</span>
+                  <span class="info-row-value mono" id="budgetDetailDti">0.00%</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Monthly program cost</span>
+                  <span class="info-row-value mono" id="budgetDetailProgramCost">$0.00</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Total monthly expenses</span>
+                  <span class="info-row-value mono" id="budgetDetailTotalMonthlyExpenses">$0.00</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-row-label">Monthly debt-to-income (with program)</span>
+                  <span class="info-row-value mono" id="budgetDetailDtiWithProgram">0.00%</span>
+                </div>
+                <div class="info-row budget-funds-row">
+                  <span class="info-row-label">Funds Available</span>
+                  <span class="info-row-value mono" id="budgetDetailFundsAvailable">$0.00</span>
+                </div>
+              </aside>
+              </div>
+            </div>
+          </div>
         </div>
-        <!-- NUEVA SECCIï¿½N CREDITORS - REDISEï¿½O LIQUID GLASS -->
+        <!-- NUEVA SECCIÓN CREDITORS - REDISEÑO LIQUID GLASS -->
         <div id="creditorsSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <div class="creditors-glass-container">
             
@@ -6640,6 +7226,9 @@
                   </span>
                   <span class="summary-badge count">
                     <small>CUENTAS</small> <strong id="creditorsPartyAccountsCount">0</strong>
+                  </span>
+                  <span class="summary-badge included">
+                    <small>INCLUIDAS</small> <strong id="creditorsPartyIncludedAmount">$0.00</strong>
                   </span>
                   <span class="summary-badge party-applicant-debt">
                     <small>APP TOTAL</small> <strong id="creditorsApplicantDebt">$0.00</strong>
@@ -6717,7 +7306,7 @@
     </div>
   </div>
 
-  <!-- Modal de clasificaciï¿½n de archivo -->
+  <!-- Modal de clasificación de archivo -->
   <div id="fileMetaModal" class="file-meta-modal hidden" aria-hidden="true">
     <div class="file-meta-modal-backdrop"></div>
     <div class="file-meta-modal-content" role="dialog" aria-modal="true" aria-labelledby="fileMetaModalTitle">
@@ -6731,7 +7320,7 @@
           <select id="fileDocType" required>
             <option value="">Seleccionar tipo...</option>
             <option value="official_document">Documento oficial</option>
-            <option value="credit_report">Reporte de crï¿½dito</option>
+            <option value="credit_report">Reporte de crédito</option>
             <option value="income_proof">Prueba de ingresos</option>
             <option value="bank_statement">Estado de cuenta bancario</option>
             <option value="contract">Contrato</option>
@@ -6768,7 +7357,7 @@
         </button>
       </div>
       <div class="file-viewer-modal-body" id="fileViewerBody">
-        <!-- El contenido se carga dinÃ¡micamente -->
+        <!-- El contenido se carga dinámicamente -->
       </div>
       <div class="file-viewer-modal-footer">
         <button id="fileViewerDownloadBtn" class="file-viewer-btn primary">
@@ -6787,11 +7376,13 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260218j"></script>
+  <script src="client.js?v=20260219a"></script>
+  <script src="budget.js?v=20260219b"></script>
   <script src="quick-actions.js?v=20260216c"></script>
-  <script src="creditors-redesign.js?v=20260218o"></script>
+  <script src="creditors-redesign.js?v=20260218p"></script>
 </body>
 </html>
+
 
 
 

@@ -142,7 +142,7 @@ function showLogin() {
   dashboardView.classList.add('hidden');
   authShell.classList.remove('hidden');
   document.body.classList.remove('home-active');
-  loginStatus.textContent = 'Credenciales demo: admin / 1234';
+  loginStatus.textContent = 'Credenciales demo: admin / 1234 | elliot / 1234';
   setAccountMenu(false);
   setToolbarExpanded(false);
 }

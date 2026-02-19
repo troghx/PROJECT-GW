@@ -900,6 +900,19 @@
     return entries.filter((entry) => isCreditorEntryActive(entry));
   }
 
+  function getIncludedActiveDebtTotal(entries = currentCreditors) {
+    return getActiveCreditors(entries)
+      .filter((entry) => entry.is_included !== false)
+      .reduce((sum, entry) => sum + normalizeMoney(entry.debt_amount || entry.debtAmount), 0);
+  }
+
+  function formatDebtSharePercent(value) {
+    const normalized = Number(value);
+    if (!Number.isFinite(normalized) || normalized <= 0) return '';
+    const rounded = Number(normalized.toFixed(1));
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
+  }
+
   function applySummaryBadgeMode(showPartySummary) {
     const normalizedShow = Boolean(showPartySummary);
     const mainSummaryEl = document.getElementById('creditorsMainSummaryBadges');
@@ -1322,6 +1335,7 @@
     const elPastDue = document.getElementById('creditorsPastDueTotal');
     const elPartyTotal = document.getElementById('creditorsPartyTotalDebt');
     const elPartyCount = document.getElementById('creditorsPartyAccountsCount');
+    const elPartyIncluded = document.getElementById('creditorsPartyIncludedAmount');
     const elApplicant = document.getElementById('creditorsApplicantDebt');
     const elCoapp = document.getElementById('creditorsCoappDebt');
 
@@ -1331,6 +1345,7 @@
     if (elPastDue) elPastDue.textContent = formatCurrency(pastDueTotal);
     if (elPartyTotal) elPartyTotal.textContent = formatCurrency(totalDebt);
     if (elPartyCount) elPartyCount.textContent = String(activeCreditors.length);
+    if (elPartyIncluded) elPartyIncluded.textContent = formatCurrency(includedDebt);
     if (elApplicant) elApplicant.textContent = formatCurrency(applicantDebt);
     if (elCoapp) elCoapp.textContent = formatCurrency(coappDebt);
 
@@ -1654,7 +1669,8 @@
       return;
     }
 
-    tbody.innerHTML = currentCreditors.map((entry, index) => renderRowOrdered(entry, index)).join('');
+    const includedActiveDebtTotal = getIncludedActiveDebtTotal(currentCreditors);
+    tbody.innerHTML = currentCreditors.map((entry, index) => renderRowOrdered(entry, index, includedActiveDebtTotal)).join('');
     updateSummary();
 
     tbody.querySelectorAll('.row-checkbox').forEach((checkbox) => {
@@ -1675,12 +1691,20 @@
     });
   }
 
-  function renderRowOrdered(entry, index) {
+  function renderRowOrdered(entry, index, includedActiveDebtTotal = 0) {
     const partyLabel = getPartyLabel(entry.debtor_party || entry.debtorParty);
     const partyClass = getPartyClass(entry.debtor_party || entry.debtorParty);
     const isActive = isCreditorEntryActive(entry);
     const rawIncluded = entry.is_included !== false;
     const isIncluded = isActive && rawIncluded;
+    const debtAmount = normalizeMoney(entry.debt_amount || entry.debtAmount);
+    const debtSharePercent = isIncluded && includedActiveDebtTotal > 0 && debtAmount > 0
+      ? (debtAmount / includedActiveDebtTotal) * 100
+      : null;
+    const debtShareLabel = debtSharePercent === null ? '' : formatDebtSharePercent(debtSharePercent);
+    const debtShareHtml = debtShareLabel
+      ? `<span class="debt-share-pill" title="${debtShareLabel} del total activo">${debtShareLabel}</span>`
+      : '';
     const checkbox = `<button type="button" class="row-checkbox ${isIncluded ? 'is-checked' : ''}" data-id="${entry.id}" aria-label="${isActive ? 'Incluir deuda' : 'Cuenta coapp desactivada'}" aria-pressed="${isIncluded ? 'true' : 'false'}" ${isActive ? '' : 'disabled'}></button>`;
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}" ${isActive ? '' : 'disabled title="Cuenta coapp desactivada por toggle"'}>×</button>`;
     
@@ -1688,7 +1712,7 @@
       checkbox: `<td class="col-checkbox">${checkbox}</td>`,
       num: `<td class="col-num">${index + 1}</td>`,
       name: `<td class="col-name" title="${escapeHtml(entry.creditor_name || entry.creditorName || '')}"><span class="creditor-name">${escapeHtml(truncate(entry.creditor_name || entry.creditorName || '-', 28))}</span></td>`,
-      debt: `<td class="col-debt">${formatCurrency(entry.debt_amount || entry.debtAmount || 0)}</td>`,
+      debt: `<td class="col-debt"><span class="debt-cell-inline"><span class="debt-value">${formatCurrency(debtAmount)}</span>${debtShareHtml}</span></td>`,
       party: `<td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>`,
       account: `<td class="col-account">${entry.account_number || entry.accountNumber ? `<span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
       resp: `<td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>`,

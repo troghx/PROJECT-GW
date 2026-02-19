@@ -2090,8 +2090,8 @@ body.home-active.theme-light .leads-table-container::-webkit-scrollbar-thumb:hov
 /* Layout principal de 3 columnas */
 .leaderboard-main-layout {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(0, 1.4fr) minmax(180px, 1fr);
-  gap: clamp(16px, 2vw, 32px);
+  grid-template-columns: minmax(210px, 1fr) minmax(520px, 1.9fr) minmax(210px, 1fr);
+  gap: clamp(12px, 1.5vw, 22px);
   align-items: start;
   margin-bottom: clamp(16px, 2.5vh, 28px);
 }
@@ -2366,9 +2366,10 @@ body.home-active.theme-light .leads-table-container::-webkit-scrollbar-thumb:hov
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  gap: clamp(12px, 2vw, 20px);
+  gap: clamp(8px, 1.2vw, 14px);
   padding: 0;
   flex-shrink: 0;
+  max-width: 100%;
 }
 
 .podium-place {
@@ -2380,7 +2381,7 @@ body.home-active.theme-light .leads-table-container::-webkit-scrollbar-thumb:hov
 
 .podium-card {
   position: relative;
-  width: clamp(130px, 16vw, 180px);
+  width: clamp(112px, 11.2vw, 152px);
   padding: clamp(16px, 2vh, 24px) clamp(14px, 1.5vw, 20px);
   border-radius: clamp(18px, 2.5vw, 24px);
   backdrop-filter: blur(20px);
@@ -2496,8 +2497,8 @@ body.home-active.theme-light .bronze-card {
 }
 
 .podium-card.featured .podium-avatar {
-  width: clamp(65px, 8vw, 90px);
-  height: clamp(65px, 8vw, 90px);
+  width: clamp(56px, 6.5vw, 78px);
+  height: clamp(56px, 6.5vw, 78px);
   border: 4px solid rgba(255, 215, 0, 0.5);
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
 }
@@ -2559,7 +2560,7 @@ body.home-active.theme-light .bronze-card {
 }
 
 .first-place .podium-base {
-  width: clamp(130px, 16vw, 180px);
+  width: clamp(118px, 12vw, 160px);
   height: clamp(10px, 1.2vh, 16px);
   background: linear-gradient(90deg, 
     transparent 0%,
@@ -3850,8 +3851,17 @@ body.home-active.theme-light .toast {
   }
 
   .leaderboard-main-layout {
-    grid-template-columns: minmax(150px, 0.9fr) minmax(0, 1.2fr) minmax(150px, 0.9fr);
-    gap: 14px;
+    grid-template-columns: minmax(185px, 1fr) minmax(460px, 1.65fr) minmax(185px, 1fr);
+    gap: 12px;
+  }
+
+  .podium-card {
+    width: clamp(104px, 10.8vw, 142px);
+    padding: clamp(12px, 1.6vh, 18px) clamp(10px, 1.1vw, 14px);
+  }
+
+  .podium-container {
+    gap: clamp(6px, 1vw, 10px);
   }
 }
 

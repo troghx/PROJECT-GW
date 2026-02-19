@@ -1,5 +1,5 @@
-/* ============================================
-   CREDITORS COMPACT - VERSIÃ“N CORREGIDA
+﻿/* ============================================
+   CREDITORS COMPACT - VERSIÓN CORREGIDA
    Orden: Nombre | Deuda | Cuenta | Resp | Status | Tipo | Meses | Vencido
    ============================================ */
 
@@ -571,7 +571,7 @@
   padding-left: 0 !important;
 }
 
-/* Checkbox custom ELIMINADO - NÃºmero */
+/* Checkbox custom ELIMINADO - Número */
 /* Checkbox custom */
 .row-checkbox {
   width: 16px;
@@ -637,7 +637,7 @@
   color: rgba(254, 240, 138, 0.95);
 }
 
-/* BotÃ³n delete */
+/* Botón delete */
 .btn-delete {
   padding: 2px 8px;
   border: none;
@@ -943,5 +943,6 @@ body.theme-light .saved-header h4 {
 body.theme-light .select-all-toggle {
   color: rgba(15, 23, 42, 0.6);
 }
+
 
 

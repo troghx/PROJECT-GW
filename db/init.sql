@@ -59,6 +59,43 @@ BEGIN
   END IF;
 END $$;
 
+-- ============================================
+-- TABLA: Budget por lead (Items, Income, Hardship)
+-- ============================================
+CREATE TABLE IF NOT EXISTS lead_budgets (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL UNIQUE REFERENCES leads(id) ON DELETE CASCADE,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_budgets' AND column_name = 'data'
+  ) THEN
+    ALTER TABLE lead_budgets ADD COLUMN data JSONB NOT NULL DEFAULT '{}'::jsonb;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_budgets' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE lead_budgets ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_budgets' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE lead_budgets ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_lead_budgets_lead_id ON lead_budgets (lead_id);
+
 -- Migración: Agregar is_test si no existe
 DO $$
 BEGIN

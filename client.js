@@ -18,6 +18,34 @@
       occupation: 'occupation',
       self_employed: 'selfEmployed'
     };
+    const LEAD_STATUS_OPTIONS = [
+      'Attempring contact',
+      'Bad number',
+      'bad state',
+      'CA Hold',
+      'Dead',
+      'DNC',
+      'Docs back',
+      'Docs sent',
+      'Hotlist',
+      'New',
+      'New Duplicate',
+      'Not interested',
+      'NQ Debt type',
+      'NQ language',
+      'Nurture',
+      'Sent to DebtManager',
+      'Submitted to UW',
+      'UW Reject',
+      'Looking for a loan',
+      'NQ Can\'t afford',
+      'NQ Debt Amount',
+      'Banking',
+      'Warm',
+      'Contacted Warm',
+      'Meeting',
+      'Transferred to CCCF'
+    ];
     const THEME_KEY = 'project_gw_theme';
     const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
     document.body.classList.remove('theme-dark', 'theme-light');
@@ -630,11 +658,23 @@
     const copyNameBtn = document.getElementById('copyNameBtn');
     const caseNumberEl = document.getElementById('caseNumber');
     const copyCaseBtn = document.getElementById('copyCaseBtn');
+    const leadStatusBadgeSelect = document.getElementById('leadStatusBadgeSelect');
+    const leadAssigneeInput = document.getElementById('leadAssigneeInput');
+    const leadAssigneeSuggestions = document.getElementById('leadAssigneeSuggestions');
+    const leadAssigneeToggleBtn = document.getElementById('leadAssigneeToggleBtn');
+    const confirmAssigneeBtn = document.getElementById('confirmAssigneeBtn');
     let originalName = '';
     let caseIdValue = '';
     let currentLeadId = null;
     window.currentLeadId = currentLeadId;
     let currentLeadData = null;
+    let assignableUsers = [];
+    let assignableUsersLoadingPromise = null;
+    let assigneeSaving = false;
+    let leadStatusSaving = false;
+    let assigneeSuggestionsOpen = false;
+    let assigneeActiveIndex = -1;
+    let assigneeVisibleUsers = [];
     let relatedBadgeRequestVersion = 0;
     const zipLocationCache = new Map();
     const notesBtn = document.getElementById('notesBtn');
@@ -806,6 +846,280 @@
       window.currentLeadData = currentLeadData;
       syncPartyDataFromLead(lead);
       syncBestTimeSelectValue(lead);
+      syncLeadStatusBadge(lead);
+      syncLeadAssigneeControl(lead);
+    }
+
+    function normalizeAssigneeName(value) {
+      return String(value || '').trim().slice(0, 120);
+    }
+
+    function getLeadAssignedToDisplay(lead = currentLeadData) {
+      const assignedTo = normalizeAssigneeName(lead?.assigned_to);
+      if (assignedTo) return assignedTo;
+      const currentUser = normalizeAssigneeName(getCurrentUsername());
+      return currentUser || 'admin';
+    }
+
+    function buildUniqueAssigneeList(candidates = []) {
+      const valuesByKey = new Map();
+      candidates.forEach((rawValue) => {
+        const value = normalizeAssigneeName(rawValue);
+        if (!value) return;
+        const key = value.toLowerCase();
+        if (!valuesByKey.has(key)) valuesByKey.set(key, value);
+      });
+      return Array.from(valuesByKey.values()).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    }
+
+    function mergeAssignableUsers(candidates = []) {
+      assignableUsers = buildUniqueAssigneeList([...(assignableUsers || []), ...candidates]);
+      if (assigneeSuggestionsOpen) {
+        openAssigneeSuggestions();
+      }
+    }
+
+    function updateAssigneeConfirmVisibility() {
+      if (!leadAssigneeInput || !confirmAssigneeBtn) return;
+      const currentValue = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
+      const selectedValue = normalizeAssigneeName(leadAssigneeInput.value);
+      const hasChanged = Boolean(selectedValue) && selectedValue.toLowerCase() !== currentValue.toLowerCase();
+      confirmAssigneeBtn.classList.toggle('hidden', !hasChanged);
+    }
+
+    function syncLeadAssigneeControl(lead = currentLeadData) {
+      if (!leadAssigneeInput) return;
+      const displayValue = getLeadAssignedToDisplay(lead);
+      leadAssigneeInput.value = displayValue;
+      leadAssigneeInput.dataset.currentAssignee = displayValue;
+      mergeAssignableUsers([displayValue, getCurrentUsername()]);
+      updateAssigneeConfirmVisibility();
+      closeAssigneeSuggestions();
+    }
+
+    function getAssigneeMatches(rawQuery = '') {
+      const query = normalizeAssigneeName(rawQuery).toLowerCase();
+      if (!query) return [...assignableUsers];
+
+      const prefix = [];
+      const contains = [];
+      assignableUsers.forEach((user) => {
+        const lowerUser = user.toLowerCase();
+        if (lowerUser.startsWith(query)) {
+          prefix.push(user);
+        } else if (lowerUser.includes(query)) {
+          contains.push(user);
+        }
+      });
+      return [...prefix, ...contains];
+    }
+
+    function closeAssigneeSuggestions() {
+      assigneeSuggestionsOpen = false;
+      assigneeActiveIndex = -1;
+      assigneeVisibleUsers = [];
+      if (!leadAssigneeSuggestions) return;
+      leadAssigneeSuggestions.classList.add('hidden');
+      leadAssigneeSuggestions.innerHTML = '';
+      if (leadAssigneeInput) leadAssigneeInput.setAttribute('aria-expanded', 'false');
+    }
+
+    function highlightAssigneeOption() {
+      if (!leadAssigneeSuggestions) return;
+      const optionElements = leadAssigneeSuggestions.querySelectorAll('.lead-assignee-option');
+      optionElements.forEach((element, index) => {
+        element.classList.toggle('active', index === assigneeActiveIndex);
+      });
+    }
+
+    function selectAssigneeAt(index) {
+      if (!leadAssigneeInput) return;
+      if (!Number.isInteger(index) || index < 0 || index >= assigneeVisibleUsers.length) return;
+      leadAssigneeInput.value = assigneeVisibleUsers[index];
+      closeAssigneeSuggestions();
+      updateAssigneeConfirmVisibility();
+    }
+
+    function openAssigneeSuggestions(query = leadAssigneeInput?.value || '') {
+      if (!leadAssigneeInput || !leadAssigneeSuggestions) return;
+
+      assigneeVisibleUsers = getAssigneeMatches(query).slice(0, 10);
+      assigneeSuggestionsOpen = true;
+      assigneeActiveIndex = assigneeVisibleUsers.length ? 0 : -1;
+      leadAssigneeSuggestions.innerHTML = '';
+
+      if (!assigneeVisibleUsers.length) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'lead-assignee-empty';
+        emptyState.textContent = 'Sin coincidencias';
+        leadAssigneeSuggestions.appendChild(emptyState);
+      } else {
+        assigneeVisibleUsers.forEach((username, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'lead-assignee-option';
+          button.textContent = username;
+          button.dataset.index = String(index);
+          button.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+          });
+          button.addEventListener('click', () => {
+            selectAssigneeAt(index);
+            leadAssigneeInput.focus();
+          });
+          leadAssigneeSuggestions.appendChild(button);
+        });
+        highlightAssigneeOption();
+      }
+
+      leadAssigneeSuggestions.classList.remove('hidden');
+      leadAssigneeInput.setAttribute('aria-expanded', 'true');
+    }
+
+    async function loadAssignableUsers() {
+      if (assignableUsersLoadingPromise) return assignableUsersLoadingPromise;
+
+      assignableUsersLoadingPromise = (async () => {
+        try {
+          const response = await fetch('/api/users');
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.message || 'No se pudieron cargar usuarios.');
+          }
+          const usersFromApi = Array.isArray(payload.users) ? payload.users : [];
+          mergeAssignableUsers(usersFromApi);
+        } catch (_error) {
+          mergeAssignableUsers([getCurrentUsername(), currentLeadData?.assigned_to]);
+        } finally {
+          assignableUsersLoadingPromise = null;
+        }
+      })();
+
+      return assignableUsersLoadingPromise;
+    }
+
+    async function saveLeadAssigneeChange() {
+      if (!leadAssigneeInput || !confirmAssigneeBtn) return;
+      if (assigneeSaving) return;
+
+      const selectedAssignee = normalizeAssigneeName(leadAssigneeInput.value);
+      const currentAssignee = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
+      if (!selectedAssignee) {
+        showToast('Selecciona un usuario valido.', 'error');
+        return;
+      }
+      if (selectedAssignee.toLowerCase() === currentAssignee.toLowerCase()) {
+        updateAssigneeConfirmVisibility();
+        return;
+      }
+
+      try {
+        assigneeSaving = true;
+        confirmAssigneeBtn.disabled = true;
+        leadAssigneeInput.disabled = true;
+        if (leadAssigneeToggleBtn) leadAssigneeToggleBtn.disabled = true;
+        const updatedLead = await patchLead({ assignedTo: selectedAssignee });
+        const nextDisplay = normalizeAssigneeName(updatedLead?.assigned_to) || selectedAssignee;
+        mergeAssignableUsers([nextDisplay]);
+        syncLeadAssigneeControl(updatedLead || currentLeadData);
+        showToast(`Lead asignado a ${nextDisplay}.`, 'success');
+      } catch (error) {
+        showToast(error.message || 'No se pudo asignar el lead.', 'error');
+        syncLeadAssigneeControl(currentLeadData);
+      } finally {
+        assigneeSaving = false;
+        confirmAssigneeBtn.disabled = false;
+        leadAssigneeInput.disabled = false;
+        if (leadAssigneeToggleBtn) leadAssigneeToggleBtn.disabled = false;
+        updateAssigneeConfirmVisibility();
+      }
+    }
+
+    function initLeadAssigneeControls() {
+      if (!leadAssigneeInput || !confirmAssigneeBtn) return;
+      if (leadAssigneeInput.dataset.bound === '1') return;
+      leadAssigneeInput.dataset.bound = '1';
+
+      leadAssigneeInput.addEventListener('click', () => {
+        if (assigneeSaving || leadAssigneeInput.disabled) return;
+        const currentAssignee = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
+        const currentValue = normalizeAssigneeName(leadAssigneeInput.value);
+        if (!currentValue || currentValue.toLowerCase() !== currentAssignee.toLowerCase()) return;
+        leadAssigneeInput.value = '';
+        updateAssigneeConfirmVisibility();
+        void loadAssignableUsers().then(() => openAssigneeSuggestions(''));
+      });
+
+      leadAssigneeInput.addEventListener('focus', () => {
+        void loadAssignableUsers().then(() => openAssigneeSuggestions(leadAssigneeInput.value));
+      });
+
+      leadAssigneeInput.addEventListener('input', () => {
+        updateAssigneeConfirmVisibility();
+        openAssigneeSuggestions(leadAssigneeInput.value);
+      });
+
+      leadAssigneeInput.addEventListener('change', () => {
+        updateAssigneeConfirmVisibility();
+      });
+
+      leadAssigneeInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeAssigneeSuggestions();
+          return;
+        }
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          if (!assigneeSuggestionsOpen) openAssigneeSuggestions(leadAssigneeInput.value);
+          if (!assigneeVisibleUsers.length) return;
+          if (event.key === 'ArrowDown') {
+            assigneeActiveIndex = (assigneeActiveIndex + 1 + assigneeVisibleUsers.length) % assigneeVisibleUsers.length;
+          } else {
+            assigneeActiveIndex = (assigneeActiveIndex - 1 + assigneeVisibleUsers.length) % assigneeVisibleUsers.length;
+          }
+          highlightAssigneeOption();
+          return;
+        }
+
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (assigneeSuggestionsOpen && assigneeActiveIndex >= 0) {
+            selectAssigneeAt(assigneeActiveIndex);
+          }
+          void saveLeadAssigneeChange();
+        }
+      });
+
+      leadAssigneeInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (!leadAssigneeSuggestions?.matches(':hover')) {
+            closeAssigneeSuggestions();
+          }
+        }, 90);
+      });
+
+      if (leadAssigneeToggleBtn) {
+        leadAssigneeToggleBtn.addEventListener('click', () => {
+          if (assigneeSuggestionsOpen) {
+            closeAssigneeSuggestions();
+            return;
+          }
+          void loadAssignableUsers().then(() => openAssigneeSuggestions(leadAssigneeInput.value));
+          leadAssigneeInput.focus();
+        });
+      }
+
+      confirmAssigneeBtn.addEventListener('click', () => {
+        void saveLeadAssigneeChange();
+      });
+
+      document.addEventListener('click', (event) => {
+        const wrap = event.target?.closest?.('.lead-assignee-wrap');
+        if (!wrap) {
+          closeAssigneeSuggestions();
+        }
+      });
     }
 
     function setPartyFieldDisplay(fieldElement, value) {
@@ -3135,6 +3449,97 @@
       });
     }
 
+    function normalizeLeadStatus(value) {
+      return String(value || '').trim().slice(0, 120);
+    }
+
+    function getLeadStatusToneClass(statusValue) {
+      const status = normalizeLeadStatus(statusValue).toLowerCase();
+      if (!status || status === 'new' || status === 'new lead' || status === 'new duplicate') return 'new';
+      if (status.includes('bad') || status.includes('dead') || status.includes('dnc') || status.includes('nq') || status.includes('reject') || status.includes("can't") || status.includes('not interested')) return 'negative';
+      if (status.includes('docs')) return 'docs';
+      if (status.includes('submitted') || status.includes('debtmanager')) return 'submitted';
+      if (status.includes('banking') || status.includes('hotlist') || status.includes('ca hold')) return 'manager';
+      if (status.includes('attempt') || status.includes('contact') || status.includes('warm') || status.includes('meeting') || status.includes('nurture') || status.includes('looking for a loan') || status.includes('transferred')) return 'callback';
+      return 'new';
+    }
+
+    function getLeadStatusOptions(currentStatusValue) {
+      const currentStatus = normalizeLeadStatus(currentStatusValue);
+      const statusMap = new Map();
+
+      LEAD_STATUS_OPTIONS.forEach((optionValue) => {
+        const normalizedOption = normalizeLeadStatus(optionValue);
+        if (!normalizedOption) return;
+        const key = normalizedOption.toLowerCase();
+        if (!statusMap.has(key)) statusMap.set(key, normalizedOption);
+      });
+
+      if (currentStatus) {
+        const currentKey = currentStatus.toLowerCase();
+        if (!statusMap.has(currentKey)) statusMap.set(currentKey, currentStatus);
+      }
+
+      return Array.from(statusMap.values());
+    }
+
+    function applyLeadStatusBadgeTone(statusValue) {
+      if (!leadStatusBadgeSelect) return;
+      const toneClass = getLeadStatusToneClass(statusValue);
+      leadStatusBadgeSelect.className = `lead-status-badge-select ${toneClass}`;
+    }
+
+    function renderLeadStatusBadgeOptions(currentStatusValue) {
+      if (!leadStatusBadgeSelect) return;
+      const currentStatus = normalizeLeadStatus(currentStatusValue) || 'New';
+      const options = getLeadStatusOptions(currentStatus);
+      leadStatusBadgeSelect.innerHTML = '';
+      options.forEach((optionValue) => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        leadStatusBadgeSelect.appendChild(option);
+      });
+      leadStatusBadgeSelect.value = currentStatus;
+      leadStatusBadgeSelect.dataset.currentStatus = currentStatus;
+      applyLeadStatusBadgeTone(currentStatus);
+    }
+
+    function syncLeadStatusBadge(lead = currentLeadData) {
+      if (!leadStatusBadgeSelect) return;
+      const currentStatus = normalizeLeadStatus(lead?.status) || 'New';
+      renderLeadStatusBadgeOptions(currentStatus);
+    }
+
+    function initLeadStatusBadgeControl() {
+      if (!leadStatusBadgeSelect) return;
+      if (leadStatusBadgeSelect.dataset.bound === '1') return;
+      leadStatusBadgeSelect.dataset.bound = '1';
+
+      leadStatusBadgeSelect.addEventListener('change', async () => {
+        if (leadStatusSaving) return;
+
+        const previousStatus = normalizeLeadStatus(leadStatusBadgeSelect.dataset.currentStatus) || 'New';
+        const nextStatus = normalizeLeadStatus(leadStatusBadgeSelect.value) || previousStatus;
+        if (nextStatus.toLowerCase() === previousStatus.toLowerCase()) return;
+
+        try {
+          leadStatusSaving = true;
+          leadStatusBadgeSelect.disabled = true;
+          const updatedLead = await patchLead({ status: nextStatus });
+          const persistedStatus = normalizeLeadStatus(updatedLead?.status) || nextStatus;
+          renderLeadStatusBadgeOptions(persistedStatus);
+          showToast(`Status actualizado a ${persistedStatus}.`, 'success');
+        } catch (error) {
+          renderLeadStatusBadgeOptions(previousStatus);
+          showToast(error.message || 'No se pudo actualizar el status.', 'error');
+        } finally {
+          leadStatusSaving = false;
+          leadStatusBadgeSelect.disabled = false;
+        }
+      });
+    }
+
     function updateStateBadge(lead) {
       const stateBadge = document.getElementById('stateBadge');
       if (!stateBadge || !lead) return;
@@ -3989,13 +4394,17 @@
       return String(lead?.state_type || '').trim();
     }
 
+    function getStateBasedProgramFeePercent(lead = currentLeadData) {
+      return getLeadStateType(lead) === 'Green' ? 25 : 29.5;
+    }
+
     function getStateBasedDefaultLegalPlan(lead = currentLeadData) {
       return getLeadStateType(lead) === 'Green';
     }
 
     function readCalcConfigFromLead(lead) {
       const legalPlanFromLead = lead?.calc_legal_plan_enabled;
-      return normalizeCalcConfig({
+      const normalized = normalizeCalcConfig({
         totalDebt: lead?.calc_total_debt,
         settlementPercent: lead?.calc_settlement_percent,
         programFeePercent: lead?.calc_program_fee_percent,
@@ -4005,6 +4414,8 @@
           ? getStateBasedDefaultLegalPlan(lead)
           : Boolean(legalPlanFromLead)
       });
+      normalized.programFeePercent = getStateBasedProgramFeePercent(lead);
+      return normalized;
     }
 
     function leadNeedsProtectedCalcDefaults(lead) {
@@ -4038,7 +4449,7 @@
       const bankFeeInput = document.getElementById('calcBankFee');
       const legalSwitch = document.getElementById('calcLegalPlanSwitch');
 
-      return normalizeCalcConfig({
+      const normalized = normalizeCalcConfig({
         totalDebt: parseCurrency(totalDebtInput?.value),
         settlementPercent: parsePercent(settlementInput?.value),
         programFeePercent: parsePercent(programFeeInput?.value),
@@ -4046,6 +4457,8 @@
         months: currentMonths,
         legalPlanEnabled: legalSwitch?.classList.contains('active')
       });
+      normalized.programFeePercent = getStateBasedProgramFeePercent();
+      return normalized;
     }
 
     function getCalcConfigPatchPayload(config) {
@@ -4179,7 +4592,7 @@
               const normalizedPercent = Math.min(100, Math.max(0, parsePercent(input.value)));
               const fallbackValue = id === 'calcSettlementPercent'
                 ? DEFAULT_CALC_CONFIG.settlementPercent
-                : DEFAULT_CALC_CONFIG.programFeePercent;
+                : getStateBasedProgramFeePercent();
               const safePercent = normalizedPercent > 0 ? normalizedPercent : fallbackValue;
               input.value = Number(safePercent.toFixed(2)).toString();
             }
@@ -4757,6 +5170,9 @@
       const resultMonthlyPaymentEl = document.getElementById('resultMonthlyPayment');
       const resultTotalProgramEl = document.getElementById('resultTotalProgram');
       const resultSavingsEl = document.getElementById('resultSavings');
+      const resultMonthlyLegalFeeEl = document.getElementById('resultMonthlyLegalFee');
+      const resultEstimatedSavingsEl = document.getElementById('resultEstimatedSavings');
+      const resultMonthlyPaymentSavingsEl = document.getElementById('resultMonthlyPaymentSavings');
 
       if (
         !totalDebtInput || !settlementInput || !programFeeInput || !bankFeeInput ||
@@ -4769,12 +5185,15 @@
       // Obtener valores
       const totalDebt = Math.max(0, parseCurrency(totalDebtInput.value));
       const settlementPercent = Math.min(100, Math.max(0, parsePercent(settlementInput.value)));
-      const programFeePercent = Math.min(100, Math.max(0, parsePercent(programFeeInput.value)));
+      const programFeePercent = getStateBasedProgramFeePercent();
       const monthlyBankFee = Math.max(0, parseCurrency(bankFeeInput.value));
       const months = Number.isFinite(currentMonths) && currentMonths > 0 ? currentMonths : 48;
       const hasLegalPlan = legalPlanSwitch.classList.contains('active');
+      const startupBankFee = monthlyBankFee;
+      const firstMonthBankFee = monthlyBankFee + startupBankFee;
 
       totalDebtInput.value = formatMoneyInput(totalDebt);
+      programFeeInput.value = Number(programFeePercent.toFixed(2)).toString();
       
       // Cálculos principales
       const estimatedSettlement = totalDebt * (settlementPercent / 100);
@@ -4785,7 +5204,7 @@
       const totalLegalFees = monthlyLegalFee * months;
       
       // Bank fees: mensual x número de meses
-      const totalBankFees = monthlyBankFee * months;
+      const totalBankFees = (monthlyBankFee * months) + startupBankFee;
       
       // Total del programa
       const totalProgram = estimatedSettlement + programFees + totalLegalFees + totalBankFees;
@@ -4795,7 +5214,8 @@
       
       // Ahorros (comparando con pagar la deuda completa)
       const totalSavings = totalDebt - estimatedSettlement;
-      const monthlySavings = totalSavings / months;
+      const totalEstimatedSavings = totalDebt - totalProgram;
+      const monthlyPaymentSavings = monthlyPayment - monthlyLegalFee - monthlyBankFee;
       
       // Actualizar resultados en UI
       resultSettlementEl.textContent = formatCurrency(estimatedSettlement);
@@ -4805,6 +5225,9 @@
       resultMonthlyPaymentEl.textContent = formatCurrency(monthlyPayment);
       resultTotalProgramEl.textContent = formatCurrency(totalProgram);
       resultSavingsEl.textContent = formatCurrency(totalSavings);
+      if (resultMonthlyLegalFeeEl) resultMonthlyLegalFeeEl.textContent = formatCurrency(monthlyLegalFee);
+      if (resultEstimatedSavingsEl) resultEstimatedSavingsEl.textContent = formatCurrency(totalEstimatedSavings);
+      if (resultMonthlyPaymentSavingsEl) resultMonthlyPaymentSavingsEl.textContent = formatCurrency(monthlyPaymentSavings);
       
       // Sincronizar con Banking: Initial Payment Amount
       const bankInitialPayment = document.getElementById('bankInitialPayment');
@@ -4813,14 +5236,17 @@
       }
       
       // Generar tabla de pagos
-      generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings);
+      generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlyPaymentSavings, firstMonthBankFee);
+      if (typeof window.refreshBudgetDetailsFromCalculator === 'function') {
+        window.refreshBudgetDetailsFromCalculator();
+      }
       queuePersistCalculatorConfig();
     }
 
     window.calculateAll = calculateAll;
     window.queuePersistCalculatorConfig = queuePersistCalculatorConfig;
     
-    function generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlySavings) {
+    function generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlyPaymentSavings, firstMonthBankFee) {
       const tbody = document.getElementById('scheduleTableBody');
       if (!tbody) return;
       
@@ -4833,6 +5259,7 @@
       
       for (let i = 1; i <= Math.min(months, 48); i++) {
         const paymentDate = addMonthsWithDayClamp(baseDate, (i - 1) + firstMonthOffset, paymentDay);
+        const scheduleBankFee = i === 1 ? firstMonthBankFee : monthlyBankFee;
         
         const dateStr = paymentDate.toLocaleDateString('en-US', {
           month: '2-digit',
@@ -4846,8 +5273,8 @@
             <td>${dateStr}</td>
             <td class="mono">${formatCurrency(monthlyPayment)}</td>
             <td class="mono">${formatCurrency(monthlyLegalFee)}</td>
-            <td class="mono">${formatCurrency(monthlyBankFee)}</td>
-            <td class="mono savings">${formatCurrency(monthlySavings)}</td>
+            <td class="mono">${formatCurrency(scheduleBankFee)}</td>
+            <td class="mono savings">${formatCurrency(monthlyPaymentSavings)}</td>
           </tr>
         `;
       }
@@ -5003,6 +5430,10 @@
         // Inicializar banking si es la pestaña de banking
         if (tabName === 'banking') {
           initBankingSection();
+        }
+
+        if (tabName === 'budget' && typeof window.initBudgetSection === 'function') {
+          window.initBudgetSection();
         }
 
         if (tabName === 'creditors') {
@@ -5216,6 +5647,7 @@
         
         // Guardar valores originales
         syncLeadDataState(lead);
+        void loadAssignableUsers();
         if (typeof window.syncLeadFilesFromServer === 'function') {
           try {
             await window.syncLeadFilesFromServer(lead.id, { silent: true });
@@ -5225,6 +5657,9 @@
         }
         prepareNotesForLead(lead.id);
         hydrateCalculatorFromLead(lead);
+        if (typeof window.onLeadLoadedForBudget === 'function') {
+          window.onLeadLoadedForBudget(lead);
+        }
         applyStoredCoappIncludeContractFlag(lead, { emitEvent: false });
         initCreditorsSection();
         await loadCreditorsData({ silent: true });
@@ -6144,7 +6579,7 @@
           case 'official_document':
             return 'Documento oficial';
           case 'credit_report':
-            return 'Reporte de cr�dito';
+            return 'Reporte de crédito';
           case 'income_proof':
             return 'Prueba de ingresos';
           case 'bank_statement':
@@ -6252,7 +6687,7 @@
         }
 
         if (file.size > maxSize) {
-          showToast(`Archivo muy grande: ${file.name} (m�x 10MB)`, 'error');
+          showToast(`Archivo muy grande: ${file.name} (máx 10MB)`, 'error');
           return;
         }
 
@@ -6528,6 +6963,8 @@
     // Cargar datos
     initNotesPanel();
     initFilesPanel();
+    initLeadStatusBadgeControl();
+    initLeadAssigneeControls();
     loadLead();
 
 
@@ -6753,7 +7190,7 @@
             if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
             
             expandSection('bankAddressFields');
-            showBankingStatus(`✓ Bank details found! (${data.source === 'local' ? 'from cache' : 'from API'})`, 'success');
+            showBankingStatus(`âœ“ Bank details found! (${data.source === 'local' ? 'from cache' : 'from API'})`, 'success');
             return;
           } else if (response.status === 404) {
             showBankingStatus('Routing number not found in database. Please verify or enter details manually.', 'error');
@@ -6780,7 +7217,7 @@
               if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
               
               expandSection('bankAddressFields');
-              showBankingStatus(`✓ Found in local database. Routing: ${bank.routing_number}`, 'success');
+              showBankingStatus(`âœ“ Found in local database. Routing: ${bank.routing_number}`, 'success');
               return;
             } else {
               showBankingStatus('Bank not found in local database. Please enter routing number (9 digits) to lookup.', 'error');
@@ -6890,3 +7327,4 @@
       }
     `;
     document.head.appendChild(bankingStyles);
+
