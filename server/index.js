@@ -68,7 +68,7 @@ const LEAD_SELECT_COLUMNS = `
   email, phone, home_phone, cell_phone,
   source, state_code, dob, ssn, address_street, city, zip_code, best_time,
   currently_employed, employer_name, occupation, self_employed,
-  status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, created_at, updated_at
+  status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, callback_date, created_at, updated_at
 `;
 
 function getStateTypeFromCode(stateCode) {
@@ -77,6 +77,16 @@ function getStateTypeFromCode(stateCode) {
 
 function getProgramFeePercentForState(stateCode) {
   return getStateTypeFromCode(stateCode) === 'Green' ? 25 : 29.5;
+}
+
+async function createNotification(recipientUsername, type, title, body, leadId) {
+  const normalizedRecipient = cleanText(recipientUsername, 120).toLowerCase();
+  if (!normalizedRecipient) return;
+  await pool.query(
+    `INSERT INTO notifications (recipient_username, type, title, body, lead_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [normalizedRecipient, type, title.slice(0, 120), body.slice(0, 500), leadId || null]
+  );
 }
 
 function cleanText(value, maxLength) {
@@ -618,6 +628,19 @@ function parseLeadPatchBody(body = {}) {
         return { ok: false, message: 'firstDepositDate debe tener formato YYYY-MM-DD.' };
       }
       changes.first_deposit_date = normalized;
+    }
+  }
+
+  const callbackDate = pickFirstDefined(body, ['callbackDate', 'callback_date']);
+  if (callbackDate !== undefined) {
+    if (callbackDate === null || String(callbackDate).trim() === '') {
+      changes.callback_date = null;
+    } else {
+      const normalized = String(callbackDate).trim();
+      if (!isValidISODate(normalized)) {
+        return { ok: false, message: 'callbackDate debe tener formato YYYY-MM-DD.' };
+      }
+      changes.callback_date = normalized;
     }
   }
 
@@ -1598,8 +1621,9 @@ app.post('/api/leads/:id/notes', async (req, res) => {
     return res.status(400).json({ message: normalizedAuthor.message });
   }
 
+  const client = await pool.connect();
   try {
-    const { rows: leadRows } = await pool.query(
+    const { rows: leadRows } = await client.query(
       `SELECT id FROM leads WHERE id = $1 LIMIT 1`,
       [leadId]
     );
@@ -1607,24 +1631,26 @@ app.post('/api/leads/:id/notes', async (req, res) => {
       return res.status(404).json({ message: 'Lead no encontrado.' });
     }
 
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `INSERT INTO lead_notes (lead_id, content, author_username, color_tag)
        VALUES ($1, $2, $3, $4)
        RETURNING id, lead_id, content, author_username, color_tag, created_at, updated_at`,
       [leadId, content, normalizedAuthor.value, normalizedColorTag.value]
     );
-
-    await pool.query(
-      `UPDATE leads
-       SET updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+    await client.query(
+      `UPDATE leads SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [leadId]
     );
+    await client.query('COMMIT');
 
     return res.status(201).json({ note: rows[0] });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error al crear nota del lead:', error);
     return res.status(500).json({ message: 'No se pudo crear la nota.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -2232,10 +2258,111 @@ app.patch('/api/leads/:id', async (req, res) => {
     const lead = rows[0];
     lead.state_type = getStateTypeFromCode(lead.state_code);
 
+    if (changes.assigned_to && lead.assigned_to) {
+      const caseLabel = lead.case_id ? `Caso #${lead.case_id}` : `Lead #${lead.id}`;
+      createNotification(
+        lead.assigned_to,
+        'lead_assigned',
+        'Se te asignó un lead',
+        `${caseLabel} – ${lead.full_name || 'Sin nombre'} fue asignado a ti.`,
+        lead.id
+      ).catch(() => {});
+    }
+
     res.json({ lead, message: 'Lead actualizado correctamente.' });
   } catch (error) {
     console.error('Error al actualizar lead:', error);
     res.status(500).json({ message: 'Error al actualizar lead.' });
+  }
+});
+
+// ============================================
+// ENDPOINTS: Notificaciones por usuario
+// ============================================
+
+app.get('/api/notifications', async (req, res) => {
+  const username = cleanText(req.query.username, 120).toLowerCase();
+  if (!username) return res.status(400).json({ message: 'username requerido.' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, type, title, body, lead_id, read_at, created_at
+       FROM notifications
+       WHERE lower(recipient_username) = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [username]
+    );
+    const unreadCount = rows.filter((n) => !n.read_at).length;
+    return res.json({ notifications: rows, unreadCount });
+  } catch (error) {
+    console.error('Error al obtener notificaciones:', error);
+    return res.status(500).json({ message: 'Error al obtener notificaciones.' });
+  }
+});
+
+app.patch('/api/notifications/read', async (req, res) => {
+  const username = cleanText(req.body?.username, 120).toLowerCase();
+  const ids = req.body?.ids;
+  if (!username) return res.status(400).json({ message: 'username requerido.' });
+
+  try {
+    if (Array.isArray(ids) && ids.length > 0) {
+      await pool.query(
+        `UPDATE notifications SET read_at = NOW()
+         WHERE lower(recipient_username) = $1 AND id = ANY($2::bigint[]) AND read_at IS NULL`,
+        [username, ids]
+      );
+    } else {
+      await pool.query(
+        `UPDATE notifications SET read_at = NOW()
+         WHERE lower(recipient_username) = $1 AND read_at IS NULL`,
+        [username]
+      );
+    }
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al marcar notificaciones:', error);
+    return res.status(500).json({ message: 'Error al marcar como leídas.' });
+  }
+});
+
+app.get('/api/callbacks', async (req, res) => {
+  const fromDateRaw = cleanText(req.query.from, 16);
+  const fromDate = fromDateRaw || new Date().toISOString().slice(0, 10);
+
+  if (!isValidISODate(fromDate)) {
+    return res.status(400).json({ message: 'Parametro from invalido. Usa YYYY-MM-DD.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         id AS lead_id,
+         case_id,
+         full_name,
+         callback_date,
+         assigned_to
+       FROM leads
+       WHERE callback_date IS NOT NULL
+         AND callback_date >= $1::date
+       ORDER BY callback_date ASC, case_id ASC NULLS LAST, id ASC
+       LIMIT 500`,
+      [fromDate]
+    );
+
+    const callbacks = rows.map((row) => ({
+      leadId: Number(row.lead_id),
+      caseId: row.case_id,
+      name: cleanText(row.full_name, 120) || `Lead #${row.lead_id}`,
+      callbackDate: row.callback_date,
+      assignedTo: cleanText(row.assigned_to, 120) || null
+    }));
+
+    return res.json({ callbacks });
+  } catch (error) {
+    console.error('Error al obtener callbacks:', error);
+    return res.status(500).json({ message: 'Error al obtener callbacks.' });
   }
 });
 
@@ -2859,60 +2986,49 @@ app.put('/api/leads/:id/banking', async (req, res) => {
     const initialPaymentAmount = parseFloat(body.initialPaymentAmount || body.initial_payment_amount) || 0;
     const paymentDayOfMonth = Math.min(31, Math.max(1, parseInt(body.paymentDayOfMonth || body.payment_day_of_month, 10) || 1));
 
-    // Verificar si ya existe registro
-    const { rows: existingRows } = await pool.query(
-      'SELECT id FROM banking_info WHERE lead_id = $1 LIMIT 1',
-      [leadId]
+    const { rows } = await pool.query(
+      `INSERT INTO banking_info (
+        lead_id, routing_number, account_number, account_type, bank_name, bank_phone,
+        bank_address, bank_address2, bank_city, bank_state, bank_zip,
+        name_on_account, mothers_maiden_name, ss_number, relationship_to_customer,
+        email, dob, address, address2,
+        initial_payment_amount, payment_day_of_month
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      ON CONFLICT (lead_id) DO UPDATE SET
+        routing_number = EXCLUDED.routing_number,
+        account_number = EXCLUDED.account_number,
+        account_type = EXCLUDED.account_type,
+        bank_name = EXCLUDED.bank_name,
+        bank_phone = EXCLUDED.bank_phone,
+        bank_address = EXCLUDED.bank_address,
+        bank_address2 = EXCLUDED.bank_address2,
+        bank_city = EXCLUDED.bank_city,
+        bank_state = EXCLUDED.bank_state,
+        bank_zip = EXCLUDED.bank_zip,
+        name_on_account = EXCLUDED.name_on_account,
+        mothers_maiden_name = EXCLUDED.mothers_maiden_name,
+        ss_number = EXCLUDED.ss_number,
+        relationship_to_customer = EXCLUDED.relationship_to_customer,
+        email = EXCLUDED.email,
+        dob = EXCLUDED.dob,
+        address = EXCLUDED.address,
+        address2 = EXCLUDED.address2,
+        initial_payment_amount = EXCLUDED.initial_payment_amount,
+        payment_day_of_month = EXCLUDED.payment_day_of_month,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *`,
+      [
+        leadId, routingNumber, accountNumber, accountType, bankName, bankPhone,
+        bankAddress, bankAddress2, bankCity, bankState, bankZip,
+        nameOnAccount, mothersMaidenName, ssNumber, relationshipToCustomer,
+        email, dob, address, address2,
+        initialPaymentAmount, paymentDayOfMonth
+      ]
     );
 
-    let result;
-    if (existingRows.length > 0) {
-      // Actualizar
-      const { rows } = await pool.query(
-        `UPDATE banking_info SET
-          routing_number = $1, account_number = $2, account_type = $3, bank_name = $4, bank_phone = $5,
-          bank_address = $6, bank_address2 = $7, bank_city = $8, bank_state = $9, bank_zip = $10,
-          name_on_account = $11, mothers_maiden_name = $12, ss_number = $13, relationship_to_customer = $14,
-          email = $15, dob = $16, address = $17, address2 = $18,
-          initial_payment_amount = $19, payment_day_of_month = $20,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE lead_id = $21
-         RETURNING *`,
-        [
-          routingNumber, accountNumber, accountType, bankName, bankPhone,
-          bankAddress, bankAddress2, bankCity, bankState, bankZip,
-          nameOnAccount, mothersMaidenName, ssNumber, relationshipToCustomer,
-          email, dob, address, address2,
-          initialPaymentAmount, paymentDayOfMonth,
-          leadId
-        ]
-      );
-      result = rows[0];
-    } else {
-      // Crear nuevo
-      const { rows } = await pool.query(
-        `INSERT INTO banking_info (
-          lead_id, routing_number, account_number, account_type, bank_name, bank_phone,
-          bank_address, bank_address2, bank_city, bank_state, bank_zip,
-          name_on_account, mothers_maiden_name, ss_number, relationship_to_customer,
-          email, dob, address, address2,
-          initial_payment_amount, payment_day_of_month
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-        RETURNING *`,
-        [
-          leadId, routingNumber, accountNumber, accountType, bankName, bankPhone,
-          bankAddress, bankAddress2, bankCity, bankState, bankZip,
-          nameOnAccount, mothersMaidenName, ssNumber, relationshipToCustomer,
-          email, dob, address, address2,
-          initialPaymentAmount, paymentDayOfMonth
-        ]
-      );
-      result = rows[0];
-    }
-
-    res.json({ 
-      banking: result, 
-      message: 'Información bancaria guardada correctamente.' 
+    res.json({
+      banking: rows[0],
+      message: 'Información bancaria guardada correctamente.'
     });
   } catch (error) {
     console.error('Error al guardar información bancaria:', error);

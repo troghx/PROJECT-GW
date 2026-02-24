@@ -46,19 +46,112 @@
       'Meeting',
       'Transferred to CCCF'
     ];
+    const SESSION_KEY = 'project_gw_session';
     const THEME_KEY = 'project_gw_theme';
-    const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
-    document.body.classList.remove('theme-dark', 'theme-light');
-    document.body.classList.add(`theme-${savedTheme}`);
-    
+    const COLOR_KEY = 'project_gw_accent_color';
+    const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
+
+    function normalizePreferenceOwner(owner) {
+      return String(owner || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, '_');
+    }
+
+    function readSessionUser() {
+      try {
+        const rawSession = localStorage.getItem(SESSION_KEY);
+        if (!rawSession) return null;
+        const parsed = JSON.parse(rawSession);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function resolvePreferenceOwner(owner) {
+      if (typeof owner === 'string') {
+        return normalizePreferenceOwner(owner);
+      }
+      if (owner && typeof owner === 'object') {
+        return normalizePreferenceOwner(owner.username || owner.name || '');
+      }
+      const session = readSessionUser();
+      return normalizePreferenceOwner(session?.username || session?.name || '');
+    }
+
+    function buildScopedPreferenceKey(baseKey, owner) {
+      const normalizedOwner = normalizePreferenceOwner(owner);
+      return normalizedOwner ? `${baseKey}__${normalizedOwner}` : baseKey;
+    }
+
+    function readScopedPreference(baseKey, owner) {
+      const normalizedOwner = resolvePreferenceOwner(owner);
+      if (normalizedOwner) {
+        const scoped = localStorage.getItem(buildScopedPreferenceKey(baseKey, normalizedOwner));
+        if (scoped) {
+          return scoped;
+        }
+      }
+      return localStorage.getItem(baseKey);
+    }
+
+    function writeScopedPreference(baseKey, value, owner) {
+      const normalizedOwner = resolvePreferenceOwner(owner);
+      if (normalizedOwner) {
+        localStorage.setItem(buildScopedPreferenceKey(baseKey, normalizedOwner), value);
+      }
+      localStorage.setItem(baseKey, value);
+    }
+
+    function applyTheme(theme, { owner } = {}) {
+      const selected = theme === 'light' ? 'light' : 'dark';
+      document.body.classList.remove('theme-dark', 'theme-light');
+      document.body.classList.add(`theme-${selected}`);
+      writeScopedPreference(THEME_KEY, selected, owner);
+
+      const switchEl = document.getElementById('themeSwitch');
+      if (switchEl) {
+        switchEl.checked = selected === 'light';
+        switchEl.setAttribute('aria-checked', selected === 'light' ? 'true' : 'false');
+        switchEl.setAttribute('aria-label', selected === 'light' ? 'Tema claro activo' : 'Tema oscuro activo');
+      }
+    }
+
+    function getInitialTheme(owner) {
+      const savedTheme = readScopedPreference(THEME_KEY, owner);
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        return savedTheme;
+      }
+      return 'dark';
+    }
+
+    function applyAccentColor(color, { owner } = {}) {
+      const selected = ACCENT_COLOR_NAMES.includes(color) ? color : 'verde';
+      ACCENT_COLOR_NAMES.forEach((entry) => document.body.classList.remove(`color-${entry}`));
+      document.body.classList.add(`color-${selected}`);
+      writeScopedPreference(COLOR_KEY, selected, owner);
+
+      document.querySelectorAll('.accent-swatch[data-color]').forEach((button) => {
+        const isActive = button.dataset.color === selected;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-checked', String(isActive));
+      });
+    }
+
+    function getInitialAccentColor(owner) {
+      const savedColor = readScopedPreference(COLOR_KEY, owner);
+      return ACCENT_COLOR_NAMES.includes(savedColor) ? savedColor : 'verde';
+    }
+
+    const initialSessionUser = readSessionUser();
+    applyTheme(getInitialTheme(initialSessionUser), { owner: initialSessionUser });
+    applyAccentColor(getInitialAccentColor(initialSessionUser), { owner: initialSessionUser });
+
     const themeSwitch = document.getElementById('themeSwitch');
     if (themeSwitch) {
-      themeSwitch.checked = savedTheme === 'light';
       themeSwitch.addEventListener('change', () => {
-        const newTheme = themeSwitch.checked ? 'light' : 'dark';
-        document.body.classList.remove('theme-dark', 'theme-light');
-        document.body.classList.add(`theme-${newTheme}`);
-        localStorage.setItem(THEME_KEY, newTheme);
+        applyTheme(themeSwitch.checked ? 'light' : 'dark');
       });
     }
 
@@ -217,6 +310,14 @@
         const isOpen = accountMenu.classList.toggle('hidden');
         accountBtn.setAttribute('aria-expanded', !isOpen);
       });
+
+      accountMenu.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const swatch = event.target.closest('.accent-swatch[data-color]');
+        if (swatch) {
+          applyAccentColor(swatch.dataset.color);
+        }
+      });
       
       document.addEventListener('click', () => {
         accountMenu.classList.add('hidden');
@@ -228,7 +329,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem('project_gw_session');
+        localStorage.removeItem(SESSION_KEY);
         window.location.href = 'index.html';
       });
     }
@@ -254,7 +355,7 @@
     const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
     const LEAD_SEARCH_PREFETCH_DEBOUNCE_MS = 80;
     const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
-    const LEAD_SEARCH_SUGGESTION_Z_INDEX = 2147483000;
+    const LEAD_SEARCH_SUGGESTION_Z_INDEX = 9000;
     let globalLeadSearchCache = [];
     let globalLeadSearchIndex = [];
     let globalLeadSearchRequest = null;
@@ -1495,6 +1596,12 @@
         .trim();
     }
 
+    function isWeakCreditorName(nameValue) {
+      const name = normalizeCreditorName(nameValue);
+      if (!name) return true;
+      return /^(you(?:'re| are)?\b|hide details\b|no data available\b|n\/a\b|overview\b|account details\b|auto loans\b|total count\b|times 30\/60\/90\b|terms count\b|remarks?\b|finan\b|closed\b)/i.test(name);
+    }
+
     function normalizeAccountToken(value) {
       return String(value || '')
         .toUpperCase()
@@ -1534,7 +1641,13 @@
         'Creditors',
         'Total',
         'Public records',
-        'Inquiries'
+        'Inquiries',
+        'You have',
+        'You’re',
+        'You\'re',
+        'Hide Details',
+        'No data available',
+        'N/A'
       ];
 
       return !blockedStarts.some((prefix) => name.startsWith(prefix));
@@ -1611,6 +1724,9 @@
         'Type ',
         'Responsibility',
         'Remarks',
+        'Open Date',
+        'Last Activity',
+        'Closed',
         'Term ',
         'High ',
         'Current ',
@@ -1626,7 +1742,22 @@
 
       const dateMatch = raw.match(/\b[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\b/);
       const moneyMatch = raw.match(/\$?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/);
-      if (!dateMatch && !moneyMatch) return null;
+      if (!dateMatch && !moneyMatch) {
+        const looksAllCapsCreditor =
+          /^[A-Z0-9][A-Z0-9&.,'/-\s]{3,80}$/.test(raw) &&
+          raw.split(/\s+/).length >= 2 &&
+          !/\b(?:AUTO LOANS|TOTAL COUNT|ACCOUNT DETAILS|OVERVIEW|CREDITOR INFORMATION|NO DATA AVAILABLE|N\/A|TYPE|RESPONSIBILITY|REMARKS|MONTH'S REVIEWED|TIMES 30\/60\/90)\b/i.test(raw) &&
+          !/,\s*[A-Z]{2}\b/.test(raw) &&
+          !/\b\d{5}(?:-\d{4})?\b/.test(raw);
+
+        if (looksAllCapsCreditor && isLikelyCreditorHeader(raw)) {
+          return {
+            creditorName: raw,
+            balanceHint: 0
+          };
+        }
+        return null;
+      }
 
       const cutIndexCandidates = [];
       if (dateMatch) cutIndexCandidates.push(dateMatch.index);
@@ -1663,6 +1794,7 @@
       let recentHeader = null;
       let recentHeaderLine = -9999;
       let waitingCreditorInfo = false;
+      let pendingCreditorInfoName = '';
 
       function createEmptyEntry() {
         return {
@@ -1691,6 +1823,9 @@
           if (recentHeader.balanceHint > 0) {
             current.balance = Math.max(current.balance, recentHeader.balanceHint);
           }
+        }
+        if (pendingCreditorInfoName && (!current.creditorName || isWeakCreditorName(current.creditorName))) {
+          current.creditorName = normalizeCreditorName(pendingCreditorInfoName);
         }
       }
 
@@ -1728,8 +1863,7 @@
         if (waitingCreditorInfo) {
           const infoName = extractNameFromCreditorInfoLine(line);
           if (infoName) {
-            ensureCurrent(lineIndex);
-            if (!current.creditorName) current.creditorName = infoName;
+            pendingCreditorInfoName = infoName;
           }
           if (/PO BOX|P\.?\s*O\.?\s*BOX|\(\d{3}\)|^\(\d{3}\)|^\d{3}-\d{3}-\d{4}/i.test(line)) {
             waitingCreditorInfo = false;
@@ -4002,7 +4136,7 @@
       };
     }
 
-    function initCallbackCalendar(leadId, leadName) {
+    function initCallbackCalendar(leadId, leadName, callbackDateValue) {
       calendarLeadId = leadId;
       calendarLeadName = leadName;
 
@@ -4017,10 +4151,10 @@
 
       if (!calendarBtn || !calendarEl || !dateDisplay || !prevBtn || !nextBtn || !monthYearEl || !daysContainer) return;
 
-      const savedCallback = localStorage.getItem(`lead_callback_${leadId}`);
-      if (savedCallback) {
-        selectedCallbackDate = savedCallback;
-        const parsedSavedDate = toCalendarDate(savedCallback);
+      const initialCallbackDate = toIsoDateOnly(callbackDateValue);
+      if (initialCallbackDate) {
+        selectedCallbackDate = initialCallbackDate;
+        const parsedSavedDate = toCalendarDate(initialCallbackDate);
         if (parsedSavedDate) {
           currentCalendarDate = new Date(parsedSavedDate.getFullYear(), parsedSavedDate.getMonth(), 1);
           dateDisplay.textContent = parsedSavedDate.toLocaleDateString('es-ES');
@@ -4048,38 +4182,46 @@
         rerenderAfterSelect: true,
         syncViewToSelectedOnOpen: true,
         decorateDay: ({ dayEl, isoDate }) => {
-          if (isoDate === localStorage.getItem(`lead_callback_${calendarLeadId}`)) {
+          if (isoDate === selectedCallbackDate) {
             dayEl.classList.add('has-pin');
           }
         },
-        onSelectDate: ({ isoDate }) => {
-          selectedCallbackDate = isoDate;
-          localStorage.setItem(`lead_callback_${calendarLeadId}`, isoDate);
-          localStorage.setItem(`lead_callback_name_${calendarLeadId}`, calendarLeadName);
+        onSelectDate: async ({ isoDate }) => {
+          try {
+            const updatedLead = await patchLead({ callbackDate: isoDate });
+            const persistedDate = toIsoDateOnly(updatedLead?.callback_date) || isoDate;
+            selectedCallbackDate = persistedDate;
 
-          const parsedDate = toCalendarDate(isoDate);
-          dateDisplay.textContent = parsedDate ? parsedDate.toLocaleDateString('es-ES') : 'Seleccionar fecha';
+            const parsedDate = toCalendarDate(persistedDate);
+            dateDisplay.textContent = parsedDate ? parsedDate.toLocaleDateString('es-ES') : 'Seleccionar fecha';
 
-          const mb = document.getElementById('callbackMacBtn');
-          if (mb) mb.classList.remove('hidden');
+            const mb = document.getElementById('callbackMacBtn');
+            if (mb) mb.classList.remove('hidden');
 
-          showToast(`Callback programado para: ${dateDisplay.textContent}`, 'success');
-          updateNotificationBadge();
-          return true;
+            showToast(`Callback programado para: ${dateDisplay.textContent}`, 'success');
+            await updateNotificationBadge();
+            return true;
+          } catch (error) {
+            showToast(error.message || 'No se pudo guardar callback.', 'error');
+            return false;
+          }
         }
       });
 
       if (macBtn) {
-        macBtn.addEventListener('click', () => {
-          selectedCallbackDate = null;
-          localStorage.removeItem(`lead_callback_${leadId}`);
-          localStorage.removeItem(`lead_callback_name_${leadId}`);
-          macBtn.classList.add('hidden');
-          dateDisplay.textContent = 'Seleccionar fecha';
-          showToast('Callback eliminado', 'info');
-          updateNotificationBadge();
-          if (callbackCalendarController) {
-            callbackCalendarController.render();
+        macBtn.addEventListener('click', async () => {
+          try {
+            await patchLead({ callbackDate: null });
+            selectedCallbackDate = null;
+            macBtn.classList.add('hidden');
+            dateDisplay.textContent = 'Seleccionar fecha';
+            showToast('Callback eliminado', 'info');
+            await updateNotificationBadge();
+            if (callbackCalendarController) {
+              callbackCalendarController.render();
+            }
+          } catch (error) {
+            showToast(error.message || 'No se pudo eliminar callback.', 'error');
           }
         });
       }
@@ -5473,39 +5615,54 @@
     // ============================================
     // NOTIFICACIONES DE CALLBACK
     // ============================================
-    function getAllCallbacks() {
-      const callbacks = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('lead_callback_') && !key.includes('_name_')) {
-          const leadId = key.replace('lead_callback_', '');
-          const date = localStorage.getItem(key);
-          const name = localStorage.getItem(`lead_callback_name_${leadId}`) || `Lead #${leadId}`;
-          if (date) {
-            callbacks.push({ leadId, date, name });
-          }
-        }
+    async function fetchCallbacksFromServer(fromDate) {
+      const safeFromDate = toIsoDateOnly(fromDate) || formatISODate(new Date());
+      const response = await fetch(`/api/callbacks?from=${encodeURIComponent(safeFromDate)}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message || 'No se pudieron cargar callbacks.');
       }
-      return callbacks.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const rawCallbacks = Array.isArray(payload.callbacks) ? payload.callbacks : [];
+      return rawCallbacks
+        .map((row) => {
+          const leadId = Number(row.leadId || row.lead_id || 0);
+          const callbackDate = toIsoDateOnly(row.callbackDate || row.callback_date);
+          if (!leadId || !callbackDate) return null;
+
+          const defaultName = row.caseId ? `Lead #${row.caseId}` : `Lead #${leadId}`;
+          return {
+            leadId,
+            caseId: row.caseId || row.case_id || null,
+            date: callbackDate,
+            name: String(row.name || row.full_name || defaultName).trim() || defaultName
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.date.localeCompare(b.date));
     }
-    
-    function updateNotificationBadge() {
-      const callbacks = getAllCallbacks();
-      const today = new Date().toISOString().split('T')[0];
-      const todayCallbacks = callbacks.filter(cb => cb.date === today);
-      
-      // Buscar el botón de notificaciones en el toolbar
-      const notifBtn = document.querySelector('.tool-btn[aria-label="Notificaciones"]');
-      if (notifBtn) {
-        // Remover badge anterior si existe
-        const existingBadge = notifBtn.querySelector('.notif-badge');
-        if (existingBadge) existingBadge.remove();
-        
-        // Agregar nuevo badge si hay callbacks para hoy
+
+    function getClientNotifButton() {
+      return document.getElementById('clientNotifBtn')
+        || document.querySelector('.tool-btn[aria-label="Notificaciones"]');
+    }
+
+    async function updateNotificationBadge() {
+      const notifBtn = getClientNotifButton();
+      if (!notifBtn) return;
+
+      const existingBadge = notifBtn.querySelector('.notif-badge');
+      if (existingBadge) existingBadge.remove();
+
+      try {
+        const today = formatISODate(new Date());
+        const callbacks = await fetchCallbacksFromServer(today);
+        const todayCallbacks = callbacks.filter((callback) => callback.date === today);
+
         if (todayCallbacks.length > 0) {
           const badge = document.createElement('span');
           badge.className = 'notif-badge';
-          badge.textContent = todayCallbacks.length;
+          badge.textContent = todayCallbacks.length > 9 ? '9+' : String(todayCallbacks.length);
           badge.style.cssText = `
             position: absolute;
             top: -4px;
@@ -5523,23 +5680,67 @@
           notifBtn.style.position = 'relative';
           notifBtn.appendChild(badge);
         }
+      } catch (error) {
+        console.error('Error actualizando badge de callbacks:', error);
       }
     }
-    
-    function showCallbackNotifications() {
-      const callbacks = getAllCallbacks();
-      const today = new Date().toISOString().split('T')[0];
-      const upcoming = callbacks.filter(cb => cb.date >= today);
-      
-      if (upcoming.length === 0) {
-        showToast('No hay callbacks programados', 'info');
+
+    async function showCallbackNotifications() {
+      let upcoming = [];
+      const today = formatISODate(new Date());
+
+      hideGlobalLeadSuggestions();
+
+      try {
+        upcoming = await fetchCallbacksFromServer(today);
+      } catch (error) {
+        showToast(error.message || 'No se pudieron cargar callbacks.', 'error');
         return;
       }
-      
-      // Crear modal de notificaciones
+
       let notifModal = document.getElementById('callbackNotifModal');
       if (notifModal) notifModal.remove();
-      
+
+      const itemsMarkup = upcoming.length > 0
+        ? upcoming.map((callbackItem) => {
+          const isToday = callbackItem.date === today;
+          const dateObj = new Date(`${callbackItem.date}T00:00:00`);
+          const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' });
+          const leadPath = `/client.html?id=${encodeURIComponent(String(callbackItem.leadId))}`;
+          return `
+                <div class="notif-item ${isToday ? 'today' : ''}">
+                  <div class="notif-item-pin">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                  </div>
+                  <div class="notif-item-info">
+                    <span class="notif-item-name">${escapeHtml(callbackItem.name)}</span>
+                    <span class="notif-item-date ${isToday ? 'today-badge' : ''}">${isToday ? 'HOY - ' : ''}${dateStr}</span>
+                  </div>
+                  <button class="notif-item-link" onclick="window.location.href='${leadPath}'">
+                    Ver
+                  </button>
+                </div>
+              `;
+        }).join('')
+        : `
+            <div class="notif-item">
+              <div class="notif-item-pin">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M12 8v5"/>
+                  <circle cx="12" cy="16.5" r="0.8"/>
+                </svg>
+              </div>
+              <div class="notif-item-info">
+                <span class="notif-item-name">Sin callbacks pendientes</span>
+                <span class="notif-item-date">No hay callbacks programados desde hoy</span>
+              </div>
+            </div>
+          `;
+
       notifModal = document.createElement('div');
       notifModal.id = 'callbackNotifModal';
       notifModal.className = 'notif-modal';
@@ -5556,53 +5757,42 @@
             </button>
           </div>
           <div class="notif-modal-body">
-            ${upcoming.map(cb => {
-              const isToday = cb.date === today;
-              const dateObj = new Date(cb.date);
-              const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' });
-              return `
-                <div class="notif-item ${isToday ? 'today' : ''}">
-                  <div class="notif-item-pin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  </div>
-                  <div class="notif-item-info">
-                    <span class="notif-item-name">${escapeHtml(cb.name)}</span>
-                    <span class="notif-item-date ${isToday ? 'today-badge' : ''}">${isToday ? 'HOY - ' : ''}${dateStr}</span>
-                  </div>
-                  <button class="notif-item-link" onclick="window.location.href='/client.html?id=${cb.leadId}'">
-                    Ver
-                  </button>
-                </div>
-              `;
-            }).join('')}
+            ${itemsMarkup}
           </div>
         </div>
       `;
-      
+
       document.body.appendChild(notifModal);
-      
-      // Cerrar al hacer click fuera
       notifModal.querySelector('.notif-modal-backdrop').addEventListener('click', () => {
         notifModal.remove();
       });
     }
-    
-    // Actualizar badge al cargar la página
-    document.addEventListener('DOMContentLoaded', () => {
-      updateNotificationBadge();
-      
-      // Conectar botón de notificaciones
-      const notifBtn = document.querySelector('.tool-btn[aria-label="Notificaciones"]');
+
+    let callbackNotificationsInitialized = false;
+    function initCallbackNotifications() {
+      if (callbackNotificationsInitialized) return;
+      callbackNotificationsInitialized = true;
+
+      void updateNotificationBadge();
+
+      const notifBtn = getClientNotifButton();
       if (notifBtn) {
-        notifBtn.addEventListener('click', (e) => {
+        notifBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          showCallbackNotifications();
+          await showCallbackNotifications();
         });
       }
-    });
+
+      setInterval(() => {
+        void updateNotificationBadge();
+      }, 60000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCallbackNotifications, { once: true });
+    } else {
+      initCallbackNotifications();
+    }
     
     // ============================================
     // CARGAR DATOS DEL LEAD
@@ -5887,7 +6077,7 @@
         `;
         
         // Inicializar Callback Calendar después de renderizar
-        initCallbackCalendar(leadId, lead.full_name);
+        initCallbackCalendar(leadId, lead.full_name, lead.callback_date);
         
         // Inicializar campos editables
         initEditableFields();

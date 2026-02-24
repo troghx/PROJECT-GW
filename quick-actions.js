@@ -136,13 +136,6 @@
       .slice(0, limit);
   }
 
-  function normalizePhoneForLead(value) {
-    const digits = String(value || '').replace(/\D/g, '');
-    const normalizedDigits = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-    if (normalizedDigits.length !== 10) return null;
-    return `${normalizedDigits.slice(0, 3)}-${normalizedDigits.slice(3, 6)}-${normalizedDigits.slice(6)}`;
-  }
-
   function formatPhoneInput(value) {
     const digits = String(value || '').replace(/\D/g, '').slice(0, 10);
     if (digits.length <= 3) return digits;
@@ -712,7 +705,7 @@
       const rawPhone = String(refs.phoneInput?.value || '').trim();
       const stateCode = String(refs.stateHiddenInput?.value || '').trim();
       const isTest = Boolean(refs.isTestInput?.checked);
-      const normalizedPhone = normalizePhoneForLead(rawPhone);
+      const normalizedPhone = crmHelpers.normalizePhoneForLead(rawPhone);
 
       if (!fullName || !rawPhone) {
         globalScope.alert('Por favor completa todos los campos obligatorios.');

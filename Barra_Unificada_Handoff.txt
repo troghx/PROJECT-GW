@@ -1,0 +1,173 @@
+BARRA / SEARCH TOOLBAR - HANDOFF TECNICO (para rehacer de cero)
+Fecha: 2026-02-24
+
+OBJETIVO
+- Dejar una sola implementacion de barra (HTML + JS + estados) para todas las pantallas.
+- Evitar copiar/pegar la barra por pantalla.
+- Evitar que cada pantalla tenga su propia logica de busqueda/notificaciones.
+
+==================================================
+1) ESTADO ACTUAL (COMO ESTA HOY)
+==================================================
+
+1.1 Markup duplicado
+- Dashboard: index.html
+  - Barra: index.html:56
+  - Input search: index.html:93
+  - Notifs (panel inline): index.html:116, index.html:124
+  - Cuenta/menu: index.html:149, index.html:164
+- Cliente: client.html
+  - Barra (copiada): client.html:6097
+  - Input search: client.html:6131
+  - Notifs (boton simple): client.html:6153
+  - Cuenta/menu: client.html:6175, client.html:6190
+
+1.2 Logica duplicada
+- Dashboard usa app.js
+  - refs de barra/search/notifs: app.js:9-18
+  - search/suggestions: app.js:760-1189
+  - notifs panel con /api/notifications: app.js:202-280
+- Cliente usa client.js
+  - account menu: client.js:304-326
+  - toolbar toggle: client.js:340-349
+  - search/suggestions: client.js:352-753
+  - notifs callbacks modal con /api/callbacks: client.js:5615-5792
+
+1.3 CSS compartido + overrides
+- Base toolbar/search/buttons: styles.css:373-679
+- Notif panel dashboard: styles.css:5427+ (notif-badge/panel/list)
+- Cliente agrega CSS inline para modal: client.html:4823+ (.notif-modal)
+
+1.4 Dependencias de busqueda
+- Helpers globales: crm-helpers.js
+  - normalizeSearchText: crm-helpers.js:54
+  - onlyDigits: crm-helpers.js:64
+  - normalizePhoneDigits: crm-helpers.js:68
+  - buildLeadSearchIndex: crm-helpers.js:94
+  - searchLeads: crm-helpers.js:178
+- Fuente de datos: GET /api/leads
+
+1.5 Comportamiento actual de search
+- Input: #homeSearch
+- Suggestions: caja flotante creada dinamicamente en document.body
+- Navegacion:
+  - dashboard: muestra lista/filtra leads en index y abre lead si match unico
+  - cliente: abre lead exacto o manda a index.html#leads con query guardada en localStorage
+
+==================================================
+2) PROBLEMAS REALES DETECTADOS
+==================================================
+
+- Duplica markup + listeners en 2 archivos grandes (index/client).
+- Duplica search engine y suggestions logic (app.js/client.js).
+- Dos sistemas de notificaciones distintos:
+  - dashboard: /api/notifications
+  - cliente: /api/callbacks
+- Mucho inline style en suggestions, dificil de mantener.
+- Superposiciones posibles por z-index de overlays (suggestions vs modales).
+- Cualquier cambio de barra obliga tocar muchos archivos.
+
+==================================================
+3) ESPEC DE REBUILD UNIFICADO (LO QUE CLAUDE DEBE HACER)
+==================================================
+
+3.1 Crear componente unico
+- Nuevo archivo de template:
+  - components/toolbar.html
+- Nuevo controlador unico:
+  - toolbar.js
+- Nuevo CSS del componente (opcional separar):
+  - toolbar.css
+  - o dejar en styles.css pero agrupado bajo bloque unico.
+
+3.2 Montaje en cada pagina
+- Reemplazar barra hardcodeada por mount point:
+  - <div id="appToolbarMount"></div>
+- En cada pagina cargar:
+  - <script src="toolbar.js"></script>
+- Inicializar con config por pagina:
+  - window.AppToolbar.init({
+      mountId: 'appToolbarMount',
+      page: 'dashboard' | 'client' | 'otros',
+      searchMode: 'global',
+      notificationsMode: 'inbox' | 'callbacks',
+      onSearchSubmit: fn,
+      onLeadOpen: fn
+    });
+
+3.3 Search engine unico
+- Una sola implementacion en toolbar.js:
+  - cache local de leads
+  - index con crmHelpers.buildLeadSearchIndex
+  - query con crmHelpers.searchLeads
+  - suggestions box unica
+- Sin duplicar funciones en app.js/client.js.
+
+3.4 Reglas funcionales unicas
+- Enter:
+  - si 1 match exacto -> abrir /client.html?id=...
+  - si multiples -> ir a index.html#leads y persistir query
+- Escape:
+  - limpiar input + cerrar suggestions
+- Click fuera:
+  - cerrar suggestions
+
+3.5 Notificaciones (normalizar contrato)
+- Mantener 2 modos soportados por config:
+  - inbox: usa /api/notifications (dashboard)
+  - callbacks: usa /api/callbacks (cliente)
+- Render UI desde el mismo modulo, no en app.js/client.js.
+- Badges y modales/paneles controlados por el mismo estado.
+
+3.6 IDs y selectores
+- Evitar selectores fragiles por aria-label.
+- Usar ids/data-attrs estables:
+  - #toolbarToggle
+  - #toolbarSearchInput
+  - #toolbarNotifBtn
+  - #toolbarAccountBtn
+  - #toolbarSuggestions
+
+==================================================
+4) PASOS DE MIGRACION (ORDEN RECOMENDADO)
+==================================================
+
+1. Crear toolbar.js con solo search + toggle + account (sin notifs al inicio).
+2. Montar toolbar en index.html desde mount point y remover markup viejo.
+3. Mover busqueda de app.js a toolbar.js y dejar app.js consumiendo eventos.
+4. Montar toolbar en client.html y remover bloque duplicado.
+5. Mover busqueda de client.js a toolbar.js.
+6. Integrar notifs modo inbox y callbacks en toolbar.js.
+7. Eliminar codigo muerto de app.js/client.js.
+8. Ajustar estilos y z-index centralizados.
+
+==================================================
+5) EVENTOS/CONTRATO ENTRE TOOLBAR Y PAGINAS
+==================================================
+
+Emitir CustomEvent para desacoplar:
+- toolbar:searchChange { query, matchesCount }
+- toolbar:searchSubmit { query, matches }
+- toolbar:openLead { leadId }
+- toolbar:notifOpen {}
+- toolbar:themeChange { theme }
+
+Las paginas escuchan eventos, no manipulan DOM interno de la barra.
+
+==================================================
+6) CRITERIOS DE ACEPTACION
+==================================================
+
+- Solo existe 1 implementacion de barra (sin copy/paste en index/client).
+- Search se comporta igual en dashboard y cliente.
+- No hay listeners duplicados en app.js/client.js para toolbar/search.
+- Notificaciones funcionan en ambos modos segun pagina.
+- No hay solapamientos de overlays por z-index.
+- Cambio de estilo/theme/accent sigue siendo por usuario (localStorage scoping).
+
+==================================================
+7) NOTA IMPORTANTE
+==================================================
+
+Los archivos edge-dom*.html son variantes de prueba y contienen copia de barra.
+No usarlos como fuente principal de verdad para la implementacion final.

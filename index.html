@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260216e" />
+    <link rel="stylesheet" href="styles.css?v=20260223k" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -112,13 +112,25 @@
                 </div>
 
                 <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
-                  <button class="tool-btn" type="button" aria-label="Notificaciones">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
-                      <path d="M10 18a2 2 0 0 0 4 0" />
-                    </svg>
-                    <span>Notifs</span>
-                  </button>
+                  <div class="notif-wrapper">
+                    <button class="tool-btn" id="notifBtn" type="button" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
+                        <path d="M10 18a2 2 0 0 0 4 0" />
+                      </svg>
+                      <span>Notifs</span>
+                      <span class="notif-badge" id="notifBadge" aria-hidden="true"></span>
+                    </button>
+                    <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
+                      <div class="notif-panel-header">
+                        <span class="notif-panel-title">Notificaciones</span>
+                        <button class="notif-mark-all" id="notifMarkAll" type="button">Marcar leídas</button>
+                      </div>
+                      <div class="notif-list" id="notifList">
+                        <p class="notif-empty">Sin notificaciones</p>
+                      </div>
+                    </div>
+                  </div>
 
                   <button class="tool-btn" type="button" aria-label="Correos">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -168,6 +180,16 @@
                 <path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M19.07 4.93l-1.56 1.56M6.49 17.51l-1.56 1.56M19.07 19.07l-1.56-1.56M6.49 6.49 4.93 4.93" />
               </svg>
             </label>
+
+            <div class="accent-color-picker" id="accentColorPicker">
+              <span class="accent-color-label">Color del tema</span>
+              <div class="accent-swatches" role="radiogroup" aria-label="Color de acento">
+                <button class="accent-swatch swatch-verde active" data-color="verde" role="radio" aria-checked="true" type="button" title="Verde"></button>
+                <button class="accent-swatch swatch-azul" data-color="azul" role="radio" aria-checked="false" type="button" title="Azul"></button>
+                <button class="accent-swatch swatch-rojo" data-color="rojo" role="radio" aria-checked="false" type="button" title="Rojo"></button>
+                <button class="accent-swatch swatch-morado" data-color="morado" role="radio" aria-checked="false" type="button" title="Morado"></button>
+              </div>
+            </div>
 
             <div class="account-menu-divider" role="separator"></div>
 
@@ -453,6 +475,7 @@
 
         <!-- Tabla de Leads -->
         <div class="leads-table-container">
+          <div class="leads-table-scroll">
           <table class="leads-table">
             <thead>
               <tr>
@@ -500,10 +523,10 @@
               </tr>
             </tbody>
           </table>
-        </div>
+          </div>
 
         <!-- Paginación -->
-        <div class="leads-pagination">
+          <div class="leads-pagination">
           <button class="page-btn" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
@@ -515,6 +538,7 @@
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
+          </div>
         </div>
       </div>
 
@@ -582,7 +606,7 @@
     </section>
 
     <script src="crm-helpers.js?v=20260216b"></script>
-    <script src="app.js?v=20260219b"></script>
+    <script src="app.js?v=20260223l"></script>
     <script src="quick-actions.js?v=20260216c"></script>
   </body>
 </html>

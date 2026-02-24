@@ -34,7 +34,7 @@
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = String(text);
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;');
   }
 
   function formatDateEs(dateString) {
@@ -71,6 +71,12 @@
       return digits.slice(1);
     }
     return digits;
+  }
+
+  function normalizePhoneForLead(value) {
+    const normalized = normalizePhoneDigits(value);
+    if (normalized.length !== 10) return null;
+    return `${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`;
   }
 
   function uniqueNonEmpty(values) {
@@ -242,6 +248,7 @@
     normalizeSearchText,
     onlyDigits,
     normalizePhoneDigits,
+    normalizePhoneForLead,
     buildLeadSearchIndex,
     searchLeads,
     getStateTypeBadgeHtml,

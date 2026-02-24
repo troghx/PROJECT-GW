@@ -360,6 +360,20 @@
       const el = document.getElementById(id);
       if (el) el.textContent = value;
     });
+
+    const fundsValueEl = document.getElementById('budgetDetailFundsAvailable');
+    const fundsRowEl = fundsValueEl ? fundsValueEl.closest('.budget-funds-row') : null;
+    const isFundsNegative = Number(m.fundsAvailable) < 0;
+
+    if (fundsValueEl) {
+      fundsValueEl.classList.toggle('is-negative', isFundsNegative);
+      fundsValueEl.classList.toggle('is-positive', !isFundsNegative);
+    }
+
+    if (fundsRowEl) {
+      fundsRowEl.classList.toggle('is-negative', isFundsNegative);
+      fundsRowEl.classList.toggle('is-positive', !isFundsNegative);
+    }
   }
 
   function setBudgetStatus(message, tone = '') {

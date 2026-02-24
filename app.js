@@ -11,12 +11,20 @@ const toolbarWrap = document.getElementById('toolbarWrap');
 const homeSearchInput = document.getElementById('homeSearch');
 const crmHelpers = window.CrmHelpers || {};
 
+const notifBtn = document.getElementById('notifBtn');
+const notifPanel = document.getElementById('notifPanel');
+const notifBadge = document.getElementById('notifBadge');
+const notifList = document.getElementById('notifList');
+const notifMarkAll = document.getElementById('notifMarkAll');
+
 const SESSION_KEY = 'project_gw_session';
 const THEME_KEY = 'project_gw_theme';
+const COLOR_KEY = 'project_gw_accent_color';
 const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
 const LEAD_SEARCH_DEBOUNCE_MS = 70;
 const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
 const LEAD_SEARCH_SUGGESTION_Z_INDEX = 2147483000;
+const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
 
 // Toast notifications
 function showToast(message, type = 'info') {
@@ -105,13 +113,55 @@ function setToolbarExpanded(open) {
   toolbarToggle.setAttribute('aria-label', open ? 'Ocultar accesos' : 'Mostrar accesos');
 }
 
-function applyTheme(theme) {
+function normalizePreferenceOwner(owner) {
+  return String(owner || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '_');
+}
+
+function resolvePreferenceOwner(owner) {
+  if (typeof owner === 'string') {
+    return normalizePreferenceOwner(owner);
+  }
+  if (owner && typeof owner === 'object') {
+    return normalizePreferenceOwner(owner.username || owner.name || '');
+  }
+  const session = getSession();
+  return normalizePreferenceOwner(session?.username || session?.name || '');
+}
+
+function buildScopedPreferenceKey(baseKey, owner) {
+  const normalizedOwner = normalizePreferenceOwner(owner);
+  return normalizedOwner ? `${baseKey}__${normalizedOwner}` : baseKey;
+}
+
+function readScopedPreference(baseKey, owner) {
+  const normalizedOwner = resolvePreferenceOwner(owner);
+  if (normalizedOwner) {
+    const scoped = localStorage.getItem(buildScopedPreferenceKey(baseKey, normalizedOwner));
+    if (scoped) {
+      return scoped;
+    }
+  }
+  return localStorage.getItem(baseKey);
+}
+
+function writeScopedPreference(baseKey, value, owner) {
+  const normalizedOwner = resolvePreferenceOwner(owner);
+  if (normalizedOwner) {
+    localStorage.setItem(buildScopedPreferenceKey(baseKey, normalizedOwner), value);
+  }
+  localStorage.setItem(baseKey, value);
+}
+
+function applyTheme(theme, { owner } = {}) {
   const selected = theme === 'light' ? 'light' : 'dark';
 
   document.body.classList.remove('theme-light', 'theme-dark');
   document.body.classList.add(selected === 'light' ? 'theme-light' : 'theme-dark');
 
-  localStorage.setItem(THEME_KEY, selected);
+  writeScopedPreference(THEME_KEY, selected, owner);
 
   if (themeSwitch) {
     themeSwitch.checked = selected === 'light';
@@ -123,13 +173,110 @@ function applyTheme(theme) {
   }
 }
 
-function getInitialTheme() {
-  const savedTheme = localStorage.getItem(THEME_KEY);
+function getInitialTheme(owner) {
+  const savedTheme = readScopedPreference(THEME_KEY, owner);
   if (savedTheme === 'light' || savedTheme === 'dark') {
     return savedTheme;
   }
 
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyAccentColor(color, { owner } = {}) {
+  const selected = ACCENT_COLOR_NAMES.includes(color) ? color : 'verde';
+  ACCENT_COLOR_NAMES.forEach((c) => document.body.classList.remove(`color-${c}`));
+  document.body.classList.add(`color-${selected}`);
+  writeScopedPreference(COLOR_KEY, selected, owner);
+  document.querySelectorAll('.accent-swatch[data-color]').forEach((btn) => {
+    const isActive = btn.dataset.color === selected;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-checked', String(isActive));
+  });
+}
+
+function getInitialAccentColor(owner) {
+  const saved = readScopedPreference(COLOR_KEY, owner);
+  return ACCENT_COLOR_NAMES.includes(saved) ? saved : 'verde';
+}
+
+// ---- Notificaciones ----
+let _notifOpen = false;
+
+function _notifTimeAgo(isoDate) {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'ahora mismo';
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
+function _notifIcon(type) {
+  if (type === 'lead_assigned') {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>';
+}
+
+function renderNotifications(data) {
+  if (!notifBadge || !notifList) return;
+  const { notifications = [], unreadCount = 0 } = data || {};
+
+  notifBadge.textContent = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : '';
+  notifBadge.classList.toggle('visible', unreadCount > 0);
+
+  if (!notifications.length) {
+    notifList.innerHTML = '<p class="notif-empty">Sin notificaciones</p>';
+    return;
+  }
+
+  const esc = crmHelpers.escapeHtml
+    ? (t) => crmHelpers.escapeHtml(t)
+    : (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  notifList.innerHTML = notifications.map((n) => {
+    const unread = !n.read_at;
+    return `<div class="notif-item${unread ? ' unread' : ''}" data-id="${n.id}" data-lead-id="${n.lead_id || ''}">
+      <div class="notif-icon">${_notifIcon(n.type)}</div>
+      <div class="notif-content">
+        <p class="notif-title">${esc(n.title)}</p>
+        <p class="notif-body">${esc(n.body)}</p>
+        <p class="notif-time">${_notifTimeAgo(n.created_at)}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshNotifications() {
+  const session = getSession();
+  if (!session?.username) return;
+  try {
+    const data = await requestJson(`/api/notifications?username=${encodeURIComponent(session.username)}`);
+    renderNotifications(data);
+  } catch (_) {}
+}
+
+function setNotifPanelOpen(open) {
+  _notifOpen = open;
+  if (!notifPanel || !notifBtn) return;
+  notifPanel.classList.toggle('visible', open);
+  notifBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) void refreshNotifications();
+}
+
+async function markAllNotificationsRead() {
+  const session = getSession();
+  if (!session?.username) return;
+  try {
+    await requestJson('/api/notifications/read', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: session.username })
+    });
+    if (notifBadge) { notifBadge.textContent = ''; notifBadge.classList.remove('visible'); }
+    if (notifList) notifList.querySelectorAll('.notif-item.unread').forEach((el) => el.classList.remove('unread'));
+  } catch (_) {}
 }
 
 function showDashboard() {
@@ -173,6 +320,43 @@ if (themeSwitch) {
     applyTheme(themeSwitch.checked ? 'light' : 'dark');
   });
 }
+
+if (accountMenu) {
+  accountMenu.addEventListener('click', (event) => {
+    const swatch = event.target.closest('.accent-swatch[data-color]');
+    if (swatch) applyAccentColor(swatch.dataset.color);
+  });
+}
+
+if (notifBtn) {
+  notifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setNotifPanelOpen(!_notifOpen);
+  });
+}
+
+if (notifMarkAll) {
+  notifMarkAll.addEventListener('click', (e) => {
+    e.stopPropagation();
+    void markAllNotificationsRead();
+  });
+}
+
+if (notifList) {
+  notifList.addEventListener('click', (e) => {
+    const item = e.target.closest('.notif-item[data-lead-id]');
+    if (!item || !item.dataset.leadId) return;
+    setNotifPanelOpen(false);
+    window.location.href = `/client.html?id=${item.dataset.leadId}`;
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (!_notifOpen) return;
+  if (notifPanel && notifPanel.contains(e.target)) return;
+  if (notifBtn && notifBtn.contains(e.target)) return;
+  setNotifPanelOpen(false);
+});
 
 if (toolbarWrap) {
   toolbarWrap.addEventListener('click', (event) => {
@@ -388,6 +572,189 @@ let leadSearchSuggestionBox = null;
 let leadSearchSuggestionShell = null;
 let leadSearchSuggestionMatches = [];
 let leadSearchSuggestionActiveIndex = -1;
+let leadActionsMenuDocumentBound = false;
+const LEADS_COLUMN_WIDTHS_KEY = 'project_gw_leads_column_widths_v1';
+const LEADS_COLUMN_MIN_WIDTHS = [30, 130, 78, 90, 86, 76, 76, 88, 64, 56, 64, 64, 40];
+const LEADS_COLUMN_DEFAULT_RATIOS = [3, 16.5, 10, 12, 9.5, 7.5, 7.5, 8.5, 4.5, 5, 6, 6, 4];
+const LEADS_RESIZABLE_COLUMN_INDEXES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+let leadColumnWidths = null;
+let leadsColumnResizeInitialized = false;
+
+function getLeadsTableElement() {
+  return document.querySelector('#leadsView .leads-table');
+}
+
+function normalizeLeadsColumnWidths(widths) {
+  if (!Array.isArray(widths)) return null;
+  if (widths.length !== LEADS_COLUMN_MIN_WIDTHS.length) return null;
+  const normalized = widths.map((value, index) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return LEADS_COLUMN_MIN_WIDTHS[index];
+    return Math.max(LEADS_COLUMN_MIN_WIDTHS[index], Math.round(parsed));
+  });
+  return normalized;
+}
+
+function getDefaultLeadsColumnWidths(table) {
+  const referenceWidth = Math.max(980, Math.floor(table?.getBoundingClientRect().width || 1080));
+  const raw = LEADS_COLUMN_DEFAULT_RATIOS.map((ratio) => Math.round((referenceWidth * ratio) / 100));
+  return normalizeLeadsColumnWidths(raw);
+}
+
+function loadLeadsColumnWidths(table) {
+  if (Array.isArray(leadColumnWidths) && leadColumnWidths.length === LEADS_COLUMN_MIN_WIDTHS.length) {
+    return leadColumnWidths;
+  }
+
+  try {
+    const raw = localStorage.getItem(LEADS_COLUMN_WIDTHS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeLeadsColumnWidths(parsed);
+      if (normalized) {
+        leadColumnWidths = normalized;
+        return leadColumnWidths;
+      }
+    }
+  } catch (_error) {
+    // Ignorar corrupt local state y reconstruir defaults
+  }
+
+  leadColumnWidths = getDefaultLeadsColumnWidths(table);
+  return leadColumnWidths;
+}
+
+function saveLeadsColumnWidths() {
+  try {
+    if (Array.isArray(leadColumnWidths)) {
+      localStorage.setItem(LEADS_COLUMN_WIDTHS_KEY, JSON.stringify(leadColumnWidths));
+    }
+  } catch (_error) {
+    // Ignorar errores de almacenamiento local
+  }
+}
+
+function getLeadsColumnMaxWidth(table) {
+  const containerWidth = Math.floor(table?.parentElement?.getBoundingClientRect().width || window.innerWidth || 1280);
+  return Math.max(140, Math.floor(containerWidth * 0.55));
+}
+
+function applyLeadsColumnWidths() {
+  const table = getLeadsTableElement();
+  if (!table) return;
+
+  const widths = loadLeadsColumnWidths(table);
+  widths.forEach((width, index) => {
+    const finalWidth = `${Math.max(LEADS_COLUMN_MIN_WIDTHS[index], Math.round(width))}px`;
+    table.querySelectorAll(`tr > *:nth-child(${index + 1})`).forEach((cell) => {
+      cell.style.width = finalWidth;
+      cell.style.minWidth = finalWidth;
+      cell.style.maxWidth = finalWidth;
+    });
+  });
+}
+
+function setLeadsColumnWidth(index, width, { persist = true } = {}) {
+  const table = getLeadsTableElement();
+  if (!table) return;
+
+  const widths = loadLeadsColumnWidths(table).slice();
+  const maxWidth = getLeadsColumnMaxWidth(table);
+  widths[index] = Math.min(maxWidth, Math.max(LEADS_COLUMN_MIN_WIDTHS[index], Math.round(width)));
+  leadColumnWidths = widths;
+  applyLeadsColumnWidths();
+  if (persist) {
+    saveLeadsColumnWidths();
+  }
+}
+
+function autoFitLeadsColumn(index) {
+  const table = getLeadsTableElement();
+  if (!table) return;
+
+  const cells = Array.from(table.querySelectorAll(`tr > *:nth-child(${index + 1})`));
+  if (!cells.length) return;
+
+  let maxContentWidth = LEADS_COLUMN_MIN_WIDTHS[index];
+
+  cells.forEach((cell) => {
+    const prevWidth = cell.style.width;
+    const prevMinWidth = cell.style.minWidth;
+    const prevMaxWidth = cell.style.maxWidth;
+
+    cell.style.width = 'auto';
+    cell.style.minWidth = '0';
+    cell.style.maxWidth = 'none';
+    maxContentWidth = Math.max(maxContentWidth, Math.ceil(cell.scrollWidth + 16));
+
+    cell.style.width = prevWidth;
+    cell.style.minWidth = prevMinWidth;
+    cell.style.maxWidth = prevMaxWidth;
+  });
+
+  setLeadsColumnWidth(index, maxContentWidth);
+}
+
+function initializeLeadsColumnResize() {
+  const table = getLeadsTableElement();
+  if (!table) return;
+
+  if (!leadsColumnResizeInitialized) {
+    const headerCells = Array.from(table.querySelectorAll('thead th'));
+
+    headerCells.forEach((headerCell, index) => {
+      if (!LEADS_RESIZABLE_COLUMN_INDEXES.has(index)) return;
+      if (headerCell.querySelector('.col-resize-handle')) return;
+
+      headerCell.classList.add('col-resizable');
+
+      const handle = document.createElement('span');
+      handle.className = 'col-resize-handle';
+      handle.title = 'Arrastra para ajustar ancho. Doble clic para autoajustar.';
+      headerCell.appendChild(handle);
+
+      handle.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        autoFitLeadsColumn(index);
+      });
+
+      handle.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      handle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startX = event.clientX;
+        const startWidth = loadLeadsColumnWidths(table)[index];
+
+        const onMouseMove = (moveEvent) => {
+          const delta = moveEvent.clientX - startX;
+          setLeadsColumnWidth(index, startWidth + delta, { persist: false });
+        };
+
+        const onMouseUp = () => {
+          document.body.classList.remove('leads-col-resizing');
+          saveLeadsColumnWidths();
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.body.classList.add('leads-col-resizing');
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    });
+
+    leadsColumnResizeInitialized = true;
+  }
+
+  applyLeadsColumnWidths();
+}
 
 function consumeTransferredLeadSearchQuery() {
   try {
@@ -641,6 +1008,7 @@ function showLeadsView() {
     
     // Inicializar State Types
     initializeStateTypes();
+    initializeLeadsColumnResize();
   }
   isLeadsView = true;
   // Cambiar el estado del botón
@@ -648,6 +1016,7 @@ function showLeadsView() {
     leadsBtn.style.background = 'var(--accent)';
     leadsBtn.style.color = '#000';
   }
+  void loadLeads();
 }
 
 // Función para inicializar todos los State Types
@@ -854,19 +1223,6 @@ const forceCreateBtn = document.getElementById('forceCreateBtn');
 let duplicateMatches = [];
 let duplicateDecision = null;
 let duplicatePhone = null;
-
-function normalizePhoneForLead(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  const normalizedDigits = digits.length === 11 && digits.startsWith('1')
-    ? digits.slice(1)
-    : digits;
-
-  if (normalizedDigits.length !== 10) {
-    return null;
-  }
-
-  return `${normalizedDigits.slice(0, 3)}-${normalizedDigits.slice(3, 6)}-${normalizedDigits.slice(6)}`;
-}
 
 function clearDuplicateAlert() {
   duplicateMatches = [];
@@ -1141,7 +1497,7 @@ if (newLeadForm) {
     const phone = document.getElementById('leadPhone').value.trim();
     const stateCode = stateHiddenInput ? stateHiddenInput.value : '';
     const isTest = document.getElementById('isTestLead').checked;
-    const normalizedPhone = normalizePhoneForLead(phone);
+    const normalizedPhone = crmHelpers.normalizePhoneForLead(phone);
     
     if (!fullName || !phone) {
       alert('Por favor completa todos los campos obligatorios.');
@@ -1214,6 +1570,34 @@ if (newLeadForm) {
 // CARGAR LEADS EXISTENTES
 // ============================================
 
+function normalizeLeadCopyText(value) {
+  if (value === undefined || value === null) return '';
+  const text = String(value).trim();
+  if (!text || text === '-') return '';
+  return text;
+}
+
+function renderLeadCopyButton(value, label) {
+  const normalized = normalizeLeadCopyText(value);
+  if (!normalized) return '';
+
+  const encodedValue = encodeURIComponent(normalized);
+  const safeLabel = escapeHtml(label);
+
+  return `
+    <button
+      class="lead-copy-btn"
+      type="button"
+      data-copy-value="${encodedValue}"
+      data-copy-label="${safeLabel}"
+      title="Copiar ${safeLabel}"
+      aria-label="Copiar ${safeLabel}"
+    >
+      <span class="lead-copy-icon" aria-hidden="true"></span>
+    </button>
+  `;
+}
+
 function renderLeadsRows(leads) {
   const tbody = document.getElementById('leadsTableBody');
   if (!tbody) return;
@@ -1263,38 +1647,104 @@ function renderLeadsRows(leads) {
     <tr class="lead-row" data-id="${lead.id}">
       <td><input type="checkbox" class="lead-checkbox"></td>
       <td class="lead-name">
-        <a href="/client.html?id=${lead.id}" class="name-link">
-          <div class="name-avatar">
-            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(lead.full_name)}&background=random&color=fff&size=32" alt="">
-            <span>${escapeHtml(lead.full_name)}</span>
-          </div>
-        </a>
+        <div class="lead-copy-inline">
+          <a href="/client.html?id=${lead.id}" class="name-link">
+            <div class="name-avatar">
+              <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(lead.full_name)}&background=random&color=fff&size=32" alt="">
+              <span>${escapeHtml(lead.full_name)}</span>
+            </div>
+          </a>
+          ${renderLeadCopyButton(lead.full_name, 'nombre')}
+        </div>
       </td>
-      <td class="lead-case">${lead.case_id}</td>
+      <td class="lead-case">
+        <div class="lead-copy-inline">
+          <span class="lead-copy-value">${escapeHtml(String(lead.case_id || '-'))}</span>
+          ${renderLeadCopyButton(lead.case_id || lead.id, 'lead')}
+        </div>
+      </td>
       <td>${getLeadBadgesCell(lead, leadMapById)}</td>
-      <td class="lead-user">${escapeHtml(lead.assigned_to || '-')}</td>
+      <td class="lead-user">
+        <div class="lead-copy-inline">
+          <span class="lead-copy-value">${escapeHtml(lead.assigned_to || '-')}</span>
+          ${renderLeadCopyButton(lead.assigned_to, 'agente')}
+        </div>
+      </td>
       <td class="lead-date">${formatDate(lead.created_at)}</td>
       <td class="lead-date">${formatDate(lead.updated_at)}</td>
-      <td class="lead-phone">${escapeHtml(lead.phone || '-')}</td>
+      <td class="lead-phone">
+        <div class="lead-copy-inline">
+          <span class="lead-copy-value">${escapeHtml(lead.phone || '-')}</span>
+          ${renderLeadCopyButton(lead.phone, 'telefono')}
+        </div>
+      </td>
       <td class="lead-email">${escapeHtml(lead.email || '-')}</td>
       <td class="lead-state">${lead.state_code || '-'}</td>
       <td>${getStateTypeBadge(lead.state_code, lead.state_type)}</td>
       <td class="lead-campaign">${escapeHtml(lead.source || '-')}</td>
       <td class="lead-actions">
-        <button class="action-btn delete-btn" data-id="${lead.id}" data-name="${escapeHtml(lead.full_name)}" title="Eliminar lead">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-        </button>
+        <div class="lead-actions-wrap">
+          <button class="action-btn lead-more-btn" type="button" title="Mas opciones" aria-label="Mas opciones">
+            <span class="lead-more-dots" aria-hidden="true"></span>
+          </button>
+          <div class="lead-actions-menu" role="menu" aria-label="Acciones del lead">
+            <button
+              class="lead-menu-item lead-delete-item"
+              type="button"
+              role="menuitem"
+              data-id="${lead.id}"
+              data-name="${escapeHtml(lead.full_name)}"
+            >
+              Eliminar lead
+            </button>
+          </div>
+        </div>
       </td>
     </tr>
   `).join('');
 
-  tbody.querySelectorAll('.delete-btn').forEach((btn) => {
+  initializeLeadsColumnResize();
+  applyLeadsColumnWidths();
+
+  const closeLeadActionsMenus = () => {
+    tbody.querySelectorAll('.lead-actions-wrap.open').forEach((menuWrap) => {
+      menuWrap.classList.remove('open');
+    });
+  };
+
+  tbody.querySelectorAll('.lead-more-btn').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const menuWrap = btn.closest('.lead-actions-wrap');
+      if (!menuWrap) return;
+
+      const willOpen = !menuWrap.classList.contains('open');
+      closeLeadActionsMenus();
+      if (willOpen) {
+        menuWrap.classList.add('open');
+      }
+    });
+  });
+
+  if (!leadActionsMenuDocumentBound) {
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.lead-actions-wrap')) {
+        document.querySelectorAll('.lead-actions-wrap.open').forEach((menuWrap) => {
+          menuWrap.classList.remove('open');
+        });
+      }
+    });
+    leadActionsMenuDocumentBound = true;
+  }
+
+  tbody.querySelectorAll('.lead-delete-item').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
+      e.preventDefault();
       e.stopPropagation();
+      closeLeadActionsMenus();
+
       const leadId = btn.dataset.id;
       const leadName = btn.dataset.name;
 
@@ -1311,6 +1761,37 @@ function renderLeadsRows(leads) {
           console.error('Error:', error);
           showToast('Error al eliminar el lead', 'error');
         }
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.lead-copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const encodedValue = btn.dataset.copyValue || '';
+      const label = btn.dataset.copyLabel || 'dato';
+      let textToCopy = '';
+
+      try {
+        textToCopy = normalizeLeadCopyText(decodeURIComponent(encodedValue));
+      } catch (_error) {
+        textToCopy = '';
+      }
+      if (!textToCopy) {
+        showToast(`No hay ${label} para copiar`, 'info');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 900);
+        showToast(`${label} copiado: ${textToCopy}`, 'success');
+      } catch (error) {
+        console.error('Error al copiar desde leads:', error);
+        showToast('Error al copiar', 'error');
       }
     });
   });
@@ -1433,13 +1914,6 @@ function getLeadBadgesCell(lead, leadMapById) {
     </div>
   `;
 }
-// Cargar leads al mostrar la vista de leads
-const originalShowLeadsView = showLeadsView;
-showLeadsView = function() {
-  originalShowLeadsView();
-  loadLeads();
-};
-
 if (loginForm) {
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1460,6 +1934,9 @@ if (loginForm) {
       });
 
       saveSession(data.user);
+      applyTheme(getInitialTheme(data.user), { owner: data.user });
+      applyAccentColor(getInitialAccentColor(data.user), { owner: data.user });
+      void refreshNotifications();
       loginStatus.textContent = data.message;
       setTimeout(() => {
         showDashboard();
@@ -1471,11 +1948,11 @@ if (loginForm) {
   });
 }
 
-applyTheme(getInitialTheme());
-setToolbarExpanded(false);
-
 const transferredLeadSearchQuery = consumeTransferredLeadSearchQuery();
 const existingSession = getSession();
+applyTheme(getInitialTheme(existingSession), { owner: existingSession });
+applyAccentColor(getInitialAccentColor(existingSession), { owner: existingSession });
+setToolbarExpanded(false);
 if (existingSession) {
   if (transferredLeadSearchQuery) {
     setLeadSearchQuery(transferredLeadSearchQuery, { syncInput: true });
@@ -1491,6 +1968,10 @@ if (existingSession) {
 } else {
   showLogin();
 }
+
+// Carga inicial de notificaciones + polling cada 60 s
+if (existingSession) void refreshNotifications();
+setInterval(() => { if (getSession()) void refreshNotifications(); }, 60000);
 
 // ============================================
 // RANKINGS WHEEL - Efecto ruleta para rankings laterales

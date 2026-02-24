@@ -1,0 +1,101 @@
+ATAJOS DE ARRANQUE (PROJECT-GW)
+Fecha de referencia: 2026-02-23
+
+Objetivo:
+Levantar backend + PostgreSQL local sin perder tiempo en errores comunes.
+
+==================================================
+FLUJO RECOMENDADO (SIEMPRE)
+==================================================
+1) Entrar al proyecto:
+   cd C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW
+
+2) Verificar prerequisitos rapidos:
+   - Existe .env
+   - Existe node_modules
+   - PostgreSQL 17 instalado en:
+     C:\Program Files\PostgreSQL\17\bin
+
+3) Inicializar DB local (idempotente, se puede correr siempre):
+   npm run db:init-local
+
+4) Iniciar servidor:
+   npm start
+
+5) Validar salud:
+   http://localhost:3000/api/health
+   Respuesta esperada:
+   {"ok":true,"message":"Server y PostgreSQL conectados."}
+
+==================================================
+COMANDOS CLAVE
+==================================================
+- Iniciar PostgreSQL local:
+  npm run db:start-local
+
+- Detener PostgreSQL local:
+  npm run db:stop-local
+
+- Reinicializar/asegurar esquema:
+  npm run db:init-local
+
+- Arrancar backend:
+  npm start
+
+==================================================
+PROBLEMAS VISTOS Y SOLUCION DIRECTA
+==================================================
+Problema:
+"npm run db:start-local" a veces parece colgarse o dar timeout.
+
+Causa probable:
+PostgreSQL ya estaba corriendo en 127.0.0.1:5433.
+
+Que hacer sin perder tiempo:
+1) Ejecutar igual:
+   npm run db:start-local
+2) Si no responde rapido, correr directo:
+   powershell -ExecutionPolicy Bypass -File ./scripts/start-postgres.ps1
+3) Si dice "PostgreSQL local ya estaba corriendo", continuar de inmediato con:
+   npm start
+
+==================================================
+VALIDACIONES RAPIDAS
+==================================================
+- Puerto del backend:
+  netstat -ano | findstr LISTENING | findstr :3000
+
+- Salud del backend:
+  powershell -Command "Invoke-WebRequest -Uri 'http://localhost:3000/api/health' -UseBasicParsing"
+
+- Endpoint de datos:
+  powershell -Command "Invoke-WebRequest -Uri 'http://localhost:3000/api/leads' -UseBasicParsing"
+
+==================================================
+RUTAS IMPORTANTES
+==================================================
+- Backend principal:
+  server/index.js
+
+- Conexion DB:
+  server/db.js
+
+- Init SQL:
+  db/init.sql
+
+- Scripts PostgreSQL:
+  scripts/init-postgres.ps1
+  scripts/start-postgres.ps1
+  scripts/stop-postgres.ps1
+
+- Logs de ejecucion usados:
+  server-run.out.log
+  server-run.err.log
+
+==================================================
+NOTA OPERATIVA
+==================================================
+Si todo estaba bien levantado previamente, el camino mas rapido es:
+1) npm run db:start-local
+2) npm start
+3) abrir http://localhost:3000

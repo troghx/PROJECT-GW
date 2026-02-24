@@ -9,6 +9,8 @@
 (function() {
   'use strict';
 
+  const crmHelpers = window.CrmHelpers || {};
+
   let creditorsSectionInitialized = false;
   let currentCreditors = [];
   let currentFicoScores = { applicant: null, coapp: null };
@@ -65,14 +67,16 @@
     }).format(normalizeMoney(value));
   }
 
-  function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  const escapeHtml = crmHelpers.escapeHtml
+    ? (text) => crmHelpers.escapeHtml(text)
+    : function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      };
 
   function truncate(str, len) {
     if (!str) return '';
@@ -388,6 +392,10 @@
         const tail = (left[2] || '').length >= (right[2] || '').length ? left[2] : right[2];
         normalized = [left[0], left[1], tail].filter(Boolean).join(' ');
       }
+    }
+
+    if (/^CAPITAL ONE AUTO(?:\s+FIN(?:AN)?)?$/i.test(normalized)) {
+      return 'CAPITAL ONE AUTO FINAN';
     }
 
     return normalized;
@@ -945,7 +953,7 @@
       const nextLine = String(lines[lineIndex + 1] || '').trim();
       const nextNextLine = String(lines[lineIndex + 2] || '').trim();
       if (!nextLine || !/[A-Za-z]/.test(nextLine)) return false;
-      if (/^(?:Account Number|Account details|Payment history|Overview|Type|Responsibility)\b/i.test(nextLine)) return false;
+      if (/^(?:Account\s*(?:Number|#)|Account details|Payment history|Overview|Type|Responsibility)/i.test(nextLine)) return false;
 
       const sameCreditorFamily = normalizeCreditorNameKey(nextLine).includes(normalizeCreditorNameKey(currentCreditorName));
       const likelyHeaderContext =
@@ -966,7 +974,7 @@
     const accountIndexes = [];
 
     for (let i = 0; i < lines.length; i += 1) {
-      if (!/Account\s*(?:Number|#)\b/i.test(lines[i])) continue;
+      if (!/Account\s*(?:Number|#)/i.test(lines[i])) continue;
 
       const lineAccounts = extractAccountNumbers(lines[i]);
       if (!lineAccounts.length) continue;

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260216e">
+  <link rel="stylesheet" href="styles.css?v=20260223k">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <link rel="stylesheet" href="budget.css?v=20260219d">
@@ -4823,7 +4823,7 @@
     .notif-modal {
       position: fixed;
       inset: 0;
-      z-index: 1000;
+      z-index: 25000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -6150,7 +6150,7 @@
               </div>
 
               <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
-                <button class="tool-btn" type="button" aria-label="Notificaciones">
+                <button id="clientNotifBtn" class="tool-btn" type="button" aria-label="Notificaciones">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
                     <path d="M10 18a2 2 0 0 0 4 0" />
@@ -6206,6 +6206,16 @@
               <path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M19.07 4.93l-1.56 1.56M6.49 17.51l-1.56 1.56M19.07 19.07l-1.56-1.56M6.49 6.49 4.93 4.93" />
             </svg>
           </label>
+
+          <div class="accent-color-picker" id="accentColorPicker">
+            <span class="accent-color-label">Color del tema</span>
+            <div class="accent-swatches" role="radiogroup" aria-label="Color de acento">
+              <button class="accent-swatch swatch-verde active" data-color="verde" role="radio" aria-checked="true" type="button" title="Verde"></button>
+              <button class="accent-swatch swatch-azul" data-color="azul" role="radio" aria-checked="false" type="button" title="Azul"></button>
+              <button class="accent-swatch swatch-rojo" data-color="rojo" role="radio" aria-checked="false" type="button" title="Rojo"></button>
+              <button class="accent-swatch swatch-morado" data-color="morado" role="radio" aria-checked="false" type="button" title="Morado"></button>
+            </div>
+          </div>
 
           <div class="account-menu-divider" role="separator"></div>
 
@@ -7376,10 +7386,10 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260219a"></script>
-  <script src="budget.js?v=20260219b"></script>
+  <script src="client.js?v=20260224b"></script>
+  <script src="budget.js?v=20260222a"></script>
   <script src="quick-actions.js?v=20260216c"></script>
-  <script src="creditors-redesign.js?v=20260218p"></script>
+  <script src="creditors-redesign.js?v=20260222a"></script>
 </body>
 </html>
 
