@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260223k">
+  <link rel="stylesheet" href="styles.css?v=20260224a">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <link rel="stylesheet" href="budget.css?v=20260219d">
@@ -6113,7 +6113,7 @@
                   <span>Leads</span>
                 </button>
 
-                <button class="tool-btn" type="button" aria-label="Calendario">
+                <button id="calendarBtn" class="tool-btn" type="button" aria-label="Calendario" onclick="window.location.href='index.html#calendar'">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="16" rx="3" />
                     <path d="M3 9h18M8 3v4M16 3v4" />
@@ -6133,7 +6133,20 @@
                     type="search"
                     placeholder="Buscar cliente..."
                     aria-label="Buscar"
+                    autocomplete="off"
                   />
+                  <button
+                    id="searchClearBtn"
+                    class="search-clear-btn"
+                    type="button"
+                    aria-label="Limpiar búsqueda"
+                    tabindex="-1"
+                  >
+                    <svg viewBox="0 0 14 14" aria-hidden="true">
+                      <line x1="2" y1="2" x2="12" y2="12"/>
+                      <line x1="12" y1="2" x2="2" y2="12"/>
+                    </svg>
+                  </button>
                 </label>
 
                 <button
@@ -6143,20 +6156,23 @@
                   aria-label="Mostrar accesos"
                   aria-expanded="false"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M3 12H21M3 6H21M3 18H21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
               </div>
 
               <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
-                <button id="clientNotifBtn" class="tool-btn" type="button" aria-label="Notificaciones">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
-                    <path d="M10 18a2 2 0 0 0 4 0" />
-                  </svg>
-                  <span>Notifs</span>
-                </button>
+                <div class="notif-wrapper">
+                  <button id="clientNotifBtn" class="tool-btn" type="button" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false" style="position:relative;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
+                      <path d="M10 18a2 2 0 0 0 4 0" />
+                    </svg>
+                    <span>Notifs</span>
+                    <span class="notif-badge" id="clientNotifBadge" aria-hidden="true"></span>
+                  </button>
+                </div>
 
                 <button class="tool-btn" type="button" aria-label="Correos">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -7386,10 +7402,19 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260224b"></script>
+  <script src="client.js?v=20260224a"></script>
   <script src="budget.js?v=20260222a"></script>
   <script src="quick-actions.js?v=20260216c"></script>
   <script src="creditors-redesign.js?v=20260222a"></script>
+  <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
+  <div class="notif-panel" id="clientNotifPanel" role="dialog" aria-label="Notificaciones">
+    <div class="notif-panel-header">
+      <span class="notif-panel-title">Notificaciones</span>
+    </div>
+    <div class="notif-list" id="clientNotifList">
+      <p class="notif-empty">ni un grillo por estas lineas zzzz</p>
+    </div>
+  </div>
 </body>
 </html>
 

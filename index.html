@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260223k" />
+    <link rel="stylesheet" href="styles.css?v=20260224a" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -75,7 +75,7 @@
                     <span>Leads</span>
                   </button>
 
-                  <button class="tool-btn" type="button" aria-label="Calendario">
+                  <button id="calendarBtn" class="tool-btn" type="button" aria-label="Calendario">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <rect x="3" y="5" width="18" height="16" rx="3" />
                       <path d="M3 9h18M8 3v4M16 3v4" />
@@ -95,7 +95,20 @@
                       type="search"
                       placeholder="Buscar cliente..."
                       aria-label="Buscar"
+                      autocomplete="off"
                     />
+                    <button
+                      id="searchClearBtn"
+                      class="search-clear-btn"
+                      type="button"
+                      aria-label="Limpiar búsqueda"
+                      tabindex="-1"
+                    >
+                      <svg viewBox="0 0 14 14" aria-hidden="true">
+                        <line x1="2" y1="2" x2="12" y2="12"/>
+                        <line x1="12" y1="2" x2="2" y2="12"/>
+                      </svg>
+                    </button>
                   </label>
 
                   <button
@@ -105,7 +118,7 @@
                     aria-label="Mostrar accesos"
                     aria-expanded="false"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M3 12H21M3 6H21M3 18H21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </button>
@@ -113,7 +126,7 @@
 
                 <div class="toolbar-group toolbar-right" aria-label="Accesos derecha">
                   <div class="notif-wrapper">
-                    <button class="tool-btn" id="notifBtn" type="button" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">
+                    <button class="tool-btn" id="notifBtn" type="button" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false" style="position:relative;">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
                         <path d="M10 18a2 2 0 0 0 4 0" />
@@ -121,15 +134,6 @@
                       <span>Notifs</span>
                       <span class="notif-badge" id="notifBadge" aria-hidden="true"></span>
                     </button>
-                    <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
-                      <div class="notif-panel-header">
-                        <span class="notif-panel-title">Notificaciones</span>
-                        <button class="notif-mark-all" id="notifMarkAll" type="button">Marcar leídas</button>
-                      </div>
-                      <div class="notif-list" id="notifList">
-                        <p class="notif-empty">Sin notificaciones</p>
-                      </div>
-                    </div>
                   </div>
 
                   <button class="tool-btn" type="button" aria-label="Correos">
@@ -542,6 +546,77 @@
         </div>
       </div>
 
+      <!-- VISTA DE CALENDARIO -->
+      <div id="calendarView" class="calendar-view hidden">
+        <div class="schedule-layout">
+          <aside class="schedule-panel schedule-notes-panel">
+            <div class="schedule-panel-head">
+              <h2>Post-its</h2>
+              <button id="calendarAddNoteBtn" class="schedule-note-add-btn" type="button">Nuevo</button>
+            </div>
+            <p class="schedule-panel-subtitle">To-do personal y rapido.</p>
+            <div id="calendarNotesBoard" class="schedule-notes-board" aria-label="Post-its arrastrables"></div>
+          </aside>
+
+          <section class="schedule-panel schedule-calendar-panel">
+            <div class="schedule-panel-head">
+              <h2>Calendario</h2>
+              <div class="schedule-month-controls">
+                <button id="calendarPrevMonthBtn" class="schedule-month-btn" type="button" aria-label="Mes anterior">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <span id="calendarMonthLabel" class="schedule-month-label"></span>
+                <button id="calendarNextMonthBtn" class="schedule-month-btn" type="button" aria-label="Mes siguiente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+                <button id="calendarTodayBtn" class="schedule-today-btn" type="button">Hoy</button>
+              </div>
+            </div>
+            <div class="schedule-weekdays" aria-hidden="true">
+              <span>Lun</span>
+              <span>Mar</span>
+              <span>Mie</span>
+              <span>Jue</span>
+              <span>Vie</span>
+              <span>Sab</span>
+              <span>Dom</span>
+            </div>
+            <div id="calendarMonthGrid" class="schedule-grid" role="grid" aria-label="Calendario mensual"></div>
+          </section>
+
+          <aside class="schedule-panel schedule-agenda-panel">
+            <div class="schedule-panel-head">
+              <h2>Agenda</h2>
+              <span id="calendarOwnerBadge" class="schedule-owner-badge">-</span>
+            </div>
+            <div class="schedule-metrics">
+              <div class="schedule-metric metric-overdue">
+                <span>Vencidas</span>
+                <strong id="calendarOverdueCount">0</strong>
+              </div>
+              <div class="schedule-metric metric-today">
+                <span>Hoy</span>
+                <strong id="calendarTodayCount">0</strong>
+              </div>
+              <div class="schedule-metric metric-upcoming">
+                <span>Proximas</span>
+                <strong id="calendarUpcomingCount">0</strong>
+              </div>
+            </div>
+            <div class="schedule-selected-date-wrap">
+              <h3 id="calendarSelectedDateLabel">Sin fecha seleccionada</h3>
+            </div>
+            <div id="calendarAgendaList" class="schedule-agenda-list">
+              <p class="schedule-empty-message">Aun no hay tasks para mostrar.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+
       <!-- MODAL: NUEVO LEAD -->
       <div id="newLeadModal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -606,8 +681,17 @@
     </section>
 
     <script src="crm-helpers.js?v=20260216b"></script>
-    <script src="app.js?v=20260223l"></script>
+    <script src="app.js?v=20260224a"></script>
     <script src="quick-actions.js?v=20260216c"></script>
+    <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
+    <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
+      <div class="notif-panel-header">
+        <span class="notif-panel-title">Notificaciones</span>
+      </div>
+      <div class="notif-list" id="notifList">
+        <p class="notif-empty">ni un grillo por estas lineas zzzz</p>
+      </div>
+    </div>
   </body>
 </html>
 

@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS leads (
   self_employed BOOLEAN NOT NULL DEFAULT FALSE,
   first_deposit_date DATE,
   callback_date DATE,
+  callback_completed_at TIMESTAMPTZ,
   status VARCHAR(30) NOT NULL DEFAULT 'New Lead',
   is_test BOOLEAN NOT NULL DEFAULT FALSE,
   notes TEXT,
@@ -248,6 +249,17 @@ BEGIN
     WHERE table_name = 'leads' AND column_name = 'callback_date'
   ) THEN
     ALTER TABLE leads ADD COLUMN callback_date DATE;
+  END IF;
+END $$;
+
+-- Migracion: Agregar callback_completed_at si no existe
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'callback_completed_at'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN callback_completed_at TIMESTAMPTZ;
   END IF;
 END $$;
 
@@ -908,6 +920,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_is_test ON leads (is_test);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads (status);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads (assigned_to);
 CREATE INDEX IF NOT EXISTS idx_leads_callback_date ON leads (callback_date);
+CREATE INDEX IF NOT EXISTS idx_leads_callback_completed_at ON leads (callback_completed_at);
 CREATE INDEX IF NOT EXISTS idx_leads_related_lead_id ON leads (related_lead_id);
 CREATE INDEX IF NOT EXISTS idx_lead_notes_lead_id_created_at ON lead_notes (lead_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_note_templates_owner_name ON note_templates (owner_username, name);

@@ -344,7 +344,8 @@
       toolbarToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         const isOpen = toolbarWrap.classList.toggle('expanded');
-        toolbarToggle.setAttribute('aria-expanded', isOpen);
+        toolbarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        syncClientNotifDotTarget();
       });
     }
 
@@ -352,6 +353,7 @@
     // BUSQUEDA GLOBAL DE LEADS (TOOLBAR)
     // ============================================
     const homeSearchInput = document.getElementById('homeSearch');
+    const searchClearBtn = document.getElementById('searchClearBtn');
     const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
     const LEAD_SEARCH_PREFETCH_DEBOUNCE_MS = 80;
     const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
@@ -419,23 +421,17 @@
       const box = document.createElement('div');
       box.setAttribute('role', 'listbox');
       box.setAttribute('aria-label', 'Sugerencias de leads');
+      box.className = 'lead-suggestion-box';
       box.style.position = 'fixed';
       box.style.top = '0';
       box.style.left = '0';
-      box.style.width = '320px';
-      box.style.maxHeight = '320px';
-      box.style.overflowY = 'auto';
-      box.style.borderRadius = '12px';
-      box.style.padding = '8px';
-      box.style.pointerEvents = 'auto';
       box.style.zIndex = String(LEAD_SEARCH_SUGGESTION_Z_INDEX);
-      box.style.display = 'none';
 
       document.body.appendChild(box);
       globalLeadSuggestionBox = box;
 
       const reposition = () => {
-        if (!globalLeadSuggestionBox || globalLeadSuggestionBox.style.display === 'none') return;
+        if (!globalLeadSuggestionBox || !globalLeadSuggestionBox.classList.contains('visible')) return;
         positionGlobalLeadSuggestionBox();
       };
       window.addEventListener('resize', reposition);
@@ -450,22 +446,21 @@
       if (rect.width <= 0 || rect.height <= 0) return;
 
       const viewportPadding = 8;
-      const top = rect.bottom + 8;
+      const top = rect.bottom + 6;
       const left = Math.max(viewportPadding, rect.left);
-      const availableWidth = Math.max(220, window.innerWidth - left - viewportPadding);
+      const availableWidth = Math.max(240, window.innerWidth - left - viewportPadding);
       const width = Math.min(rect.width, availableWidth);
       const availableHeight = Math.max(140, window.innerHeight - top - viewportPadding);
 
       globalLeadSuggestionBox.style.left = `${left}px`;
       globalLeadSuggestionBox.style.top = `${top}px`;
-      globalLeadSuggestionBox.style.width = `${Math.max(220, width)}px`;
-      globalLeadSuggestionBox.style.maxHeight = `${Math.min(360, availableHeight)}px`;
+      globalLeadSuggestionBox.style.width = `${Math.max(240, width)}px`;
+      globalLeadSuggestionBox.style.maxHeight = `${Math.min(380, availableHeight)}px`;
     }
 
     function hideGlobalLeadSuggestions() {
       if (!globalLeadSuggestionBox) return;
-      globalLeadSuggestionBox.style.display = 'none';
-      globalLeadSuggestionBox.innerHTML = '';
+      globalLeadSuggestionBox.classList.remove('visible');
       globalLeadSuggestionMatches = [];
       globalLeadSuggestionActiveIndex = -1;
     }
@@ -481,10 +476,22 @@
       if (target >= buttons.length) target = 0;
 
       globalLeadSuggestionActiveIndex = target;
-      const palette = getGlobalLeadSuggestionPalette();
       buttons.forEach((button, index) => {
-        button.style.background = index === target ? palette.itemHover : 'transparent';
+        button.classList.toggle('active', index === target);
+        if (index === target) {
+          button.scrollIntoView({ block: 'nearest' });
+        }
       });
+    }
+
+    function highlightGlobalSearchMatch(text, query) {
+      if (!query) return escapeHtml(text);
+      const escaped = escapeHtml(text);
+      const escapedQuery = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escaped.replace(
+        new RegExp(`(${escapedQuery})`, 'gi'),
+        '<mark class="lead-suggestion-match">$1</mark>'
+      );
     }
 
     function openGlobalLeadById(leadId) {
@@ -520,29 +527,38 @@
         return;
       }
 
-      const palette = getGlobalLeadSuggestionPalette();
-      box.style.background = palette.background;
-      box.style.border = palette.border;
-      box.style.boxShadow = palette.shadow;
-
       globalLeadSuggestionMatches = list;
       globalLeadSuggestionActiveIndex = -1;
 
-      box.innerHTML = list.map((lead, index) => {
-        const linePrimary = escapeHtml(lead.full_name || 'Sin nombre');
-        const lineSecondary = `#${escapeHtml(String(lead.case_id || '-'))} · ${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')}`;
-        return `
-          <button
-            type="button"
-            data-suggest-index="${index}"
-            data-lead-id="${lead.id}"
-            style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:${palette.itemBorder};border-radius:9px;padding:9px 10px;margin:0 0 6px;background:transparent;cursor:pointer;text-align:left;"
-          >
-            <span style="font-size:0.86rem;font-weight:600;color:${palette.textPrimary};">${linePrimary}</span>
-            <span style="font-size:0.75rem;color:${palette.textSecondary};">${lineSecondary}</span>
-          </button>
-        `;
-      }).join('');
+      box.innerHTML = `
+        <div class="lead-suggestion-header">
+          <span class="lead-suggestion-header-label">Resultados</span>
+          <span class="lead-suggestion-count">${list.length < LEAD_SEARCH_SUGGESTION_LIMIT ? list.length : `${list.length}+`}</span>
+        </div>
+        ${list.map((lead, index) => {
+          const initials = String(lead.full_name || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+          const nameHighlighted = highlightGlobalSearchMatch(lead.full_name || 'Sin nombre', normalizedQuery);
+          const metaStr = [
+            lead.case_id ? `#${escapeHtml(String(lead.case_id))}` : null,
+            lead.phone ? escapeHtml(lead.phone) : null,
+            lead.state_code ? escapeHtml(lead.state_code) : null
+          ].filter(Boolean).join(' · ');
+          return `
+            <button
+              type="button"
+              class="lead-suggestion-item"
+              data-suggest-index="${index}"
+              data-lead-id="${lead.id}"
+            >
+              <span class="lead-suggestion-item__avatar">${initials}</span>
+              <span class="lead-suggestion-item__body">
+                <span class="lead-suggestion-item__name">${nameHighlighted}</span>
+                <span class="lead-suggestion-item__meta">${metaStr}</span>
+              </span>
+            </button>
+          `;
+        }).join('')}
+      `;
 
       box.querySelectorAll('[data-suggest-index]').forEach((button) => {
         button.addEventListener('mouseenter', () => {
@@ -560,7 +576,7 @@
       });
 
       positionGlobalLeadSuggestionBox();
-      box.style.display = 'block';
+      box.classList.add('visible');
     }
 
     function openActiveGlobalLeadSuggestion() {
@@ -690,6 +706,12 @@
     }
 
     if (homeSearchInput) {
+      const syncClearBtn = () => {
+        if (searchClearBtn) {
+          searchClearBtn.classList.toggle('has-text', homeSearchInput.value.length > 0);
+        }
+      };
+
       homeSearchInput.addEventListener('focus', async () => {
         await ensureGlobalLeadSearchData();
         const query = String(homeSearchInput.value || '').trim();
@@ -699,6 +721,7 @@
       });
 
       homeSearchInput.addEventListener('input', (event) => {
+        syncClearBtn();
         if (globalLeadSearchDebounceTimer) {
           clearTimeout(globalLeadSearchDebounceTimer);
         }
@@ -738,6 +761,7 @@
 
         if (event.key === 'Escape') {
           homeSearchInput.value = '';
+          syncClearBtn();
           hideGlobalLeadSuggestions();
         }
       });
@@ -749,6 +773,15 @@
         if (!shell.contains(event.target) && !clickedInsideSuggestions) {
           hideGlobalLeadSuggestions();
         }
+      });
+    }
+
+    if (searchClearBtn && homeSearchInput) {
+      searchClearBtn.addEventListener('click', () => {
+        homeSearchInput.value = '';
+        searchClearBtn.classList.remove('has-text');
+        hideGlobalLeadSuggestions();
+        homeSearchInput.focus();
       });
     }
     
@@ -4188,7 +4221,16 @@
         },
         onSelectDate: async ({ isoDate }) => {
           try {
-            const updatedLead = await patchLead({ callbackDate: isoDate });
+            const callbackPayload = { callbackDate: isoDate };
+            const currentAssignee = normalizeAssigneeName(currentLeadData?.assigned_to);
+            if (!currentAssignee) {
+              const activeUsername = normalizeAssigneeName(getCurrentUsername());
+              if (activeUsername) {
+                callbackPayload.assignedTo = activeUsername;
+              }
+            }
+
+            const updatedLead = await patchLead(callbackPayload);
             const persistedDate = toIsoDateOnly(updatedLead?.callback_date) || isoDate;
             selectedCallbackDate = persistedDate;
 
@@ -4199,7 +4241,7 @@
             if (mb) mb.classList.remove('hidden');
 
             showToast(`Callback programado para: ${dateDisplay.textContent}`, 'success');
-            await updateNotificationBadge();
+            void _refreshClientNotifications();
             return true;
           } catch (error) {
             showToast(error.message || 'No se pudo guardar callback.', 'error');
@@ -4216,7 +4258,7 @@
             macBtn.classList.add('hidden');
             dateDisplay.textContent = 'Seleccionar fecha';
             showToast('Callback eliminado', 'info');
-            await updateNotificationBadge();
+            void _refreshClientNotifications();
             if (callbackCalendarController) {
               callbackCalendarController.render();
             }
@@ -5613,186 +5655,234 @@
     }
 
     // ============================================
-    // NOTIFICACIONES DE CALLBACK
+    // NOTIFICACIONES (PANEL GLOBAL)
     // ============================================
-    async function fetchCallbacksFromServer(fromDate) {
-      const safeFromDate = toIsoDateOnly(fromDate) || formatISODate(new Date());
-      const response = await fetch(`/api/callbacks?from=${encodeURIComponent(safeFromDate)}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.message || 'No se pudieron cargar callbacks.');
+    const clientNotifBtn  = document.getElementById('clientNotifBtn');
+    let clientNotifPanel = document.getElementById('clientNotifPanel');
+    let clientNotifBadge = document.getElementById('clientNotifBadge');
+    let clientNotifList  = document.getElementById('clientNotifList');
+    let _clientNotifListEventsBound = false;
+    let _clientNotifOpen = false;
+    let _clientNotifUnreadCount = 0;
+    const CLIENT_NOTIF_EMPTY_TEXT = 'ni un grillo por estas lineas zzzz';
+
+    function _syncClientNotifRefs() {
+      if (!clientNotifPanel) clientNotifPanel = document.getElementById('clientNotifPanel');
+      if (!clientNotifBadge) clientNotifBadge = document.getElementById('clientNotifBadge');
+      if (!clientNotifList) clientNotifList = document.getElementById('clientNotifList');
+    }
+
+    function _renderClientNotifEmptyState() {
+      if (!clientNotifList) return;
+      clientNotifList.innerHTML = `<p class="notif-empty">${CLIENT_NOTIF_EMPTY_TEXT}</p>`;
+    }
+
+    function isClientToolbarExpanded() {
+      return Boolean(toolbarWrap && toolbarWrap.classList.contains('expanded'));
+    }
+
+    function syncClientNotifDotTarget() {
+      _syncClientNotifRefs();
+      const hasUnread = _clientNotifUnreadCount > 0;
+      const showInNotifButton = hasUnread && isClientToolbarExpanded();
+      const showInToggleButton = hasUnread && !isClientToolbarExpanded();
+
+      if (clientNotifBadge) {
+        clientNotifBadge.textContent = '';
+        clientNotifBadge.classList.toggle('visible', showInNotifButton);
       }
-
-      const rawCallbacks = Array.isArray(payload.callbacks) ? payload.callbacks : [];
-      return rawCallbacks
-        .map((row) => {
-          const leadId = Number(row.leadId || row.lead_id || 0);
-          const callbackDate = toIsoDateOnly(row.callbackDate || row.callback_date);
-          if (!leadId || !callbackDate) return null;
-
-          const defaultName = row.caseId ? `Lead #${row.caseId}` : `Lead #${leadId}`;
-          return {
-            leadId,
-            caseId: row.caseId || row.case_id || null,
-            date: callbackDate,
-            name: String(row.name || row.full_name || defaultName).trim() || defaultName
-          };
-        })
-        .filter(Boolean)
-        .sort((a, b) => a.date.localeCompare(b.date));
-    }
-
-    function getClientNotifButton() {
-      return document.getElementById('clientNotifBtn')
-        || document.querySelector('.tool-btn[aria-label="Notificaciones"]');
-    }
-
-    async function updateNotificationBadge() {
-      const notifBtn = getClientNotifButton();
-      if (!notifBtn) return;
-
-      const existingBadge = notifBtn.querySelector('.notif-badge');
-      if (existingBadge) existingBadge.remove();
-
-      try {
-        const today = formatISODate(new Date());
-        const callbacks = await fetchCallbacksFromServer(today);
-        const todayCallbacks = callbacks.filter((callback) => callback.date === today);
-
-        if (todayCallbacks.length > 0) {
-          const badge = document.createElement('span');
-          badge.className = 'notif-badge';
-          badge.textContent = todayCallbacks.length > 9 ? '9+' : String(todayCallbacks.length);
-          badge.style.cssText = `
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: #ef4444;
-            color: white;
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 10px;
-            min-width: 18px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-          `;
-          notifBtn.style.position = 'relative';
-          notifBtn.appendChild(badge);
-        }
-      } catch (error) {
-        console.error('Error actualizando badge de callbacks:', error);
+      if (toolbarToggle) {
+        toolbarToggle.classList.toggle('has-notif-dot', showInToggleButton);
       }
     }
 
-    async function showCallbackNotifications() {
-      let upcoming = [];
-      const today = formatISODate(new Date());
+    function _clientNotifTimeAgo(isoDate) {
+      const diff = Date.now() - new Date(isoDate).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return 'ahora mismo';
+      if (m < 60) return `hace ${m} min`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `hace ${h} h`;
+      return `hace ${Math.floor(h / 24)} d`;
+    }
 
-      hideGlobalLeadSuggestions();
+    function _clientNotifIcon(type) {
+      if (type === 'lead_assigned' || type === 'leads_assigned') {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>';
+    }
 
-      try {
-        upcoming = await fetchCallbacksFromServer(today);
-      } catch (error) {
-        showToast(error.message || 'No se pudieron cargar callbacks.', 'error');
+    function _positionClientNotifPanel() {
+      _syncClientNotifRefs();
+      if (!clientNotifPanel || !clientNotifBtn) return;
+      const rect = clientNotifBtn.getBoundingClientRect();
+      const panelWidth = clientNotifPanel.offsetWidth || Number.parseFloat(window.getComputedStyle(clientNotifPanel).width) || 392;
+      const vpPad = 8;
+      let left = rect.right - panelWidth;
+      if (left < vpPad) left = vpPad;
+      clientNotifPanel.style.left = `${left}px`;
+      clientNotifPanel.style.top = `${rect.bottom + 8}px`;
+    }
+
+    function _renderClientNotifications(data) {
+      _syncClientNotifRefs();
+      if (!clientNotifBadge) return;
+      const { notifications = [], unreadCount = 0 } = data || {};
+      _clientNotifUnreadCount = Number(unreadCount) > 0 ? Number(unreadCount) : 0;
+      syncClientNotifDotTarget();
+
+      if (!clientNotifList) return;
+
+      if (!notifications.length) {
+        _renderClientNotifEmptyState();
         return;
       }
 
-      let notifModal = document.getElementById('callbackNotifModal');
-      if (notifModal) notifModal.remove();
-
-      const itemsMarkup = upcoming.length > 0
-        ? upcoming.map((callbackItem) => {
-          const isToday = callbackItem.date === today;
-          const dateObj = new Date(`${callbackItem.date}T00:00:00`);
-          const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric' });
-          const leadPath = `/client.html?id=${encodeURIComponent(String(callbackItem.leadId))}`;
-          return `
-                <div class="notif-item ${isToday ? 'today' : ''}">
-                  <div class="notif-item-pin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  </div>
-                  <div class="notif-item-info">
-                    <span class="notif-item-name">${escapeHtml(callbackItem.name)}</span>
-                    <span class="notif-item-date ${isToday ? 'today-badge' : ''}">${isToday ? 'HOY - ' : ''}${dateStr}</span>
-                  </div>
-                  <button class="notif-item-link" onclick="window.location.href='${leadPath}'">
-                    Ver
-                  </button>
-                </div>
-              `;
-        }).join('')
-        : `
-            <div class="notif-item">
-              <div class="notif-item-pin">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="9"/>
-                  <path d="M12 8v5"/>
-                  <circle cx="12" cy="16.5" r="0.8"/>
-                </svg>
-              </div>
-              <div class="notif-item-info">
-                <span class="notif-item-name">Sin callbacks pendientes</span>
-                <span class="notif-item-date">No hay callbacks programados desde hoy</span>
-              </div>
-            </div>
-          `;
-
-      notifModal = document.createElement('div');
-      notifModal.id = 'callbackNotifModal';
-      notifModal.className = 'notif-modal';
-      notifModal.innerHTML = `
-        <div class="notif-modal-backdrop"></div>
-        <div class="notif-modal-content">
-          <div class="notif-modal-header">
-            <h3>Callbacks Programados</h3>
-            <button class="notif-modal-close" onclick="this.closest('.notif-modal').remove()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
+      clientNotifList.innerHTML = notifications.map((n) => {
+        const unread = !n.read_at;
+        const normalizedType = String(n.type || 'info').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        const normalizedLeadId = Number(n.lead_id);
+        const leadIdAttr = Number.isInteger(normalizedLeadId) && normalizedLeadId > 0 ? String(normalizedLeadId) : '';
+        return `<div class="notif-item${unread ? ' unread' : ''}" data-id="${n.id}" data-type="${normalizedType}" data-lead-id="${leadIdAttr}">
+          <div class="notif-icon">${_clientNotifIcon(n.type)}</div>
+          <div class="notif-content">
+            <p class="notif-title">${escapeHtml(n.title || '')}</p>
+            <p class="notif-body">${escapeHtml(n.body || '')}</p>
+            <p class="notif-time">${_clientNotifTimeAgo(n.created_at)}</p>
           </div>
-          <div class="notif-modal-body">
-            ${itemsMarkup}
-          </div>
-        </div>
-      `;
+          <button class="notif-item-delete" type="button" data-delete-id="${n.id}" aria-label="Eliminar notificación">
+            <svg viewBox="0 0 14 14" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
+          </button>
+        </div>`;
+      }).join('');
+    }
 
-      document.body.appendChild(notifModal);
-      notifModal.querySelector('.notif-modal-backdrop').addEventListener('click', () => {
-        notifModal.remove();
+    async function _refreshClientNotifications() {
+      const session = readSessionUser();
+      if (!session?.username) return;
+      try {
+        const res = await fetch(`/api/notifications?username=${encodeURIComponent(session.username)}`);
+        const data = await res.json().catch(() => ({}));
+        _renderClientNotifications(data);
+      } catch (_) {}
+    }
+
+    async function _markClientNotificationsRead() {
+      const session = readSessionUser();
+      if (!session?.username) return;
+      try {
+        await fetch('/api/notifications/read', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: session.username })
+        });
+        _clientNotifUnreadCount = 0;
+        syncClientNotifDotTarget();
+        if (clientNotifList) clientNotifList.querySelectorAll('.notif-item.unread').forEach((el) => el.classList.remove('unread'));
+      } catch (_) {}
+    }
+
+    async function _deleteClientNotification(id) {
+      _syncClientNotifRefs();
+      const session = readSessionUser();
+      if (!session?.username) return;
+      const item = clientNotifList?.querySelector(`.notif-item[data-id="${id}"]`);
+      if (item) {
+        item.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        item.style.opacity = '0';
+        item.style.transform = 'translateX(12px)';
+        setTimeout(() => {
+          item.remove();
+          if (clientNotifList && !clientNotifList.querySelector('.notif-item')) {
+            _renderClientNotifEmptyState();
+          }
+        }, 200);
+      }
+      try {
+        await fetch(`/api/notifications/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: session.username })
+        });
+      } catch (_) {}
+    }
+
+    function _bindClientNotifListEvents() {
+      _syncClientNotifRefs();
+      if (!clientNotifList || _clientNotifListEventsBound) return;
+      _clientNotifListEventsBound = true;
+      clientNotifList.addEventListener('click', (e) => {
+        const deleteBtn = e.target.closest('[data-delete-id]');
+        if (deleteBtn) {
+          e.stopPropagation();
+          void _deleteClientNotification(deleteBtn.dataset.deleteId);
+          return;
+        }
+        const item = e.target.closest('.notif-item[data-id]');
+        if (!item) return;
+
+        const notifType = String(item.dataset.type || '').toLowerCase();
+        if (notifType === 'leads_assigned') {
+          const session = readSessionUser();
+          const username = String(session?.username || '').trim();
+          if (username) {
+            storeLeadSearchTransferQuery(username);
+          }
+          _setClientNotifPanelOpen(false);
+          window.location.href = 'index.html#leads';
+          return;
+        }
+
+        if (!item.dataset.leadId) return;
+        _setClientNotifPanelOpen(false);
+        window.location.href = `/client.html?id=${item.dataset.leadId}`;
       });
     }
 
-    let callbackNotificationsInitialized = false;
-    function initCallbackNotifications() {
-      if (callbackNotificationsInitialized) return;
-      callbackNotificationsInitialized = true;
-
-      void updateNotificationBadge();
-
-      const notifBtn = getClientNotifButton();
-      if (notifBtn) {
-        notifBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await showCallbackNotifications();
+    function _setClientNotifPanelOpen(open) {
+      _clientNotifOpen = open;
+      _syncClientNotifRefs();
+      if (!clientNotifPanel || !clientNotifBtn) return;
+      if (open) {
+        _bindClientNotifListEvents();
+        hideGlobalLeadSuggestions();
+        _positionClientNotifPanel();
+        clientNotifPanel.classList.add('visible');
+        clientNotifBtn.setAttribute('aria-expanded', 'true');
+        void _refreshClientNotifications().then(() => {
+          if (_clientNotifOpen) void _markClientNotificationsRead();
         });
+      } else {
+        clientNotifPanel.classList.remove('visible');
+        clientNotifBtn.setAttribute('aria-expanded', 'false');
       }
-
-      setInterval(() => {
-        void updateNotificationBadge();
-      }, 60000);
     }
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initCallbackNotifications, { once: true });
-    } else {
-      initCallbackNotifications();
+    if (clientNotifBtn) {
+      clientNotifBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _setClientNotifPanelOpen(!_clientNotifOpen);
+      });
     }
+
+    _bindClientNotifListEvents();
+
+    document.addEventListener('click', (e) => {
+      _syncClientNotifRefs();
+      if (!_clientNotifOpen) return;
+      if (clientNotifPanel && clientNotifPanel.contains(e.target)) return;
+      if (clientNotifBtn && clientNotifBtn.contains(e.target)) return;
+      _setClientNotifPanelOpen(false);
+    });
+
+    window.addEventListener('resize', () => {
+      if (_clientNotifOpen) _positionClientNotifPanel();
+    });
+
+    // Badge inicial + polling
+    void _refreshClientNotifications();
+    setInterval(() => void _refreshClientNotifications(), 60000);
     
     // ============================================
     // CARGAR DATOS DEL LEAD

@@ -1,4 +1,4 @@
-const loginForm = document.getElementById('loginForm');
+﻿const loginForm = document.getElementById('loginForm');
 const loginStatus = document.getElementById('loginStatus');
 const quoteText = document.getElementById('quoteText');
 const authShell = document.getElementById('authShell');
@@ -12,10 +12,10 @@ const homeSearchInput = document.getElementById('homeSearch');
 const crmHelpers = window.CrmHelpers || {};
 
 const notifBtn = document.getElementById('notifBtn');
-const notifPanel = document.getElementById('notifPanel');
-const notifBadge = document.getElementById('notifBadge');
-const notifList = document.getElementById('notifList');
-const notifMarkAll = document.getElementById('notifMarkAll');
+let notifPanel = document.getElementById('notifPanel');
+let notifBadge = document.getElementById('notifBadge');
+let notifList = document.getElementById('notifList');
+let notifMarkAll = document.getElementById('notifMarkAll');
 
 const SESSION_KEY = 'project_gw_session';
 const THEME_KEY = 'project_gw_theme';
@@ -55,14 +55,14 @@ function showToast(message, type = 'info') {
 }
 
 const quotes = [
-  'Como gotas de rocío que alimentan el océano, cada pequeña acción construye mares de transformación.',
-  'En el jardín de la perseverancia, las semillas de hoy florecen en los bosques del mañana.',
+  'Como gotas de rocÃ­o que alimentan el ocÃ©ano, cada pequeÃ±a acciÃ³n construye mares de transformaciÃ³n.',
+  'En el jardÃ­n de la perseverancia, las semillas de hoy florecen en los bosques del maÃ±ana.',
   'La excelencia no es un destino, sino el arte de bailar con la disciplina cada amanecer.',
-  'Cuando sirves con el corazón, cada encuentro se convierte en poesía y cada gesto, en legado.',
-  'Las montañas más altas se conquistan un paso a la vez, con la fe de quien sueña en grande.',
-  'El tiempo es el lienzo; tu dedicación, el pincel. Pinta con pasión cada momento.',
-  'Como el faro guía al navegante perdido, tu compromiso ilumina caminos de esperanza.',
-  'La verdadera riqueza no se mide en números, sino en las vidas que tocas con autenticidad.'
+  'Cuando sirves con el corazÃ³n, cada encuentro se convierte en poesÃ­a y cada gesto, en legado.',
+  'Las montaÃ±as mÃ¡s altas se conquistan un paso a la vez, con la fe de quien sueÃ±a en grande.',
+  'El tiempo es el lienzo; tu dedicaciÃ³n, el pincel. Pinta con pasiÃ³n cada momento.',
+  'Como el faro guÃ­a al navegante perdido, tu compromiso ilumina caminos de esperanza.',
+  'La verdadera riqueza no se mide en nÃºmeros, sino en las vidas que tocas con autenticidad.'
 ];
 
 let quoteIndex = 0;
@@ -111,6 +111,7 @@ function setToolbarExpanded(open) {
   toolbarWrap.classList.toggle('expanded', open);
   toolbarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   toolbarToggle.setAttribute('aria-label', open ? 'Ocultar accesos' : 'Mostrar accesos');
+  syncNotifDotTarget();
 }
 
 function normalizePreferenceOwner(owner) {
@@ -201,6 +202,40 @@ function getInitialAccentColor(owner) {
 
 // ---- Notificaciones ----
 let _notifOpen = false;
+let _notifListEventsBound = false;
+let _notifUnreadCount = 0;
+const NOTIF_EMPTY_TEXT = 'ni un grillo por estas lineas zzzz';
+
+function _syncNotifRefs() {
+  if (!notifPanel) notifPanel = document.getElementById('notifPanel');
+  if (!notifBadge) notifBadge = document.getElementById('notifBadge');
+  if (!notifList) notifList = document.getElementById('notifList');
+  if (!notifMarkAll) notifMarkAll = document.getElementById('notifMarkAll');
+}
+
+function _renderNotifEmptyState() {
+  if (!notifList) return;
+  notifList.innerHTML = `<p class="notif-empty">${NOTIF_EMPTY_TEXT}</p>`;
+}
+
+function isToolbarExpanded() {
+  return Boolean(toolbarWrap && toolbarWrap.classList.contains('expanded'));
+}
+
+function syncNotifDotTarget() {
+  _syncNotifRefs();
+  const hasUnread = _notifUnreadCount > 0;
+  const showInNotifButton = hasUnread && isToolbarExpanded();
+  const showInToggleButton = hasUnread && !isToolbarExpanded();
+
+  if (notifBadge) {
+    notifBadge.textContent = '';
+    notifBadge.classList.toggle('visible', showInNotifButton);
+  }
+  if (toolbarToggle) {
+    toolbarToggle.classList.toggle('has-notif-dot', showInToggleButton);
+  }
+}
 
 function _notifTimeAgo(isoDate) {
   const diff = Date.now() - new Date(isoDate).getTime();
@@ -213,21 +248,36 @@ function _notifTimeAgo(isoDate) {
 }
 
 function _notifIcon(type) {
-  if (type === 'lead_assigned') {
+  if (type === 'lead_assigned' || type === 'leads_assigned') {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
   }
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>';
 }
 
-function renderNotifications(data) {
-  if (!notifBadge || !notifList) return;
-  const { notifications = [], unreadCount = 0 } = data || {};
+function _positionNotifPanel() {
+  _syncNotifRefs();
+  if (!notifPanel || !notifBtn) return;
+  const rect = notifBtn.getBoundingClientRect();
+  const panelWidth = notifPanel.offsetWidth || Number.parseFloat(window.getComputedStyle(notifPanel).width) || 392;
+  const vpPad = 8;
+  let left = rect.right - panelWidth;
+  if (left < vpPad) left = vpPad;
+  const top = rect.bottom + 8;
+  notifPanel.style.left = `${left}px`;
+  notifPanel.style.top = `${top}px`;
+}
 
-  notifBadge.textContent = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : '';
-  notifBadge.classList.toggle('visible', unreadCount > 0);
+function renderNotifications(data) {
+  _syncNotifRefs();
+  if (!notifBadge) return;
+  const { notifications = [], unreadCount = 0 } = data || {};
+  _notifUnreadCount = Number(unreadCount) > 0 ? Number(unreadCount) : 0;
+  syncNotifDotTarget();
+
+  if (!notifList) return;
 
   if (!notifications.length) {
-    notifList.innerHTML = '<p class="notif-empty">Sin notificaciones</p>';
+    _renderNotifEmptyState();
     return;
   }
 
@@ -237,13 +287,19 @@ function renderNotifications(data) {
 
   notifList.innerHTML = notifications.map((n) => {
     const unread = !n.read_at;
-    return `<div class="notif-item${unread ? ' unread' : ''}" data-id="${n.id}" data-lead-id="${n.lead_id || ''}">
+    const normalizedType = String(n.type || 'info').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const normalizedLeadId = Number(n.lead_id);
+    const leadIdAttr = Number.isInteger(normalizedLeadId) && normalizedLeadId > 0 ? String(normalizedLeadId) : '';
+    return `<div class="notif-item${unread ? ' unread' : ''}" data-id="${n.id}" data-type="${normalizedType}" data-lead-id="${leadIdAttr}">
       <div class="notif-icon">${_notifIcon(n.type)}</div>
       <div class="notif-content">
         <p class="notif-title">${esc(n.title)}</p>
         <p class="notif-body">${esc(n.body)}</p>
         <p class="notif-time">${_notifTimeAgo(n.created_at)}</p>
       </div>
+      <button class="notif-item-delete" type="button" data-delete-id="${n.id}" aria-label="Eliminar notificaciÃ³n">
+        <svg viewBox="0 0 14 14" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
+      </button>
     </div>`;
   }).join('');
 }
@@ -257,15 +313,8 @@ async function refreshNotifications() {
   } catch (_) {}
 }
 
-function setNotifPanelOpen(open) {
-  _notifOpen = open;
-  if (!notifPanel || !notifBtn) return;
-  notifPanel.classList.toggle('visible', open);
-  notifBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (open) void refreshNotifications();
-}
-
-async function markAllNotificationsRead() {
+async function _markAllNotificationsRead() {
+  _syncNotifRefs();
   const session = getSession();
   if (!session?.username) return;
   try {
@@ -274,9 +323,89 @@ async function markAllNotificationsRead() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: session.username })
     });
-    if (notifBadge) { notifBadge.textContent = ''; notifBadge.classList.remove('visible'); }
+    _notifUnreadCount = 0;
+    syncNotifDotTarget();
     if (notifList) notifList.querySelectorAll('.notif-item.unread').forEach((el) => el.classList.remove('unread'));
   } catch (_) {}
+}
+
+async function _deleteNotification(id) {
+  _syncNotifRefs();
+  const session = getSession();
+  if (!session?.username) return;
+  const item = notifList?.querySelector(`.notif-item[data-id="${id}"]`);
+  if (item) {
+    item.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    item.style.opacity = '0';
+    item.style.transform = 'translateX(12px)';
+    setTimeout(() => {
+      item.remove();
+      if (notifList && !notifList.querySelector('.notif-item')) {
+        _renderNotifEmptyState();
+      }
+    }, 200);
+  }
+  try {
+    await requestJson(`/api/notifications/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: session.username })
+    });
+  } catch (_) {}
+}
+
+function _bindNotifListEvents() {
+  _syncNotifRefs();
+  if (!notifList || _notifListEventsBound) return;
+  _notifListEventsBound = true;
+  notifList.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('[data-delete-id]');
+    if (deleteBtn) {
+      e.stopPropagation();
+      void _deleteNotification(deleteBtn.dataset.deleteId);
+      return;
+    }
+    const item = e.target.closest('.notif-item[data-id]');
+    if (!item) return;
+
+    const notifType = String(item.dataset.type || '').toLowerCase();
+    if (notifType === 'leads_assigned') {
+      const session = getSession();
+      const username = String(session?.username || '').trim();
+      if (username) {
+        setLeadSearchQuery(username, { syncInput: true });
+        if (searchClearBtn) searchClearBtn.classList.add('has-text');
+      }
+      setNotifPanelOpen(false);
+      showLeadsView();
+      if (window.location.hash !== '#leads') {
+        window.location.hash = 'leads';
+      }
+      return;
+    }
+
+    if (!item.dataset.leadId) return;
+    setNotifPanelOpen(false);
+    window.location.href = `/client.html?id=${item.dataset.leadId}`;
+  });
+}
+
+function setNotifPanelOpen(open) {
+  _notifOpen = open;
+  _syncNotifRefs();
+  if (!notifPanel || !notifBtn) return;
+  if (open) {
+    _bindNotifListEvents();
+    _positionNotifPanel();
+    notifPanel.classList.add('visible');
+    notifBtn.setAttribute('aria-expanded', 'true');
+    void refreshNotifications().then(() => {
+      if (_notifOpen) void _markAllNotificationsRead();
+    });
+  } else {
+    notifPanel.classList.remove('visible');
+    notifBtn.setAttribute('aria-expanded', 'false');
+  }
 }
 
 function showDashboard() {
@@ -287,11 +416,20 @@ function showDashboard() {
 
 function showLogin() {
   dashboardView.classList.add('hidden');
+  if (calendarView) calendarView.classList.add('hidden');
   authShell.classList.remove('hidden');
   document.body.classList.remove('home-active');
   loginStatus.textContent = 'Credenciales demo: admin / 1234 | elliot / 1234';
+  _notifUnreadCount = 0;
+  syncNotifDotTarget();
   setAccountMenu(false);
   setToolbarExpanded(false);
+  isLeadsView = false;
+  isCalendarView = false;
+  scheduleTasks = [];
+  scheduleTasksLoaded = false;
+  scheduleOwnerKey = '';
+  scheduleNotes = [];
 }
 
 function saveSession(user) {
@@ -335,27 +473,22 @@ if (notifBtn) {
   });
 }
 
-if (notifMarkAll) {
-  notifMarkAll.addEventListener('click', (e) => {
-    e.stopPropagation();
-    void markAllNotificationsRead();
-  });
-}
-
-if (notifList) {
-  notifList.addEventListener('click', (e) => {
-    const item = e.target.closest('.notif-item[data-lead-id]');
-    if (!item || !item.dataset.leadId) return;
-    setNotifPanelOpen(false);
-    window.location.href = `/client.html?id=${item.dataset.leadId}`;
-  });
-}
+_bindNotifListEvents();
 
 document.addEventListener('click', (e) => {
+  _syncNotifRefs();
   if (!_notifOpen) return;
   if (notifPanel && notifPanel.contains(e.target)) return;
   if (notifBtn && notifBtn.contains(e.target)) return;
   setNotifPanelOpen(false);
+});
+
+window.addEventListener('resize', () => {
+  if (_notifOpen) _positionNotifPanel();
+  if (isCalendarView) {
+    renderScheduleMonth();
+    renderScheduleNotes();
+  }
 });
 
 if (toolbarWrap) {
@@ -396,7 +529,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-// Botón de cerrar sesión
+// BotÃ³n de cerrar sesiÃ³n
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
   logoutBtn.addEventListener('click', (event) => {
@@ -406,7 +539,7 @@ if (logoutBtn) {
   });
 }
 
-// Animación de contadores en el dashboard
+// AnimaciÃ³n de contadores en el dashboard
 function animateCounter(elementId, targetValue, duration = 800) {
   const element = document.getElementById(elementId);
   if (!element) return;
@@ -434,7 +567,7 @@ function animateCounter(elementId, targetValue, duration = 800) {
 
 // Animar contadores cuando se muestra el dashboard
 function animateDashboardCounters() {
-  // Valores de ejemplo (estos vendrán de la base de datos)
+  // Valores de ejemplo (estos vendrÃ¡n de la base de datos)
   animateCounter('callsCount', 247, 1500);
   animateCounter('conversionsCount', 18, 1200);
 }
@@ -452,7 +585,7 @@ if (dashboardView) {
   dashboardObserver.observe(dashboardView, { attributes: true, attributeFilter: ['class'] });
 }
 
-// Estados Green State (los que no están aquí son Red)
+// Estados Green State (los que no estÃ¡n aquÃ­ son Red)
 const GREEN_STATES = [
   'MO', 'VA', 'CA', 'AR', 'TX', 'NY', 'FL', 'MS', 'LA', 'NC', 
   'NM', 'AL', 'TN', 'AZ', 'OK', 'MI', 'NE', 'MN', 'NV', 'ND', 
@@ -461,13 +594,13 @@ const GREEN_STATES = [
 
 const STATE_NAMES = crmHelpers.STATE_NAMES || {};
 
-// Función para determinar si un estado es Green o Red
+// FunciÃ³n para determinar si un estado es Green o Red
 function getStateType(stateCode) {
   const code = stateCode.toUpperCase().trim();
   return GREEN_STATES.includes(code) ? 'Green' : 'Red';
 }
 
-// Función para obtener nombre completo del estado
+// FunciÃ³n para obtener nombre completo del estado
 function getStateName(stateCode) {
   if (crmHelpers.getStateName) {
     return crmHelpers.getStateName(stateCode);
@@ -475,7 +608,7 @@ function getStateName(stateCode) {
   return STATE_NAMES[stateCode?.toUpperCase?.().trim?.()] || stateCode;
 }
 
-// Mapeo de códigos de área (LADA) a estados
+// Mapeo de cÃ³digos de Ã¡rea (LADA) a estados
 const AREA_CODE_TO_STATE = {
   '201': 'NJ', '202': 'DC', '203': 'CT', '205': 'AL', '206': 'WA', '207': 'ME', '208': 'ID', '209': 'CA',
   '210': 'TX', '212': 'NY', '213': 'CA', '214': 'TX', '215': 'PA', '216': 'OH', '217': 'IL', '218': 'MN',
@@ -520,23 +653,23 @@ const AREA_CODE_TO_STATE = {
   '973': 'NJ', '978': 'MA', '979': 'TX', '980': 'NC', '984': 'NC', '985': 'LA', '986': 'ID', '989': 'MI'
 };
 
-// Función para detectar estado por código de área
+// FunciÃ³n para detectar estado por cÃ³digo de Ã¡rea
 function detectStateByAreaCode(phone) {
-  // Extraer solo los números
+  // Extraer solo los nÃºmeros
   const digits = phone.replace(/\D/g, '');
   
-  // Si empieza con 1 (código de país), quitarlo
+  // Si empieza con 1 (cÃ³digo de paÃ­s), quitarlo
   const nationalNumber = digits.startsWith('1') && digits.length === 11 
     ? digits.slice(1) 
     : digits;
   
-  // Tomar los primeros 3 dígitos (código de área)
+  // Tomar los primeros 3 dÃ­gitos (cÃ³digo de Ã¡rea)
   const areaCode = nationalNumber.slice(0, 3);
   
   return AREA_CODE_TO_STATE[areaCode] || null;
 }
 
-// Función para actualizar el badge de State Type
+// FunciÃ³n para actualizar el badge de State Type
 function updateStateTypeBadge(stateCell, badgeCell) {
   const stateCode = stateCell.textContent.trim();
   const stateType = getStateType(stateCode);
@@ -551,17 +684,34 @@ if (monthSelector) {
   monthSelector.addEventListener('change', (e) => {
     const selectedMonth = e.target.options[e.target.selectedIndex].text;
     console.log('Mes seleccionado:', selectedMonth);
-    // Aquí se conectará con la base de datos para cargar los datos del mes seleccionado
-    // Por ahora solo recargamos la animación de contadores como demo
+    // AquÃ­ se conectarÃ¡ con la base de datos para cargar los datos del mes seleccionado
+    // Por ahora solo recargamos la animaciÃ³n de contadores como demo
     animateDashboardCounters();
   });
 }
 
-// Navegación entre Dashboard y Leads
+// NavegaciÃ³n entre Dashboard y Leads
 const leadsBtn = document.getElementById('leadsBtn');
+const calendarBtn = document.getElementById('calendarBtn');
 const dashboardGrid = document.querySelector('.dashboard-grid');
 const leadsView = document.getElementById('leadsView');
+const calendarView = document.getElementById('calendarView');
+const searchClearBtn = document.getElementById('searchClearBtn');
+const calendarMonthLabel = document.getElementById('calendarMonthLabel');
+const calendarMonthGrid = document.getElementById('calendarMonthGrid');
+const calendarPrevMonthBtn = document.getElementById('calendarPrevMonthBtn');
+const calendarNextMonthBtn = document.getElementById('calendarNextMonthBtn');
+const calendarTodayBtn = document.getElementById('calendarTodayBtn');
+const calendarSelectedDateLabel = document.getElementById('calendarSelectedDateLabel');
+const calendarAgendaList = document.getElementById('calendarAgendaList');
+const calendarOverdueCount = document.getElementById('calendarOverdueCount');
+const calendarTodayCount = document.getElementById('calendarTodayCount');
+const calendarUpcomingCount = document.getElementById('calendarUpcomingCount');
+const calendarOwnerBadge = document.getElementById('calendarOwnerBadge');
+const calendarNotesBoard = document.getElementById('calendarNotesBoard');
+const calendarAddNoteBtn = document.getElementById('calendarAddNoteBtn');
 let isLeadsView = false;
+let isCalendarView = false;
 let allLeadsCache = [];
 let leadSearchIndex = [];
 let currentLeadSearchQuery = '';
@@ -573,6 +723,19 @@ let leadSearchSuggestionShell = null;
 let leadSearchSuggestionMatches = [];
 let leadSearchSuggestionActiveIndex = -1;
 let leadActionsMenuDocumentBound = false;
+let scheduleViewDate = new Date();
+let scheduleSelectedDateKey = new Date().toISOString().slice(0, 10);
+let scheduleTasks = [];
+let scheduleOwnerKey = '';
+let scheduleTasksLoaded = false;
+let scheduleNotes = [];
+let scheduleInteractionsBound = false;
+let scheduleNoteDragState = null;
+let scheduleCompleteLeadInFlight = null;
+const SCHEDULE_CALLBACKS_FROM = '2000-01-01';
+const SCHEDULE_NOTES_KEY = 'project_gw_schedule_notes_v1';
+const SCHEDULE_NOTE_MAX_LENGTH = 220;
+const SCHEDULE_NOTE_COLORS = ['yellow', 'pink', 'blue', 'green'];
 const LEADS_COLUMN_WIDTHS_KEY = 'project_gw_leads_column_widths_v1';
 const LEADS_COLUMN_MIN_WIDTHS = [30, 130, 78, 90, 86, 76, 76, 88, 64, 56, 64, 64, 40];
 const LEADS_COLUMN_DEFAULT_RATIOS = [3, 16.5, 10, 12, 9.5, 7.5, 7.5, 8.5, 4.5, 5, 6, 6, 4];
@@ -844,23 +1007,17 @@ function ensureLeadSearchSuggestionBox() {
   const box = document.createElement('div');
   box.setAttribute('role', 'listbox');
   box.setAttribute('aria-label', 'Sugerencias de leads');
+  box.className = 'lead-suggestion-box';
   box.style.position = 'fixed';
   box.style.top = '0';
   box.style.left = '0';
-  box.style.width = '320px';
-  box.style.maxHeight = '320px';
-  box.style.overflowY = 'auto';
-  box.style.borderRadius = '12px';
-  box.style.padding = '8px';
-  box.style.pointerEvents = 'auto';
   box.style.zIndex = String(LEAD_SEARCH_SUGGESTION_Z_INDEX);
-  box.style.display = 'none';
 
   document.body.appendChild(box);
   leadSearchSuggestionBox = box;
 
   const reposition = () => {
-    if (!leadSearchSuggestionBox || leadSearchSuggestionBox.style.display === 'none') return;
+    if (!leadSearchSuggestionBox || !leadSearchSuggestionBox.classList.contains('visible')) return;
     positionLeadSearchSuggestionBox();
   };
   window.addEventListener('resize', reposition);
@@ -875,22 +1032,21 @@ function positionLeadSearchSuggestionBox() {
   if (rect.width <= 0 || rect.height <= 0) return;
 
   const viewportPadding = 8;
-  const top = rect.bottom + 8;
+  const top = rect.bottom + 6;
   const left = Math.max(viewportPadding, rect.left);
-  const availableWidth = Math.max(220, window.innerWidth - left - viewportPadding);
+  const availableWidth = Math.max(240, window.innerWidth - left - viewportPadding);
   const width = Math.min(rect.width, availableWidth);
   const availableHeight = Math.max(140, window.innerHeight - top - viewportPadding);
 
   leadSearchSuggestionBox.style.left = `${left}px`;
   leadSearchSuggestionBox.style.top = `${top}px`;
-  leadSearchSuggestionBox.style.width = `${Math.max(220, width)}px`;
-  leadSearchSuggestionBox.style.maxHeight = `${Math.min(360, availableHeight)}px`;
+  leadSearchSuggestionBox.style.width = `${Math.max(240, width)}px`;
+  leadSearchSuggestionBox.style.maxHeight = `${Math.min(380, availableHeight)}px`;
 }
 
 function hideLeadSearchSuggestions() {
   if (!leadSearchSuggestionBox) return;
-  leadSearchSuggestionBox.style.display = 'none';
-  leadSearchSuggestionBox.innerHTML = '';
+  leadSearchSuggestionBox.classList.remove('visible');
   leadSearchSuggestionMatches = [];
   leadSearchSuggestionActiveIndex = -1;
 }
@@ -917,10 +1073,22 @@ function setLeadSearchSuggestionActive(nextIndex) {
   if (target >= buttons.length) target = 0;
 
   leadSearchSuggestionActiveIndex = target;
-  const palette = getLeadSearchSuggestionPalette();
   buttons.forEach((button, index) => {
-    button.style.background = index === target ? palette.itemHover : 'transparent';
+    button.classList.toggle('active', index === target);
+    if (index === target) {
+      button.scrollIntoView({ block: 'nearest' });
+    }
   });
+}
+
+function highlightSearchMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const escapedQuery = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace(
+    new RegExp(`(${escapedQuery})`, 'gi'),
+    '<mark class="lead-suggestion-match">$1</mark>'
+  );
 }
 
 function renderLeadSearchSuggestions(matches) {
@@ -939,29 +1107,38 @@ function renderLeadSearchSuggestions(matches) {
     return;
   }
 
-  const palette = getLeadSearchSuggestionPalette();
-  box.style.background = palette.background;
-  box.style.border = palette.border;
-  box.style.boxShadow = palette.shadow;
-
   leadSearchSuggestionMatches = list;
   leadSearchSuggestionActiveIndex = -1;
 
-  box.innerHTML = list.map((lead, index) => {
-    const linePrimary = escapeHtml(lead.full_name || 'Sin nombre');
-    const lineSecondary = `#${escapeHtml(String(lead.case_id || '-'))} · ${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')}`;
-    return `
-      <button
-        type="button"
-        data-suggest-index="${index}"
-        data-lead-id="${lead.id}"
-        style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:${palette.itemBorder};border-radius:9px;padding:9px 10px;margin:0 0 6px;background:transparent;cursor:pointer;text-align:left;"
-      >
-        <span style="font-size:0.86rem;font-weight:600;color:${palette.textPrimary};">${linePrimary}</span>
-        <span style="font-size:0.75rem;color:${palette.textSecondary};">${lineSecondary}</span>
-      </button>
-    `;
-  }).join('');
+  box.innerHTML = `
+    <div class="lead-suggestion-header">
+      <span class="lead-suggestion-header-label">Resultados</span>
+      <span class="lead-suggestion-count">${list.length < LEAD_SEARCH_SUGGESTION_LIMIT ? list.length : `${list.length}+`}</span>
+    </div>
+    ${list.map((lead, index) => {
+      const initials = String(lead.full_name || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+      const nameHighlighted = highlightSearchMatch(lead.full_name || 'Sin nombre', query);
+      const metaStr = [
+        lead.case_id ? `#${escapeHtml(String(lead.case_id))}` : null,
+        lead.phone ? escapeHtml(lead.phone) : null,
+        lead.state_code ? escapeHtml(lead.state_code) : null
+      ].filter(Boolean).join(' Â· ');
+      return `
+        <button
+          type="button"
+          class="lead-suggestion-item"
+          data-suggest-index="${index}"
+          data-lead-id="${lead.id}"
+        >
+          <span class="lead-suggestion-item__avatar">${initials}</span>
+          <span class="lead-suggestion-item__body">
+            <span class="lead-suggestion-item__name">${nameHighlighted}</span>
+            <span class="lead-suggestion-item__meta">${metaStr}</span>
+          </span>
+        </button>
+      `;
+    }).join('')}
+  `;
 
   box.querySelectorAll('[data-suggest-index]').forEach((button) => {
     button.addEventListener('mouseenter', () => {
@@ -979,7 +1156,7 @@ function renderLeadSearchSuggestions(matches) {
   });
 
   positionLeadSearchSuggestionBox();
-  box.style.display = 'block';
+  box.classList.add('visible');
 }
 
 function openActiveLeadSearchSuggestion() {
@@ -993,11 +1170,749 @@ function openActiveLeadSearchSuggestion() {
   return true;
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseIsoDateLocal(isoDate) {
+  const raw = String(isoDate || '').trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+  return parsed;
+}
+
+function normalizeScheduleDateKey(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return toIsoDateLocal(value);
+  }
+
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch && parseIsoDateLocal(directMatch[1])) {
+    return directMatch[1];
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return toIsoDateLocal(parsed);
+  }
+
+  return '';
+}
+
+function toIsoDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatScheduleDateLabel(isoDate) {
+  const date = parseIsoDateLocal(isoDate);
+  if (!date) return 'Fecha invalida';
+  return date.toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+function getScheduleOwner(sessionOverride = null) {
+  const session = sessionOverride || getSession();
+  return normalizePreferenceOwner(session?.username || session?.name || '');
+}
+
+function readStrictScopedPreference(baseKey, owner) {
+  try {
+    const normalizedOwner = resolvePreferenceOwner(owner);
+    if (!normalizedOwner) return '';
+    return String(localStorage.getItem(buildScopedPreferenceKey(baseKey, normalizedOwner)) || '');
+  } catch (_error) {
+    return '';
+  }
+}
+
+function writeStrictScopedPreference(baseKey, value, owner) {
+  try {
+    const normalizedOwner = resolvePreferenceOwner(owner);
+    if (!normalizedOwner) return;
+    localStorage.setItem(buildScopedPreferenceKey(baseKey, normalizedOwner), String(value ?? ''));
+  } catch (_error) {
+    // Ignorar errores de almacenamiento local
+  }
+}
+
+function normalizeScheduleNotes(rawNotes) {
+  if (!Array.isArray(rawNotes)) return [];
+  return rawNotes
+    .map((note, index) => {
+      const noteId = String(note?.id || `note_${Date.now()}_${index}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || `note_${Date.now()}_${index}`;
+      const noteText = String(note?.text || '').slice(0, SCHEDULE_NOTE_MAX_LENGTH);
+      const noteColor = SCHEDULE_NOTE_COLORS.includes(note?.color) ? note.color : 'yellow';
+      const normalizedX = Number(note?.x);
+      const normalizedY = Number(note?.y);
+      const x = Number.isFinite(normalizedX) ? clampNumber(normalizedX, 0, 1) : Math.random() * 0.55;
+      const y = Number.isFinite(normalizedY) ? clampNumber(normalizedY, 0, 1) : Math.random() * 0.45;
+      return {
+        id: noteId,
+        text: noteText,
+        color: noteColor,
+        x,
+        y
+      };
+    })
+    .slice(0, 42);
+}
+
+function readScheduleNotes(owner = getScheduleOwner()) {
+  const raw = readStrictScopedPreference(SCHEDULE_NOTES_KEY, owner);
+  if (!raw) return [];
+  try {
+    return normalizeScheduleNotes(JSON.parse(raw));
+  } catch (_error) {
+    return [];
+  }
+}
+
+function persistScheduleNotes(owner = getScheduleOwner()) {
+  writeStrictScopedPreference(SCHEDULE_NOTES_KEY, JSON.stringify(scheduleNotes), owner);
+}
+
+function getScheduleBoardMetrics() {
+  const boardWidth = Math.max(240, Math.floor(calendarNotesBoard?.clientWidth || 0));
+  const boardHeight = Math.max(220, Math.floor(calendarNotesBoard?.clientHeight || 0));
+  const noteWidth = 138;
+  const noteHeight = 124;
+  return {
+    boardWidth,
+    boardHeight,
+    noteWidth,
+    noteHeight,
+    maxX: Math.max(0, boardWidth - noteWidth),
+    maxY: Math.max(0, boardHeight - noteHeight)
+  };
+}
+
+function resolveScheduleNotePixels(note, metrics) {
+  const left = clampNumber((Number(note?.x) || 0) * metrics.maxX, 0, metrics.maxX);
+  const top = clampNumber((Number(note?.y) || 0) * metrics.maxY, 0, metrics.maxY);
+  return { left, top };
+}
+
+function getScheduleNoteTilt(noteId) {
+  let hash = 0;
+  const raw = String(noteId || '');
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = (hash * 31 + raw.charCodeAt(i)) % 997;
+  }
+  return ((hash % 7) - 3) * 0.75;
+}
+
+function renderScheduleNotes() {
+  if (!calendarNotesBoard) return;
+
+  if (!scheduleNotes.length) {
+    calendarNotesBoard.innerHTML = '<p class="schedule-notes-empty">Sin notas por ahora. Crea una para tu to-do.</p>';
+    return;
+  }
+
+  const metrics = getScheduleBoardMetrics();
+  calendarNotesBoard.innerHTML = scheduleNotes.map((note) => {
+    const { left, top } = resolveScheduleNotePixels(note, metrics);
+    const tilt = getScheduleNoteTilt(note.id);
+    return `
+      <article class="schedule-note is-${note.color}" data-note-id="${escapeHtml(note.id)}" style="left:${left}px; top:${top}px; --note-tilt:${tilt}deg;">
+        <button type="button" class="schedule-note-delete" data-note-delete="${escapeHtml(note.id)}" aria-label="Eliminar post-it">
+          <svg viewBox="0 0 14 14" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
+        </button>
+        <textarea class="schedule-note-text" data-note-text="${escapeHtml(note.id)}" maxlength="${SCHEDULE_NOTE_MAX_LENGTH}" placeholder="Escribe algo...">${escapeHtml(note.text)}</textarea>
+      </article>
+    `;
+  }).join('');
+}
+
+function updateScheduleNotePosition(noteId, leftPx, topPx, { persist = false } = {}) {
+  const metrics = getScheduleBoardMetrics();
+  const clampedLeft = clampNumber(Number(leftPx) || 0, 0, metrics.maxX);
+  const clampedTop = clampNumber(Number(topPx) || 0, 0, metrics.maxY);
+  const index = scheduleNotes.findIndex((note) => note.id === noteId);
+  if (index < 0) return;
+  scheduleNotes[index] = {
+    ...scheduleNotes[index],
+    x: metrics.maxX > 0 ? Number((clampedLeft / metrics.maxX).toFixed(4)) : 0,
+    y: metrics.maxY > 0 ? Number((clampedTop / metrics.maxY).toFixed(4)) : 0
+  };
+  if (persist) {
+    persistScheduleNotes();
+  }
+}
+
+function createScheduleNote() {
+  if (scheduleNotes.length >= 42) {
+    showToast('Limite de 42 post-its alcanzado.', 'info');
+    return;
+  }
+
+  const metrics = getScheduleBoardMetrics();
+  const randomLeft = metrics.maxX > 0 ? Math.random() * Math.min(metrics.maxX, 120) : 0;
+  const randomTop = metrics.maxY > 0 ? Math.random() * Math.min(metrics.maxY, 90) : 0;
+  const color = SCHEDULE_NOTE_COLORS[Math.floor(Math.random() * SCHEDULE_NOTE_COLORS.length)];
+  const noteId = `note_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  const note = {
+    id: noteId,
+    text: '',
+    color,
+    x: metrics.maxX > 0 ? Number((randomLeft / metrics.maxX).toFixed(4)) : 0,
+    y: metrics.maxY > 0 ? Number((randomTop / metrics.maxY).toFixed(4)) : 0
+  };
+  scheduleNotes.unshift(note);
+  persistScheduleNotes();
+  renderScheduleNotes();
+}
+
+function removeScheduleNote(noteId) {
+  const next = scheduleNotes.filter((note) => note.id !== noteId);
+  if (next.length === scheduleNotes.length) return;
+  scheduleNotes = next;
+  persistScheduleNotes();
+  renderScheduleNotes();
+}
+
+function normalizeScheduleTimestamp(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function normalizeScheduleTask(callback) {
+  const callbackDate = normalizeScheduleDateKey(callback?.callbackDate);
+  if (!callbackDate) return null;
+  const leadId = Number(callback?.leadId);
+  const callbackCompletedAt = normalizeScheduleTimestamp(
+    callback?.callbackCompletedAt ?? callback?.callback_completed_at
+  );
+  return {
+    leadId: Number.isFinite(leadId) && leadId > 0 ? leadId : null,
+    caseId: callback?.caseId ? String(callback.caseId) : '',
+    name: String(callback?.name || '').trim() || `Lead #${callback?.leadId || '-'}`,
+    callbackDate,
+    callbackCompletedAt,
+    assignedTo: String(callback?.assignedTo || '').trim()
+  };
+}
+
+function sortScheduleTasks(tasks) {
+  tasks.sort((a, b) => {
+    if (a.callbackDate !== b.callbackDate) return a.callbackDate.localeCompare(b.callbackDate);
+    if (a.caseId !== b.caseId) return String(a.caseId).localeCompare(String(b.caseId), 'es');
+    return String(a.name).localeCompare(String(b.name), 'es');
+  });
+  return tasks;
+}
+
+function isScheduleTaskCompleted(task) {
+  return Boolean(String(task?.callbackCompletedAt || '').trim());
+}
+
+function getScheduleTaskState(task, todayKey) {
+  if (isScheduleTaskCompleted(task)) return 'completed';
+  if (String(task?.callbackDate || '') < todayKey) return 'missed';
+  return 'pending';
+}
+
+function getScheduleTaskPresentation(task, todayKey) {
+  const state = getScheduleTaskState(task, todayKey);
+  if (state === 'completed') return { state, statusLabel: 'Completada', statusClass: 'is-completed' };
+  if (state === 'missed') return { state, statusLabel: 'No completada', statusClass: 'is-overdue' };
+  return { state, statusLabel: 'Pendiente', statusClass: 'is-pending' };
+}
+
+function renderScheduleMonth() {
+  if (!calendarMonthGrid || !calendarMonthLabel) return;
+
+  const viewYear = scheduleViewDate.getFullYear();
+  const viewMonth = scheduleViewDate.getMonth();
+  const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const mondayStartOffset = (firstDayOfMonth.getDay() + 6) % 7;
+  const todayKey = toIsoDateLocal(new Date());
+
+  calendarMonthLabel.textContent = firstDayOfMonth.toLocaleDateString('es-ES', {
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const summaryByDate = scheduleTasks.reduce((acc, task) => {
+    const state = getScheduleTaskState(task, todayKey);
+    const current = acc.get(task.callbackDate) || {
+      count: 0,
+      hasMissed: false,
+      hasPending: false,
+      hasCompleted: false
+    };
+    current.count += 1;
+    if (state === 'missed') current.hasMissed = true;
+    if (state === 'pending') current.hasPending = true;
+    if (state === 'completed') current.hasCompleted = true;
+    acc.set(task.callbackDate, current);
+    return acc;
+  }, new Map());
+
+  const cells = [];
+  for (let index = 0; index < 42; index += 1) {
+    let dayNumber = 0;
+    let dateRef = null;
+    let outsideMonth = false;
+
+    if (index < mondayStartOffset) {
+      dayNumber = daysInPrevMonth - (mondayStartOffset - index - 1);
+      dateRef = new Date(viewYear, viewMonth - 1, dayNumber);
+      outsideMonth = true;
+    } else if (index >= mondayStartOffset + daysInMonth) {
+      dayNumber = index - (mondayStartOffset + daysInMonth) + 1;
+      dateRef = new Date(viewYear, viewMonth + 1, dayNumber);
+      outsideMonth = true;
+    } else {
+      dayNumber = index - mondayStartOffset + 1;
+      dateRef = new Date(viewYear, viewMonth, dayNumber);
+    }
+
+    const dateKey = toIsoDateLocal(dateRef);
+    const summary = summaryByDate.get(dateKey) || null;
+    const taskCount = summary?.count || 0;
+    const isSelected = dateKey === scheduleSelectedDateKey;
+    const isToday = dateKey === todayKey;
+    const dayStatusClass = summary
+      ? (summary.hasMissed ? ' has-missed' : (summary.hasPending ? ' has-pending' : (summary.hasCompleted ? ' has-completed' : '')))
+      : '';
+
+    cells.push(`
+      <button type="button" class="schedule-day${outsideMonth ? ' is-outside' : ''}${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${dayStatusClass}" data-date-key="${dateKey}">
+        ${isToday ? '<span class="schedule-day-tag">HOY</span>' : '<span class="schedule-day-tag schedule-day-tag-spacer" aria-hidden="true"></span>'}
+        <span class="schedule-day-number">${dayNumber}</span>
+        ${taskCount > 0 ? `<span class="schedule-day-dot">${taskCount}</span>` : ''}
+      </button>
+    `);
+  }
+
+  calendarMonthGrid.innerHTML = cells.join('');
+}
+
+function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = {}) {
+  const caseLabel = task.caseId ? `Caso #${escapeHtml(String(task.caseId))}` : 'Caso sin ID';
+  const presentation = getScheduleTaskPresentation(task, todayKey);
+  const actionButtons = [];
+
+  if (task.leadId) {
+    actionButtons.push(`<button type="button" class="schedule-open-lead-btn" data-open-lead-id="${task.leadId}">Abrir lead</button>`);
+  }
+
+  const canCompleteToday = showCompleteAction
+    && presentation.state === 'pending'
+    && task.callbackDate === todayKey
+    && Number.isInteger(task.leadId)
+    && task.leadId > 0;
+
+  if (canCompleteToday) {
+    const isSaving = scheduleCompleteLeadInFlight === task.leadId;
+    actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-lead-id="${task.leadId}" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Guardando...' : 'Marcar completada'}</button>`);
+  }
+
+  return `
+    <article class="schedule-task-card ${presentation.statusClass}">
+      <div class="schedule-task-main">
+        <p class="schedule-task-title">${escapeHtml(task.name)}</p>
+        <p class="schedule-task-meta">${caseLabel} - ${escapeHtml(formatScheduleDateLabel(task.callbackDate))}</p>
+      </div>
+      <div class="schedule-task-side">
+        <span class="schedule-task-status">${presentation.statusLabel}</span>
+        <div class="schedule-task-actions">${actionButtons.join('')}</div>
+      </div>
+    </article>
+  `;
+}
+
+async function markScheduleTaskCompleted(leadId) {
+  const numericLeadId = Number(leadId);
+  if (!Number.isInteger(numericLeadId) || numericLeadId <= 0) return;
+  if (scheduleCompleteLeadInFlight) return;
+
+  const session = getSession();
+  const username = String(session?.username || session?.name || '').trim();
+
+  scheduleCompleteLeadInFlight = numericLeadId;
+  renderScheduleAgenda();
+  try {
+    const result = await requestJson(`/api/callbacks/${numericLeadId}/complete`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    showToast(result?.message || 'Task marcada como completada.', 'success');
+    await loadScheduleTasks({ force: true });
+  } catch (error) {
+    showToast(error.message || 'No se pudo marcar la task como completada.', 'error');
+  } finally {
+    scheduleCompleteLeadInFlight = null;
+    renderScheduleAgenda();
+    renderScheduleMonth();
+  }
+}
+
+function renderScheduleAgenda() {
+  if (!calendarAgendaList) return;
+
+  const todayKey = toIsoDateLocal(new Date());
+  const sortedTasks = sortScheduleTasks(scheduleTasks.slice());
+  const missedTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'missed');
+  const pendingTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'pending');
+  const completedTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'completed');
+  const selected = sortedTasks.filter((task) => task.callbackDate === scheduleSelectedDateKey);
+  const todayPending = pendingTasks.filter((task) => task.callbackDate === todayKey);
+  const upcomingPending = pendingTasks.filter((task) => task.callbackDate > todayKey);
+
+  if (calendarOverdueCount) calendarOverdueCount.textContent = String(missedTasks.length);
+  if (calendarTodayCount) calendarTodayCount.textContent = String(todayPending.length);
+  if (calendarUpcomingCount) calendarUpcomingCount.textContent = String(upcomingPending.length);
+
+  if (calendarSelectedDateLabel) {
+    calendarSelectedDateLabel.textContent = formatScheduleDateLabel(scheduleSelectedDateKey);
+  }
+
+  if (!sortedTasks.length) {
+    calendarAgendaList.innerHTML = '<p class="schedule-empty-message">Aun no hay tasks asignadas para ti.</p>';
+    return;
+  }
+
+  const sections = [];
+
+  if (missedTasks.length) {
+    sections.push(`
+      <section class="schedule-task-section">
+        <h4 class="schedule-task-section-title">No completadas</h4>
+        ${missedTasks.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
+      </section>
+    `);
+  }
+
+  if (selected.length) {
+    sections.push(`
+      <section class="schedule-task-section">
+        <h4 class="schedule-task-section-title">Fecha seleccionada</h4>
+        ${selected.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
+      </section>
+    `);
+  }
+
+  if (pendingTasks.length) {
+    const nextItems = pendingTasks.slice(0, 10);
+    sections.push(`
+      <section class="schedule-task-section">
+        <h4 class="schedule-task-section-title">Siguientes tasks</h4>
+        ${nextItems.map((task) => buildScheduleTaskCard(task, { todayKey, showCompleteAction: true })).join('')}
+      </section>
+    `);
+  }
+
+  if (completedTasks.length) {
+    const recentCompleted = completedTasks.slice(-10).reverse();
+    sections.push(`
+      <section class="schedule-task-section">
+        <h4 class="schedule-task-section-title">Completadas</h4>
+        ${recentCompleted.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
+      </section>
+    `);
+  }
+
+  if (!sections.length) {
+    calendarAgendaList.innerHTML = '<p class="schedule-empty-message">No hay tasks para esta fecha.</p>';
+    return;
+  }
+
+  calendarAgendaList.innerHTML = sections.join('');
+}
+async function loadScheduleTasks({ force = false } = {}) {
+  const ownerKey = getScheduleOwner();
+  if (!ownerKey) {
+    scheduleTasks = [];
+    scheduleTasksLoaded = false;
+    renderScheduleMonth();
+    renderScheduleAgenda();
+    return [];
+  }
+
+  if (!force && scheduleTasksLoaded && scheduleOwnerKey === ownerKey) {
+    renderScheduleMonth();
+    renderScheduleAgenda();
+    return scheduleTasks;
+  }
+
+  scheduleOwnerKey = ownerKey;
+
+  try {
+    const cacheBuster = force ? `&_=${Date.now()}` : '';
+    const data = await requestJson(`/api/callbacks?from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}${cacheBuster}`, {
+      cache: 'no-store'
+    });
+    const callbacks = Array.isArray(data?.callbacks) ? data.callbacks : [];
+    scheduleTasks = sortScheduleTasks(
+      callbacks
+        .map((callback) => normalizeScheduleTask(callback))
+        .filter(Boolean)
+        .filter((callback) => normalizePreferenceOwner(callback.assignedTo) === ownerKey)
+    );
+    scheduleTasksLoaded = true;
+  } catch (error) {
+    console.error('Error al cargar tasks del calendario:', error);
+    scheduleTasks = [];
+    scheduleTasksLoaded = false;
+  }
+
+  renderScheduleMonth();
+  renderScheduleAgenda();
+  return scheduleTasks;
+}
+
+function hydrateScheduleForCurrentUser({ forceTasks = false } = {}) {
+  const session = getSession();
+  const ownerKey = getScheduleOwner(session);
+  const ownerLabel = String(session?.username || session?.name || 'Sin usuario');
+
+  if (calendarOwnerBadge) {
+    calendarOwnerBadge.textContent = ownerLabel ? `@${ownerLabel}` : '-';
+  }
+
+  if (scheduleOwnerKey !== ownerKey) {
+    scheduleTasks = [];
+    scheduleTasksLoaded = false;
+  }
+  scheduleOwnerKey = ownerKey;
+
+  if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
+    scheduleSelectedDateKey = toIsoDateLocal(new Date());
+  }
+
+  const selectedDate = parseIsoDateLocal(scheduleSelectedDateKey) || new Date();
+  scheduleViewDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+
+  scheduleNotes = readScheduleNotes(ownerKey);
+  renderScheduleNotes();
+  renderScheduleMonth();
+  renderScheduleAgenda();
+  void loadScheduleTasks({ force: forceTasks || !scheduleTasksLoaded });
+}
+
+function setToolbarRouteButtonState(routeName) {
+  if (leadsBtn) {
+    const leadsActive = routeName === 'leads';
+    leadsBtn.style.background = leadsActive ? 'var(--accent)' : '';
+    leadsBtn.style.color = leadsActive ? '#000' : '';
+  }
+  if (calendarBtn) {
+    const calendarActive = routeName === 'calendar';
+    calendarBtn.style.background = calendarActive ? 'var(--accent)' : '';
+    calendarBtn.style.color = calendarActive ? '#000' : '';
+  }
+}
+
+function showCalendarView() {
+  if (dashboardGrid) dashboardGrid.classList.add('hidden');
+  if (leadsView) leadsView.classList.add('hidden');
+  if (calendarView) {
+    calendarView.classList.remove('hidden');
+    calendarView.animate(
+      [
+        { opacity: 0, transform: 'translateY(14px)' },
+        { opacity: 1, transform: 'translateY(0)' }
+      ],
+      {
+        duration: 360,
+        easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+      }
+    );
+  }
+  isLeadsView = false;
+  isCalendarView = true;
+  setToolbarRouteButtonState('calendar');
+  hideLeadSearchSuggestions();
+  initializeScheduleInteractions();
+  hydrateScheduleForCurrentUser({ forceTasks: true });
+}
+
+function initializeScheduleInteractions() {
+  if (scheduleInteractionsBound) return;
+  scheduleInteractionsBound = true;
+
+  if (calendarPrevMonthBtn) {
+    calendarPrevMonthBtn.addEventListener('click', () => {
+      scheduleViewDate = new Date(scheduleViewDate.getFullYear(), scheduleViewDate.getMonth() - 1, 1);
+      renderScheduleMonth();
+    });
+  }
+
+  if (calendarNextMonthBtn) {
+    calendarNextMonthBtn.addEventListener('click', () => {
+      scheduleViewDate = new Date(scheduleViewDate.getFullYear(), scheduleViewDate.getMonth() + 1, 1);
+      renderScheduleMonth();
+    });
+  }
+
+  if (calendarTodayBtn) {
+    calendarTodayBtn.addEventListener('click', () => {
+      const today = new Date();
+      scheduleSelectedDateKey = toIsoDateLocal(today);
+      scheduleViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      renderScheduleMonth();
+      renderScheduleAgenda();
+    });
+  }
+
+  if (calendarMonthGrid) {
+    calendarMonthGrid.addEventListener('click', (event) => {
+      const dayBtn = event.target.closest('.schedule-day[data-date-key]');
+      if (!dayBtn) return;
+      const nextDateKey = String(dayBtn.dataset.dateKey || '');
+      if (!parseIsoDateLocal(nextDateKey)) return;
+      scheduleSelectedDateKey = nextDateKey;
+      const parsed = parseIsoDateLocal(nextDateKey);
+      scheduleViewDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      renderScheduleMonth();
+      renderScheduleAgenda();
+    });
+  }
+
+  if (calendarAgendaList) {
+    calendarAgendaList.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+
+      const completeBtn = target.closest('[data-complete-lead-id]');
+      if (completeBtn) {
+        const leadId = Number(completeBtn.dataset.completeLeadId);
+        if (!Number.isFinite(leadId) || leadId <= 0) return;
+        void markScheduleTaskCompleted(leadId);
+        return;
+      }
+
+      const openBtn = target.closest('[data-open-lead-id]');
+      if (!openBtn) return;
+      const leadId = Number(openBtn.dataset.openLeadId);
+      if (!Number.isFinite(leadId) || leadId <= 0) return;
+      window.location.href = `/client.html?id=${leadId}`;
+    });
+  }
+
+  if (calendarAddNoteBtn) {
+    calendarAddNoteBtn.addEventListener('click', () => {
+      createScheduleNote();
+    });
+  }
+
+  if (calendarNotesBoard) {
+    calendarNotesBoard.addEventListener('click', (event) => {
+      const deleteBtn = event.target.closest('[data-note-delete]');
+      if (deleteBtn) {
+        removeScheduleNote(String(deleteBtn.dataset.noteDelete || ''));
+      }
+    });
+
+    calendarNotesBoard.addEventListener('input', (event) => {
+      const textArea = event.target.closest('[data-note-text]');
+      if (!textArea) return;
+      const noteId = String(textArea.dataset.noteText || '');
+      const noteIndex = scheduleNotes.findIndex((note) => note.id === noteId);
+      if (noteIndex < 0) return;
+      scheduleNotes[noteIndex] = {
+        ...scheduleNotes[noteIndex],
+        text: String(textArea.value || '').slice(0, SCHEDULE_NOTE_MAX_LENGTH)
+      };
+      persistScheduleNotes();
+    });
+
+    calendarNotesBoard.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const noteEl = event.target.closest('.schedule-note[data-note-id]');
+      if (!noteEl) return;
+      if (event.target.closest('.schedule-note-text') || event.target.closest('.schedule-note-delete')) return;
+      event.preventDefault();
+
+      const metrics = getScheduleBoardMetrics();
+      const boardRect = calendarNotesBoard.getBoundingClientRect();
+      const noteRect = noteEl.getBoundingClientRect();
+      const noteId = String(noteEl.dataset.noteId || '');
+      const startLeft = clampNumber(noteRect.left - boardRect.left, 0, metrics.maxX);
+      const startTop = clampNumber(noteRect.top - boardRect.top, 0, metrics.maxY);
+
+      scheduleNoteDragState = {
+        pointerId: event.pointerId,
+        noteId,
+        noteElement: noteEl,
+        startX: event.clientX,
+        startY: event.clientY,
+        originLeft: startLeft,
+        originTop: startTop
+      };
+
+      noteEl.classList.add('is-dragging');
+      if (typeof noteEl.setPointerCapture === 'function') {
+        noteEl.setPointerCapture(event.pointerId);
+      }
+    });
+
+    calendarNotesBoard.addEventListener('pointermove', (event) => {
+      if (!scheduleNoteDragState || event.pointerId !== scheduleNoteDragState.pointerId) return;
+      const { noteElement, startX, startY, originLeft, originTop } = scheduleNoteDragState;
+      const metrics = getScheduleBoardMetrics();
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+      const nextLeft = clampNumber(originLeft + deltaX, 0, metrics.maxX);
+      const nextTop = clampNumber(originTop + deltaY, 0, metrics.maxY);
+      noteElement.style.left = `${nextLeft}px`;
+      noteElement.style.top = `${nextTop}px`;
+    });
+
+    const stopNoteDrag = (event) => {
+      if (!scheduleNoteDragState || event.pointerId !== scheduleNoteDragState.pointerId) return;
+      const { noteId, noteElement } = scheduleNoteDragState;
+      const metrics = getScheduleBoardMetrics();
+      const nextLeft = clampNumber(Number.parseFloat(noteElement.style.left) || 0, 0, metrics.maxX);
+      const nextTop = clampNumber(Number.parseFloat(noteElement.style.top) || 0, 0, metrics.maxY);
+      updateScheduleNotePosition(noteId, nextLeft, nextTop, { persist: true });
+      noteElement.classList.remove('is-dragging');
+      if (typeof noteElement.releasePointerCapture === 'function') {
+        try {
+          noteElement.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignorar
+        }
+      }
+      scheduleNoteDragState = null;
+    };
+
+    calendarNotesBoard.addEventListener('pointerup', stopNoteDrag);
+    calendarNotesBoard.addEventListener('pointercancel', stopNoteDrag);
+  }
+}
+
 function showLeadsView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
+  if (calendarView) calendarView.classList.add('hidden');
   if (leadsView) {
     leadsView.classList.remove('hidden');
-    // Animar entrada
     leadsView.animate([
       { opacity: 0, transform: 'translateY(20px)' },
       { opacity: 1, transform: 'translateY(0)' }
@@ -1005,21 +1920,16 @@ function showLeadsView() {
       duration: 400,
       easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
     });
-    
-    // Inicializar State Types
     initializeStateTypes();
     initializeLeadsColumnResize();
   }
   isLeadsView = true;
-  // Cambiar el estado del botón
-  if (leadsBtn) {
-    leadsBtn.style.background = 'var(--accent)';
-    leadsBtn.style.color = '#000';
-  }
+  isCalendarView = false;
+  setToolbarRouteButtonState('leads');
   void loadLeads();
 }
 
-// Función para inicializar todos los State Types
+// FunciÃ³n para inicializar todos los State Types
 function initializeStateTypes() {
   const rows = document.querySelectorAll('.lead-row');
   rows.forEach(row => {
@@ -1032,10 +1942,10 @@ function initializeStateTypes() {
 }
 
 function showDashboardView() {
+  if (calendarView) calendarView.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
   if (dashboardGrid) {
     dashboardGrid.classList.remove('hidden');
-    // Animar entrada
     dashboardGrid.animate([
       { opacity: 0, transform: 'translateY(20px)' },
       { opacity: 1, transform: 'translateY(0)' }
@@ -1045,17 +1955,17 @@ function showDashboardView() {
     });
   }
   isLeadsView = false;
-  // Restaurar estado del botón
-  if (leadsBtn) {
-    leadsBtn.style.background = '';
-    leadsBtn.style.color = '';
-  }
+  // Restaurar estado del botÃ³n
+  isCalendarView = false;
+  setToolbarRouteButtonState('dashboard');
 }
 
 function applyDashboardRouteFromHash() {
   const route = (window.location.hash || '').replace('#', '').toLowerCase();
   if (route === 'leads') {
     showLeadsView();
+  } else if (route === 'calendar') {
+    showCalendarView();
   } else {
     showDashboardView();
   }
@@ -1066,6 +1976,15 @@ if (leadsBtn) {
     showLeadsView();
     if (window.location.hash !== '#leads') {
       window.location.hash = 'leads';
+    }
+  });
+}
+
+if (calendarBtn) {
+  calendarBtn.addEventListener('click', () => {
+    showCalendarView();
+    if (window.location.hash !== '#calendar') {
+      window.location.hash = 'calendar';
     }
   });
 }
@@ -1137,6 +2056,12 @@ async function runLeadSearchSubmit() {
 }
 
 if (homeSearchInput) {
+  const syncClearBtn = () => {
+    if (searchClearBtn) {
+      searchClearBtn.classList.toggle('has-text', homeSearchInput.value.length > 0);
+    }
+  };
+
   homeSearchInput.addEventListener('focus', async () => {
     if (getSession()) {
       await loadLeads();
@@ -1147,6 +2072,7 @@ if (homeSearchInput) {
   });
 
   homeSearchInput.addEventListener('input', (event) => {
+    syncClearBtn();
     scheduleLeadSearch(event.target.value);
   });
 
@@ -1173,6 +2099,7 @@ if (homeSearchInput) {
     if (event.key === 'Escape') {
       event.preventDefault();
       setLeadSearchQuery('', { syncInput: true });
+      syncClearBtn();
       hideLeadSearchSuggestions();
       if (isLeadsView) renderFilteredLeads();
     }
@@ -1185,6 +2112,16 @@ if (homeSearchInput) {
     if (!shell.contains(event.target) && !clickedInsideSuggestions) {
       hideLeadSearchSuggestions();
     }
+  });
+}
+
+if (searchClearBtn && homeSearchInput) {
+  searchClearBtn.addEventListener('click', () => {
+    setLeadSearchQuery('', { syncInput: true });
+    searchClearBtn.classList.remove('has-text');
+    hideLeadSearchSuggestions();
+    homeSearchInput.focus();
+    if (isLeadsView) renderFilteredLeads();
   });
 }
 
@@ -1207,7 +2144,7 @@ const closeModalBtn = document.getElementById('closeModalBtn');
 const cancelLeadBtn = document.getElementById('cancelLeadBtn');
 const createLeadBtn = document.querySelector('.create-lead-btn');
 
-// Elementos del buscador de estados (declarados aquí para estar disponibles en todas las funciones)
+// Elementos del buscador de estados (declarados aquÃ­ para estar disponibles en todas las funciones)
 const stateSearchInput = document.getElementById('leadStateSearch');
 const stateHiddenInput = document.getElementById('leadState');
 const stateSuggestions = document.getElementById('stateSuggestions');
@@ -1264,8 +2201,8 @@ function renderDuplicateAlert(matches, normalizedPhone) {
     const stateType = lead.state_type || (lead.state_code ? getStateType(lead.state_code) : '-');
     return `
       <button type="button" class="duplicate-item duplicate-open-link" data-id="${lead.id}">
-        <span class="duplicate-item-name">${escapeHtml(lead.full_name || 'Sin nombre')} · Case #${lead.case_id || '-'}</span>
-        <span class="duplicate-item-meta">${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')} · ${escapeHtml(stateType)} · ${escapeHtml(lead.status || '-')}</span>
+        <span class="duplicate-item-name">${escapeHtml(lead.full_name || 'Sin nombre')} Â· Case #${lead.case_id || '-'}</span>
+        <span class="duplicate-item-meta">${escapeHtml(lead.phone || '-')} Â· ${escapeHtml(lead.state_code || '-')} Â· ${escapeHtml(stateType)} Â· ${escapeHtml(lead.status || '-')}</span>
       </button>
     `;
   }).join('');
@@ -1442,7 +2379,7 @@ function updateActiveSuggestion(items) {
   });
 }
 
-// Detección automática por código de área
+// DetecciÃ³n automÃ¡tica por cÃ³digo de Ã¡rea
 if (phoneInput) {
   phoneInput.addEventListener('input', (e) => {
     clearDuplicateAlert();
@@ -1456,7 +2393,7 @@ if (phoneInput) {
       // Auto-completar el campo
       stateSearchInput.value = `${stateName} (${detectedState})`;
       stateHiddenInput.value = detectedState;
-      showDetectedState(`Detectado por código de área: ${stateName} (${detectedState}) - ${stateType}`);
+      showDetectedState(`Detectado por cÃ³digo de Ã¡rea: ${stateName} (${detectedState}) - ${stateType}`);
     }
   });
 }
@@ -1505,7 +2442,7 @@ if (newLeadForm) {
     }
 
     if (!normalizedPhone) {
-      alert('Ingresa un teléfono válido de 10 dígitos (ej: 305-555-0123).');
+      alert('Ingresa un telÃ©fono vÃ¡lido de 10 dÃ­gitos (ej: 305-555-0123).');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -1556,7 +2493,7 @@ if (newLeadForm) {
       // Cerrar modal
       closeModal();
       
-      // Redirigir a detalle iniciando siempre en pestaña de información
+      // Redirigir a detalle iniciando siempre en pestaÃ±a de informaciÃ³n
       window.location.href = `/client.html?id=${lead.id}&tab=lead`;
       
     } catch (error) {
@@ -1748,7 +2685,7 @@ function renderLeadsRows(leads) {
       const leadId = btn.dataset.id;
       const leadName = btn.dataset.name;
 
-      if (confirm(`¿Estás seguro de eliminar el lead "${leadName}"?\n\nEsta acción no se puede deshacer.`)) {
+      if (confirm(`Â¿EstÃ¡s seguro de eliminar el lead "${leadName}"?\n\nEsta acciÃ³n no se puede deshacer.`)) {
         try {
           const response = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
           if (response.ok) {
@@ -1977,7 +2914,7 @@ setInterval(() => { if (getSession()) void refreshNotifications(); }, 60000);
 // RANKINGS WHEEL - Efecto ruleta para rankings laterales
 // ============================================
 
-// Bandera para evitar inicialización múltiple
+// Bandera para evitar inicializaciÃ³n mÃºltiple
 let rankingsWheelInitialized = false;
 
 function initRankingsWheel() {
@@ -2020,31 +2957,31 @@ function initRankingsWheel() {
     items = Array.from(wheel.querySelectorAll('.rankings-wheel-item'));
     const totalOriginalItems = originalItems.length;
     
-    // Posicionar el track para que el primer item esté centrado
+    // Posicionar el track para que el primer item estÃ© centrado
     let baseOffset = centerOffset; // Offset base que reseteamos
-    let currentOffset = 0; // Offset acumulado desde el último reset
+    let currentOffset = 0; // Offset acumulado desde el Ãºltimo reset
     track.style.transform = `translateY(${baseOffset}px)`;
     
     const listHeight = totalOriginalItems * itemHeight;
     
     function updateActiveItem() {
-      // Calcular el índice visual basado en cuánto nos hemos movido
+      // Calcular el Ã­ndice visual basado en cuÃ¡nto nos hemos movido
       const totalPixelsMoved = -currentOffset;
       const visualIndex = Math.round(totalPixelsMoved / itemHeight);
       
-      // Solo aplicar clases a los items que están dentro del rango visual (0 a totalOriginalItems-1)
+      // Solo aplicar clases a los items que estÃ¡n dentro del rango visual (0 a totalOriginalItems-1)
       // Los items duplicados (totalOriginalItems en adelante) son para el loop, no para highlight
       const effectiveIndex = visualIndex % totalOriginalItems;
       
       items.forEach((item, index) => {
         item.classList.remove('active', 'near-top', 'near-bottom');
         
-        // Calcular a qué índice original corresponde este item
+        // Calcular a quÃ© Ã­ndice original corresponde este item
         const itemOriginalIndex = index % totalOriginalItems;
         
-        // Calcular distancia circular al índice activo
+        // Calcular distancia circular al Ã­ndice activo
         let distance = itemOriginalIndex - effectiveIndex;
-        // Normalizar distancia para que siempre sea la más corta
+        // Normalizar distancia para que siempre sea la mÃ¡s corta
         if (distance > totalOriginalItems / 2) distance -= totalOriginalItems;
         if (distance < -totalOriginalItems / 2) distance += totalOriginalItems;
         
@@ -2072,7 +3009,7 @@ function initRankingsWheel() {
         // Mover suavemente
         currentOffset -= autoScrollSpeed;
         
-        // LOOP INFINITO: cuando nos hemos movido exactamente listHeight píxeles, reseteamos
+        // LOOP INFINITO: cuando nos hemos movido exactamente listHeight pÃ­xeles, reseteamos
         if (currentOffset <= -listHeight) {
           currentOffset += listHeight;
         }
@@ -2147,11 +3084,11 @@ const originalShowDashboard = showDashboard;
 showDashboard = function() {
   console.log('[RankingsWheel] Dashboard mostrado, inicializando...');
   originalShowDashboard();
-  // Pequeño delay para asegurar que el DOM esté listo
+  // PequeÃ±o delay para asegurar que el DOM estÃ© listo
   setTimeout(initRankingsWheel, 300);
 };
 
-// Si ya estamos en el dashboard (sesión existente), inicializar ahora
+// Si ya estamos en el dashboard (sesiÃ³n existente), inicializar ahora
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[RankingsWheel] DOMContentLoaded, verificando dashboard...');
   const dashboard = document.getElementById('dashboardView');
@@ -2164,6 +3101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initRankingsWheel, 500);
   }
 });
+
 
 
 

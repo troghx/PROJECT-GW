@@ -68,7 +68,7 @@ const LEAD_SELECT_COLUMNS = `
   email, phone, home_phone, cell_phone,
   source, state_code, dob, ssn, address_street, city, zip_code, best_time,
   currently_employed, employer_name, occupation, self_employed,
-  status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, callback_date, created_at, updated_at
+  status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, callback_date, callback_completed_at, created_at, updated_at
 `;
 
 function getStateTypeFromCode(stateCode) {
@@ -87,6 +87,78 @@ async function createNotification(recipientUsername, type, title, body, leadId) 
      VALUES ($1, $2, $3, $4, $5)`,
     [normalizedRecipient, type, title.slice(0, 120), body.slice(0, 500), leadId || null]
   );
+}
+
+async function createLeadAssignmentNotification(recipientUsername, lead) {
+  const normalizedRecipient = cleanText(recipientUsername, 120).toLowerCase();
+  if (!normalizedRecipient) return;
+
+  const caseLabel = lead?.case_id ? `Caso #${lead.case_id}` : `Lead #${lead?.id || ''}`;
+  const leadName = cleanText(lead?.full_name, 120) || 'Sin nombre';
+  const singleTitle = 'Se te asigno un lead';
+  const singleBody = `${caseLabel} - ${leadName} fue asignado a ti.`;
+  const groupedTitle = 'se te han asignado leads';
+  const groupedBody = 'Tienes nuevos leads asignados. Abre la pantalla de Leads para marcarlos.';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: unreadAssignmentRows } = await client.query(
+      `SELECT id, type
+       FROM notifications
+       WHERE lower(recipient_username) = $1
+         AND read_at IS NULL
+         AND type IN ('lead_assigned', 'leads_assigned')
+       ORDER BY created_at DESC`,
+      [normalizedRecipient]
+    );
+
+    const hasGroupedUnread = unreadAssignmentRows.some((row) => row.type === 'leads_assigned');
+    if (hasGroupedUnread) {
+      await client.query(
+        `DELETE FROM notifications
+         WHERE lower(recipient_username) = $1
+           AND read_at IS NULL
+           AND type = 'lead_assigned'`,
+        [normalizedRecipient]
+      );
+      await client.query('COMMIT');
+      return;
+    }
+
+    const unreadSingleIds = unreadAssignmentRows
+      .filter((row) => row.type === 'lead_assigned')
+      .map((row) => Number(row.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (unreadSingleIds.length >= 2) {
+      await client.query(
+        `DELETE FROM notifications
+         WHERE id = ANY($1::bigint[])`,
+        [unreadSingleIds]
+      );
+      await client.query(
+        `INSERT INTO notifications (recipient_username, type, title, body, lead_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [normalizedRecipient, 'leads_assigned', groupedTitle, groupedBody, null]
+      );
+      await client.query('COMMIT');
+      return;
+    }
+
+    await client.query(
+      `INSERT INTO notifications (recipient_username, type, title, body, lead_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [normalizedRecipient, 'lead_assigned', singleTitle.slice(0, 120), singleBody.slice(0, 500), lead?.id || null]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function cleanText(value, maxLength) {
@@ -635,12 +707,14 @@ function parseLeadPatchBody(body = {}) {
   if (callbackDate !== undefined) {
     if (callbackDate === null || String(callbackDate).trim() === '') {
       changes.callback_date = null;
+      changes.callback_completed_at = null;
     } else {
       const normalized = String(callbackDate).trim();
       if (!isValidISODate(normalized)) {
         return { ok: false, message: 'callbackDate debe tener formato YYYY-MM-DD.' };
       }
       changes.callback_date = normalized;
+      changes.callback_completed_at = null;
     }
   }
 
@@ -2259,14 +2333,7 @@ app.patch('/api/leads/:id', async (req, res) => {
     lead.state_type = getStateTypeFromCode(lead.state_code);
 
     if (changes.assigned_to && lead.assigned_to) {
-      const caseLabel = lead.case_id ? `Caso #${lead.case_id}` : `Lead #${lead.id}`;
-      createNotification(
-        lead.assigned_to,
-        'lead_assigned',
-        'Se te asignó un lead',
-        `${caseLabel} – ${lead.full_name || 'Sin nombre'} fue asignado a ti.`,
-        lead.id
-      ).catch(() => {});
+      await createLeadAssignmentNotification(lead.assigned_to, lead).catch(() => {});
     }
 
     res.json({ lead, message: 'Lead actualizado correctamente.' });
@@ -2327,6 +2394,33 @@ app.patch('/api/notifications/read', async (req, res) => {
   }
 });
 
+app.delete('/api/notifications/:id', async (req, res) => {
+  const notificationId = Number(req.params.id);
+  if (!Number.isInteger(notificationId) || notificationId <= 0) {
+    return res.status(400).json({ message: 'id de notificacion invalido.' });
+  }
+
+  const username = cleanText(req.body?.username || req.query.username, 120).toLowerCase();
+  if (!username) return res.status(400).json({ message: 'username requerido.' });
+
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM notifications
+       WHERE id = $1 AND lower(recipient_username) = $2`,
+      [notificationId, username]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ message: 'Notificacion no encontrada.' });
+    }
+
+    return res.json({ ok: true, deletedId: notificationId });
+  } catch (error) {
+    console.error('Error al eliminar notificacion:', error);
+    return res.status(500).json({ message: 'Error al eliminar notificacion.' });
+  }
+});
+
 app.get('/api/callbacks', async (req, res) => {
   const fromDateRaw = cleanText(req.query.from, 16);
   const fromDate = fromDateRaw || new Date().toISOString().slice(0, 10);
@@ -2342,6 +2436,7 @@ app.get('/api/callbacks', async (req, res) => {
          case_id,
          full_name,
          callback_date,
+         callback_completed_at,
          assigned_to
        FROM leads
        WHERE callback_date IS NOT NULL
@@ -2351,18 +2446,113 @@ app.get('/api/callbacks', async (req, res) => {
       [fromDate]
     );
 
+    const normalizeCallbackDateForApi = (value) => {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
+      }
+      const raw = String(value || '').trim();
+      const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : null;
+    };
+
+    const normalizeTimestampForApi = (value) => {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString();
+      }
+      const raw = String(value || '').trim();
+      if (!raw) return null;
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    };
+
     const callbacks = rows.map((row) => ({
       leadId: Number(row.lead_id),
       caseId: row.case_id,
       name: cleanText(row.full_name, 120) || `Lead #${row.lead_id}`,
-      callbackDate: row.callback_date,
+      callbackDate: normalizeCallbackDateForApi(row.callback_date),
+      callbackCompletedAt: normalizeTimestampForApi(row.callback_completed_at),
       assignedTo: cleanText(row.assigned_to, 120) || null
-    }));
+    })).filter((item) => Boolean(item.callbackDate));
 
     return res.json({ callbacks });
   } catch (error) {
     console.error('Error al obtener callbacks:', error);
     return res.status(500).json({ message: 'Error al obtener callbacks.' });
+  }
+});
+
+app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
+  const leadId = Number(req.params.leadId);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'leadId invalido.' });
+  }
+
+  try {
+    const { rows: leadRows } = await pool.query(
+      `SELECT id,
+              callback_date::date AS callback_date,
+              callback_completed_at,
+              CURRENT_DATE::date AS server_today
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+
+    if (leadRows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const lead = leadRows[0];
+    const callbackDate = lead.callback_date ? String(lead.callback_date).slice(0, 10) : '';
+    const serverToday = lead.server_today ? String(lead.server_today).slice(0, 10) : '';
+
+    if (!callbackDate) {
+      return res.status(400).json({ message: 'Este lead no tiene task de callback.' });
+    }
+
+    if (lead.callback_completed_at) {
+      return res.json({
+        ok: true,
+        alreadyCompleted: true,
+        message: 'La task ya estaba completada.'
+      });
+    }
+
+    if (callbackDate !== serverToday) {
+      return res.status(400).json({
+        message: `Solo puedes completar esta task el dia programado (${callbackDate}).`
+      });
+    }
+
+    const { rows: updatedRows } = await pool.query(
+      `UPDATE leads
+       SET callback_completed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND callback_date = CURRENT_DATE
+         AND callback_completed_at IS NULL
+       RETURNING ${LEAD_SELECT_COLUMNS}`,
+      [leadId]
+    );
+
+    if (!updatedRows.length) {
+      return res.status(409).json({
+        message: 'No se pudo completar la task. Intenta recargar e intentar de nuevo.'
+      });
+    }
+
+    const updatedLead = updatedRows[0];
+    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
+
+    return res.json({
+      ok: true,
+      lead: updatedLead,
+      message: 'Task marcada como completada.'
+    });
+  } catch (error) {
+    console.error('Error al completar callback task:', error);
+    return res.status(500).json({ message: 'Error al completar callback task.' });
   }
 });
 
