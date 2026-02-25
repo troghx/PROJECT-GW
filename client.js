@@ -3360,6 +3360,16 @@
         event.preventDefault();
         event.stopPropagation();
         const nextOpen = !notesPanelOpen;
+        if (nextOpen) {
+          const filesPanel = document.getElementById('filesPanel');
+          const filesBtn = document.getElementById('filesBtn');
+          const emailPanel = document.getElementById('emailPanel');
+          const emailBtn = document.getElementById('emailBtn');
+          filesPanel?.classList.add('hidden');
+          filesBtn?.setAttribute('aria-expanded', 'false');
+          emailPanel?.classList.add('hidden');
+          emailBtn?.setAttribute('aria-expanded', 'false');
+        }
         setNotesPanelOpen(nextOpen);
         if (nextOpen) {
           try {
@@ -5823,7 +5833,7 @@
         if (!item) return;
 
         const notifType = String(item.dataset.type || '').toLowerCase();
-        if (notifType === 'leads_assigned') {
+        if (notifType === 'leads_assigned' || notifType === 'lead_assigned') {
           const session = readSessionUser();
           const username = String(session?.username || '').trim();
           if (username) {
@@ -6669,11 +6679,12 @@
         e.stopPropagation();
         const isHidden = filesPanel.classList.contains('hidden');
 
-        document.querySelectorAll('.files-panel, .notes-panel').forEach((panel) => {
-          if (panel !== filesPanel) panel.classList.add('hidden');
-        });
-
         if (isHidden) {
+          setNotesPanelOpen(false);
+          const emailPanel = document.getElementById('emailPanel');
+          const emailBtn = document.getElementById('emailBtn');
+          emailPanel?.classList.add('hidden');
+          emailBtn?.setAttribute('aria-expanded', 'false');
           filesPanel.classList.remove('hidden');
           filesBtn.setAttribute('aria-expanded', 'true');
           loadFilesList({ forceServer: true }).catch((error) => {
@@ -7240,9 +7251,496 @@
       };
     }
 
+    function isValidEmailFormat(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (!normalized) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+    }
+
+    function parseCcEmailsInput(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return { ok: true, value: [] };
+
+      const unique = new Set();
+      const parsed = [];
+      const parts = raw.split(/[,\n;]+/g).map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean);
+
+      for (const entry of parts) {
+        if (!isValidEmailFormat(entry)) {
+          return { ok: false, message: `Correo en CC invalido: ${entry}` };
+        }
+        if (unique.has(entry)) continue;
+        unique.add(entry);
+        parsed.push(entry);
+      }
+
+      return { ok: true, value: parsed.slice(0, 20) };
+    }
+
+    function resolveSessionRoleForEmail(session) {
+      const roleRaw = String(session?.role || '').trim().toLowerCase();
+      if (roleRaw === 'admin' || roleRaw === 'administrador') return 'admin';
+      if (roleRaw === 'seller' || roleRaw === 'agente') return 'seller';
+
+      const username = String(session?.username || session?.name || '').trim().toLowerCase();
+      const displayName = String(session?.displayName || '').trim().toLowerCase();
+      const email = String(session?.email || '').trim().toLowerCase();
+
+      if (username === 'admin' || displayName === 'admin' || email === 'elliot.perez@cerodeuda.com') {
+        return 'admin';
+      }
+      return 'seller';
+    }
+
+    function getCurrentEmailIdentity() {
+      const session = readSessionUser() || {};
+      return {
+        username: String(session.username || session.name || '').trim(),
+        displayName: String(session.displayName || session.name || '').trim(),
+        email: String(session.email || '').trim(),
+        role: resolveSessionRoleForEmail(session)
+      };
+    }
+
+    function getPrimaryLeadEmail() {
+      return String(currentLeadData?.email || '').trim();
+    }
+
+    function getPrimaryLeadPhone() {
+      const lead = currentLeadData || {};
+      const preferred = [lead.cell_phone, lead.home_phone, lead.phone]
+        .map((value) => String(value || '').trim())
+        .find(Boolean);
+      return preferred || '';
+    }
+
+    function getLeadDisplayName() {
+      return String(currentLeadData?.full_name || originalName || 'Cliente').trim() || 'Cliente';
+    }
+
+    function getLeadCaseLabel() {
+      const caseValue = String(caseIdValue || currentLeadData?.case_id || currentLeadId || '').trim();
+      if (!caseValue) return '';
+      return caseValue.startsWith('#') ? caseValue : `#${caseValue}`;
+    }
+
+    function buildFollowupEmailBody() {
+      const leadName = getLeadDisplayName();
+      const caseLabel = getLeadCaseLabel();
+      const caseText = caseLabel ? ` para tu caso ${caseLabel}` : '';
+      return [
+        `Hola ${leadName},`,
+        '',
+        `Te escribo para dar seguimiento${caseText}.`,
+        '',
+        'Si tienes alguna duda, respondeme este correo y con gusto te apoyo.',
+        '',
+        'Saludos,'
+      ].join('\n');
+    }
+
+    function buildContractPreviewText() {
+      const lead = currentLeadData || {};
+      const leadName = getLeadDisplayName();
+      const caseLabel = getLeadCaseLabel() || String(currentLeadId || '-');
+      const includeCoapp = readCoappIncludeContractFlag(lead);
+      const coappName = String(lead.co_applicant_name || '').trim();
+      const phone = getPrimaryLeadPhone() || 'No disponible';
+      const email = getPrimaryLeadEmail() || 'No disponible';
+      const address = [
+        String(lead.address_street || '').trim(),
+        String(lead.city || '').trim(),
+        String(lead.state_code || lead.state || '').trim(),
+        String(lead.zip_code || '').trim()
+      ].filter(Boolean).join(', ') || 'No disponible';
+
+      const totalDebt = formatCurrency(parseCurrency(document.getElementById('calcTotalDebt')?.value || lead.calc_total_debt || 0));
+      const estSettlement = String(document.getElementById('resultSettlement')?.textContent || formatCurrency(0)).trim();
+      const totalProgramFees = String(document.getElementById('resultProgramFees')?.textContent || formatCurrency(0)).trim();
+      const totalLegalFees = String(document.getElementById('resultLegalFees')?.textContent || formatCurrency(0)).trim();
+      const totalBankFees = String(document.getElementById('resultBankFees')?.textContent || formatCurrency(0)).trim();
+      const totalProgram = String(document.getElementById('resultTotalProgram')?.textContent || formatCurrency(0)).trim();
+      const monthlyPayment = String(document.getElementById('resultMonthlyPayment')?.textContent || formatCurrency(0)).trim();
+      const estimatedSavings = String(document.getElementById('resultEstimatedSavings')?.textContent || formatCurrency(0)).trim();
+      const paymentSavings = String(document.getElementById('resultMonthlyPaymentSavings')?.textContent || formatCurrency(0)).trim();
+      const settlementPercent = String(document.getElementById('calcSettlementPercent')?.value || lead.calc_settlement_percent || '55').trim();
+      const programFeePercent = String(document.getElementById('calcProgramFeePercent')?.value || lead.calc_program_fee_percent || getStateBasedProgramFeePercent(lead)).trim();
+      const bankFeeMonthly = formatCurrency(parseCurrency(document.getElementById('calcBankFee')?.value || lead.calc_bank_fee || 0));
+      const legalPlanEnabled = Boolean(document.getElementById('calcLegalPlanSwitch')?.classList.contains('active'));
+      const months = String(document.getElementById('calcMonths')?.value || lead.calc_months || 48).trim();
+      const firstDeposit = String(document.getElementById('calcPaymentDayDisplay')?.textContent || '').trim() || 'Pendiente';
+      const assignedTo = String(lead.assigned_to || '').trim() || 'Sin asignar';
+      const stateType = String(getLeadStateType(lead) || '-').trim();
+
+      return [
+        'CONTRACT PREVIEW',
+        '================',
+        `Case: ${caseLabel}`,
+        `Lead: ${leadName}`,
+        includeCoapp && coappName ? `Co-Applicant: ${coappName}` : 'Co-Applicant: No incluido',
+        `Assigned To: ${assignedTo}`,
+        '',
+        'CLIENT DATA',
+        '-----------',
+        `Phone: ${phone}`,
+        `Email: ${email}`,
+        `Address: ${address}`,
+        `State Type: ${stateType}`,
+        '',
+        'PROGRAM DATA',
+        '------------',
+        `Total Debt: ${totalDebt}`,
+        `Estimated Settlement (${settlementPercent}%): ${estSettlement}`,
+        `Program Fee (${programFeePercent}%): ${totalProgramFees}`,
+        `Monthly Bank Fee: ${bankFeeMonthly}`,
+        `Total Legal Fees: ${totalLegalFees}`,
+        `Total Bank Fees: ${totalBankFees}`,
+        `Total Program Cost: ${totalProgram}`,
+        `Monthly Payment: ${monthlyPayment}`,
+        `Estimated Savings: ${estimatedSavings}`,
+        `Monthly Payment Savings: ${paymentSavings}`,
+        `Program Length (months): ${months}`,
+        `Legal Plan: ${legalPlanEnabled ? 'Activo ($24.99/mes)' : 'No incluido'}`,
+        `First Deposit Date: ${firstDeposit}`,
+        '',
+        'Este resumen fue generado desde la plataforma CRM para revision del cliente.'
+      ].join('\n');
+    }
+
+    async function registerLeadEmailSend(payload) {
+      const identity = getCurrentEmailIdentity();
+      const leadId = Number(currentLeadId || currentLeadData?.id || 0);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        throw new Error('No hay lead activo para enviar correo.');
+      }
+
+      const response = await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId,
+          role: identity.role,
+          username: identity.username,
+          displayName: identity.displayName,
+          email: identity.email,
+          fromEmail: identity.email || null,
+          ...payload
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || 'No se pudo registrar el correo.');
+      }
+      return data;
+    }
+
+    function initEmailPanel() {
+      const emailBtn = document.getElementById('emailBtn');
+      const emailPanel = document.getElementById('emailPanel');
+      const emailCloseBtn = document.getElementById('emailCloseBtn');
+      const emailCreateBtn = document.getElementById('emailCreateBtn');
+      const emailSendContractBtn = document.getElementById('emailSendContractBtn');
+      const filesBtn = document.getElementById('filesBtn');
+      const filesPanel = document.getElementById('filesPanel');
+
+      const emailComposerModal = document.getElementById('emailComposerModal');
+      const emailComposerCloseBtn = document.getElementById('emailComposerCloseBtn');
+      const emailComposerForm = document.getElementById('emailComposerForm');
+      const emailComposerTo = document.getElementById('emailComposerTo');
+      const emailComposerCc = document.getElementById('emailComposerCc');
+      const emailComposerSubject = document.getElementById('emailComposerSubject');
+      const emailComposerBody = document.getElementById('emailComposerBody');
+      const emailComposerCancelBtn = document.getElementById('emailComposerCancelBtn');
+      const emailComposerSendBtn = document.getElementById('emailComposerSendBtn');
+
+      const contractComposerModal = document.getElementById('contractComposerModal');
+      const contractComposerCloseBtn = document.getElementById('contractComposerCloseBtn');
+      const contractComposerCancelBtn = document.getElementById('contractComposerCancelBtn');
+      const contractContactPhone = document.getElementById('contractContactPhone');
+      const contractContactEmail = document.getElementById('contractContactEmail');
+      const contractEmailSubject = document.getElementById('contractEmailSubject');
+      const contractEmailIntro = document.getElementById('contractEmailIntro');
+      const contractPreviewBody = document.getElementById('contractPreviewBody');
+      const contractCopyPreviewBtn = document.getElementById('contractCopyPreviewBtn');
+      const contractSendEmailBtn = document.getElementById('contractSendEmailBtn');
+
+      if (!emailBtn || !emailPanel) return;
+
+      let sendingComposerEmail = false;
+      let sendingContractEmail = false;
+
+      function setEmailPanelOpen(nextOpen) {
+        const open = Boolean(nextOpen);
+        emailPanel.classList.toggle('hidden', !open);
+        emailBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      function setComposerModalOpen(nextOpen) {
+        if (!emailComposerModal) return;
+        const open = Boolean(nextOpen);
+        emailComposerModal.classList.toggle('hidden', !open);
+        emailComposerModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+
+      function setContractModalOpen(nextOpen) {
+        if (!contractComposerModal) return;
+        const open = Boolean(nextOpen);
+        contractComposerModal.classList.toggle('hidden', !open);
+        contractComposerModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+
+      function closeAllEmailModals() {
+        setComposerModalOpen(false);
+        setContractModalOpen(false);
+      }
+
+      function openCreateComposerModal() {
+        const recipient = getPrimaryLeadEmail();
+        const leadName = getLeadDisplayName();
+        const caseLabel = getLeadCaseLabel();
+        const subject = `Seguimiento ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
+
+        if (emailComposerTo) emailComposerTo.value = recipient;
+        if (emailComposerCc) emailComposerCc.value = '';
+        if (emailComposerSubject) emailComposerSubject.value = subject;
+        if (emailComposerBody) emailComposerBody.value = buildFollowupEmailBody();
+        if (emailComposerSendBtn) {
+          emailComposerSendBtn.disabled = false;
+          emailComposerSendBtn.textContent = 'Enviar correo';
+        }
+
+        setEmailPanelOpen(false);
+        setComposerModalOpen(true);
+        setContractModalOpen(false);
+        setTimeout(() => {
+          emailComposerTo?.focus();
+        }, 0);
+      }
+
+      function openContractComposerModal() {
+        const recipientEmail = getPrimaryLeadEmail();
+        const recipientPhone = getPrimaryLeadPhone();
+        const caseLabel = getLeadCaseLabel();
+        const leadName = getLeadDisplayName();
+        const subject = `Contrato ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
+        const previewText = buildContractPreviewText();
+
+        if (contractContactPhone) contractContactPhone.textContent = recipientPhone || 'No disponible';
+        if (contractContactEmail) contractContactEmail.textContent = recipientEmail || 'No disponible';
+        if (contractEmailSubject) contractEmailSubject.value = subject;
+        if (contractEmailIntro) {
+          contractEmailIntro.value = [
+            `Hola ${leadName},`,
+            '',
+            `Te comparto tu resumen de contrato ${caseLabel || ''}.`,
+            'Por favor revisalo y respondeme con cualquier duda.',
+            '',
+            'Saludos,'
+          ].join('\n').trim();
+        }
+        if (contractPreviewBody) contractPreviewBody.textContent = previewText;
+        if (contractSendEmailBtn) {
+          contractSendEmailBtn.disabled = !isValidEmailFormat(recipientEmail);
+          contractSendEmailBtn.textContent = 'Enviar contrato';
+        }
+
+        setEmailPanelOpen(false);
+        setComposerModalOpen(false);
+        setContractModalOpen(true);
+      }
+
+      emailBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const shouldOpen = emailPanel.classList.contains('hidden');
+
+        if (shouldOpen) {
+          filesPanel?.classList.add('hidden');
+          filesBtn?.setAttribute('aria-expanded', 'false');
+          setNotesPanelOpen(false);
+          closeAllEmailModals();
+        }
+
+        setEmailPanelOpen(shouldOpen);
+      });
+
+      emailCloseBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setEmailPanelOpen(false);
+      });
+
+      emailCreateBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        openCreateComposerModal();
+      });
+
+      emailSendContractBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        openContractComposerModal();
+      });
+
+      emailComposerCloseBtn?.addEventListener('click', () => setComposerModalOpen(false));
+      emailComposerCancelBtn?.addEventListener('click', () => setComposerModalOpen(false));
+      contractComposerCloseBtn?.addEventListener('click', () => setContractModalOpen(false));
+      contractComposerCancelBtn?.addEventListener('click', () => setContractModalOpen(false));
+
+      emailComposerModal?.addEventListener('click', (event) => {
+        const closeBtn = event.target instanceof Element ? event.target.closest('[data-close-email-modal="composer"]') : null;
+        if (closeBtn) setComposerModalOpen(false);
+      });
+
+      contractComposerModal?.addEventListener('click', (event) => {
+        const closeBtn = event.target instanceof Element ? event.target.closest('[data-close-email-modal="contract"]') : null;
+        if (closeBtn) setContractModalOpen(false);
+      });
+
+      emailComposerForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (sendingComposerEmail) return;
+
+        const toEmail = String(emailComposerTo?.value || '').trim().toLowerCase();
+        const subject = String(emailComposerSubject?.value || '').trim();
+        const body = String(emailComposerBody?.value || '').trim();
+        const ccResult = parseCcEmailsInput(emailComposerCc?.value || '');
+
+        if (!isValidEmailFormat(toEmail)) {
+          showToast('El destinatario no tiene un correo valido.', 'error');
+          emailComposerTo?.focus();
+          return;
+        }
+        if (!ccResult.ok) {
+          showToast(ccResult.message || 'Revisa los correos en CC.', 'error');
+          emailComposerCc?.focus();
+          return;
+        }
+        if (!subject) {
+          showToast('Debes escribir un asunto.', 'error');
+          emailComposerSubject?.focus();
+          return;
+        }
+        if (!body) {
+          showToast('Debes escribir el cuerpo del correo.', 'error');
+          emailComposerBody?.focus();
+          return;
+        }
+
+        sendingComposerEmail = true;
+        if (emailComposerSendBtn) {
+          emailComposerSendBtn.disabled = true;
+          emailComposerSendBtn.textContent = 'Enviando...';
+        }
+
+        try {
+          await registerLeadEmailSend({
+            toEmail,
+            ccEmails: ccResult.value,
+            subject,
+            body,
+            provider: 'platform'
+          });
+          showToast('Correo enviado correctamente.', 'success');
+          setComposerModalOpen(false);
+        } catch (error) {
+          showToast(error.message || 'No se pudo enviar el correo.', 'error');
+        } finally {
+          sendingComposerEmail = false;
+          if (emailComposerSendBtn) {
+            emailComposerSendBtn.disabled = false;
+            emailComposerSendBtn.textContent = 'Enviar correo';
+          }
+        }
+      });
+
+      contractCopyPreviewBtn?.addEventListener('click', async () => {
+        const preview = String(contractPreviewBody?.textContent || '').trim();
+        if (!preview) {
+          showToast('No hay vista previa para copiar.', 'info');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(preview);
+          showToast('Vista previa copiada.', 'success');
+        } catch (_error) {
+          showToast('No se pudo copiar la vista previa.', 'error');
+        }
+      });
+
+      contractSendEmailBtn?.addEventListener('click', async () => {
+        if (sendingContractEmail) return;
+
+        const toEmail = getPrimaryLeadEmail().toLowerCase();
+        const subject = String(contractEmailSubject?.value || '').trim();
+        const intro = String(contractEmailIntro?.value || '').trim();
+        const preview = String(contractPreviewBody?.textContent || '').trim();
+        const body = [intro, preview].filter(Boolean).join('\n\n');
+
+        if (!isValidEmailFormat(toEmail)) {
+          showToast('Este lead no tiene un email valido para contrato.', 'error');
+          return;
+        }
+        if (!subject) {
+          showToast('Debes escribir un asunto para contrato.', 'error');
+          contractEmailSubject?.focus();
+          return;
+        }
+        if (!body) {
+          showToast('No hay contenido para enviar el contrato.', 'error');
+          return;
+        }
+
+        sendingContractEmail = true;
+        contractSendEmailBtn.disabled = true;
+        contractSendEmailBtn.textContent = 'Enviando...';
+
+        try {
+          await registerLeadEmailSend({
+            toEmail,
+            ccEmails: [],
+            subject,
+            body,
+            provider: 'contract'
+          });
+          showToast('Contrato enviado por correo.', 'success');
+          setContractModalOpen(false);
+        } catch (error) {
+          showToast(error.message || 'No se pudo enviar el contrato.', 'error');
+        } finally {
+          sendingContractEmail = false;
+          contractSendEmailBtn.disabled = false;
+          contractSendEmailBtn.textContent = 'Enviar contrato';
+        }
+      });
+
+      emailPanel.addEventListener('click', (event) => {
+        event.stopPropagation();
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!emailPanel.contains(event.target) && !emailBtn.contains(event.target)) {
+          setEmailPanelOpen(false);
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (contractComposerModal && !contractComposerModal.classList.contains('hidden')) {
+          setContractModalOpen(false);
+          return;
+        }
+        if (emailComposerModal && !emailComposerModal.classList.contains('hidden')) {
+          setComposerModalOpen(false);
+          return;
+        }
+        setEmailPanelOpen(false);
+      });
+    }
+
     // Cargar datos
     initNotesPanel();
     initFilesPanel();
+    initEmailPanel();
     initLeadStatusBadgeControl();
     initLeadAssigneeControls();
     loadLead();

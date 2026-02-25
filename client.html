@@ -613,6 +613,12 @@
       align-items: center;
     }
 
+    .email-anchor {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
     /* Files Panel - Similar a Notes Panel */
     .files-anchor {
       position: relative;
@@ -1208,6 +1214,362 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
       z-index: 5000;
       overflow: visible;
+    }
+
+    .email-panel {
+      position: absolute;
+      top: calc(100% + 12px);
+      right: 0;
+      width: min(320px, calc(100vw - 28px));
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background:
+        linear-gradient(155deg, rgba(21, 29, 44, 0.9) 0%, rgba(16, 23, 35, 0.88) 55%, rgba(10, 16, 26, 0.92) 100%),
+        rgba(10, 16, 26, 0.9);
+      backdrop-filter: blur(20px) saturate(130%);
+      box-shadow:
+        0 20px 42px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      z-index: 5000;
+      overflow: visible;
+    }
+
+    .email-panel::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      right: 12px;
+      width: 14px;
+      height: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      border-left: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(16, 23, 35, 0.93);
+      transform: rotate(45deg);
+      backdrop-filter: blur(20px) saturate(130%);
+      z-index: -1;
+    }
+
+    .email-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .email-panel-title {
+      font-size: 0.86rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .email-panel-close.modal-close-mac {
+      position: static;
+      width: 12px;
+      height: 12px;
+      margin-left: auto;
+      flex-shrink: 0;
+      transform: none;
+    }
+
+    .email-panel-close.modal-close-mac:hover {
+      transform: scale(1.12);
+    }
+
+    .email-panel-body {
+      padding: 12px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .email-option-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .email-option-btn:hover {
+      border-color: rgba(126, 234, 252, 0.55);
+      background: rgba(126, 234, 252, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .email-option-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(126, 234, 252, 0.14);
+      color: #7eeafc;
+      flex-shrink: 0;
+    }
+
+    .email-option-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .email-option-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .email-option-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.94);
+    }
+
+    .email-option-subtitle {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.62);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .email-compose-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 12050;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .email-compose-modal.hidden {
+      display: none;
+    }
+
+    .email-compose-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 8, 16, 0.72);
+      backdrop-filter: blur(7px);
+    }
+
+    .email-compose-content {
+      position: relative;
+      width: min(640px, 96vw);
+      max-height: 92vh;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background:
+        linear-gradient(155deg, rgba(21, 29, 44, 0.98) 0%, rgba(16, 23, 35, 0.96) 100%),
+        rgba(10, 16, 26, 0.95);
+      box-shadow: 0 26px 54px rgba(0, 0, 0, 0.48);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .email-compose-content.contract-compose-content {
+      width: min(880px, 97vw);
+    }
+
+    .email-compose-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .email-compose-title {
+      margin: 0;
+      font-size: 0.94rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .email-compose-close.modal-close-mac {
+      position: static;
+      margin-left: auto;
+      width: 12px;
+      height: 12px;
+      transform: none;
+      flex-shrink: 0;
+    }
+
+    .email-compose-body {
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+    }
+
+    .email-compose-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .email-compose-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .email-compose-field.full {
+      grid-column: 1 / -1;
+    }
+
+    .email-compose-label {
+      font-size: 0.71rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    .email-compose-input,
+    .email-compose-textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(3, 8, 18, 0.42);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 10px 12px;
+      font-size: 0.86rem;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .email-compose-input:focus,
+    .email-compose-textarea:focus {
+      border-color: rgba(59, 130, 246, 0.58);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .email-compose-input[readonly] {
+      opacity: 0.8;
+      cursor: default;
+    }
+
+    .email-compose-textarea {
+      min-height: 220px;
+      line-height: 1.34;
+      resize: vertical;
+    }
+
+    .email-compose-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .email-compose-btn {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
+      padding: 9px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .email-compose-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .email-compose-btn.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(29, 78, 216, 0.95));
+      color: #fff;
+    }
+
+    .email-compose-btn.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38);
+    }
+
+    .email-compose-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .email-contract-contact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .email-contract-contact-item {
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .email-contract-contact-item small {
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.56);
+    }
+
+    .email-contract-contact-item span {
+      font-size: 0.84rem;
+      font-weight: 650;
+      color: rgba(255, 255, 255, 0.92);
+      word-break: break-word;
+    }
+
+    .email-contract-preview {
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(3, 8, 18, 0.44);
+      padding: 12px;
+    }
+
+    .email-contract-preview pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-size: 0.78rem;
+      line-height: 1.42;
+      color: rgba(255, 255, 255, 0.9);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    @media (max-width: 720px) {
+      .email-compose-grid,
+      .email-contract-contact-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .email-compose-content.contract-compose-content {
+        width: min(640px, 97vw);
+      }
     }
 
     .notes-panel::before {
@@ -4114,6 +4476,110 @@
       color: rgba(15, 23, 42, 0.78);
     }
 
+    body.home-active.theme-light .email-panel {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 251, 255, 0.94) 100%),
+        rgba(255, 255, 255, 0.96);
+      box-shadow:
+        0 20px 42px rgba(15, 23, 42, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    body.home-active.theme-light .email-panel::before {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    body.home-active.theme-light .email-panel-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .email-panel-title {
+      color: rgba(15, 23, 42, 0.78);
+    }
+
+    body.home-active.theme-light .email-option-btn {
+      border-color: rgba(15, 23, 42, 0.12);
+      background: rgba(15, 23, 42, 0.04);
+      color: rgba(15, 23, 42, 0.88);
+    }
+
+    body.home-active.theme-light .email-option-btn:hover {
+      border-color: rgba(37, 99, 235, 0.4);
+      background: rgba(37, 99, 235, 0.1);
+    }
+
+    body.home-active.theme-light .email-option-title {
+      color: rgba(15, 23, 42, 0.92);
+    }
+
+    body.home-active.theme-light .email-option-subtitle {
+      color: rgba(15, 23, 42, 0.62);
+    }
+
+    body.home-active.theme-light .email-compose-backdrop {
+      background: rgba(15, 23, 42, 0.38);
+    }
+
+    body.home-active.theme-light .email-compose-content {
+      border-color: rgba(15, 23, 42, 0.16);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.96) 100%),
+        rgba(255, 255, 255, 0.98);
+      box-shadow: 0 26px 54px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .email-compose-header {
+      border-bottom-color: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .email-compose-title {
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    body.home-active.theme-light .email-compose-label {
+      color: rgba(15, 23, 42, 0.54);
+    }
+
+    body.home-active.theme-light .email-compose-input,
+    body.home-active.theme-light .email-compose-textarea {
+      border-color: rgba(15, 23, 42, 0.15);
+      background: rgba(255, 255, 255, 0.9);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .email-compose-input:focus,
+    body.home-active.theme-light .email-compose-textarea:focus {
+      border-color: rgba(37, 99, 235, 0.5);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+
+    body.home-active.theme-light .email-compose-btn {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(15, 23, 42, 0.06);
+      color: rgba(15, 23, 42, 0.84);
+    }
+
+    body.home-active.theme-light .email-compose-btn:hover {
+      background: rgba(15, 23, 42, 0.1);
+    }
+
+    body.home-active.theme-light .email-contract-contact-item,
+    body.home-active.theme-light .email-contract-preview {
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    body.home-active.theme-light .email-contract-contact-item small {
+      color: rgba(15, 23, 42, 0.56);
+    }
+
+    body.home-active.theme-light .email-contract-contact-item span,
+    body.home-active.theme-light .email-contract-preview pre {
+      color: rgba(15, 23, 42, 0.9);
+    }
+
     body.home-active.theme-light .files-upload-zone {
       border-color: rgba(59, 130, 246, 0.3);
       background: rgba(59, 130, 246, 0.05);
@@ -6174,7 +6640,7 @@
                   </button>
                 </div>
 
-                <button class="tool-btn" type="button" aria-label="Correos">
+                <button id="emailsBtn" class="tool-btn" type="button" aria-label="Correos" onclick="window.location.href='index.html#emails'">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="14" rx="2" />
                     <path d="m4 7 8 6 8-6" />
@@ -6382,12 +6848,48 @@
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
                 </svg>
               </button>
-              <button class="action-icon-btn" id="emailBtn" title="Enviar Email">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-              </button>
+              <div class="email-anchor">
+                <button class="action-icon-btn" id="emailBtn" title="Enviar Email" aria-controls="emailPanel" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </button>
+                <section id="emailPanel" class="email-panel hidden" aria-label="Opciones de correo">
+                  <div class="email-panel-header">
+                    <span class="email-panel-title">Correos</span>
+                    <button class="email-panel-close modal-close-mac" id="emailCloseBtn" type="button" title="Cerrar correos"></button>
+                  </div>
+                  <div class="email-panel-body">
+                    <button id="emailCreateBtn" class="email-option-btn" type="button">
+                      <span class="email-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                          <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                      </span>
+                      <span class="email-option-text">
+                        <span class="email-option-title">Crear nuevo correo</span>
+                        <span class="email-option-subtitle">Abrir redaccion para este lead</span>
+                      </span>
+                    </button>
+                    <button id="emailSendContractBtn" class="email-option-btn" type="button">
+                      <span class="email-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14,2 14,8 20,8"></polyline>
+                          <line x1="8" y1="13" x2="16" y2="13"></line>
+                          <line x1="8" y1="17" x2="14" y2="17"></line>
+                        </svg>
+                      </span>
+                      <span class="email-option-text">
+                        <span class="email-option-title">Enviar contrato</span>
+                        <span class="email-option-subtitle">Preparar correo de contrato</span>
+                      </span>
+                    </button>
+                  </div>
+                </section>
+              </div>
               <div class="notes-anchor">
                 <button class="action-icon-btn" id="notesBtn" title="Notas" aria-controls="notesPanel" aria-expanded="false">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7304,6 +7806,81 @@
     </div>
   </main>
 
+  <div id="emailComposerModal" class="email-compose-modal hidden" aria-hidden="true">
+    <div class="email-compose-backdrop" data-close-email-modal="composer"></div>
+    <div class="email-compose-content" role="dialog" aria-modal="true" aria-labelledby="emailComposerTitle">
+      <div class="email-compose-header">
+        <h3 id="emailComposerTitle" class="email-compose-title">Nuevo correo</h3>
+        <button class="email-compose-close modal-close-mac" id="emailComposerCloseBtn" type="button" title="Cerrar"></button>
+      </div>
+      <form id="emailComposerForm" class="email-compose-body">
+        <div class="email-compose-grid">
+          <label class="email-compose-field full">
+            <span class="email-compose-label">Para</span>
+            <input id="emailComposerTo" class="email-compose-input" type="email" maxlength="200" placeholder="cliente@dominio.com" required>
+          </label>
+          <label class="email-compose-field full">
+            <span class="email-compose-label">CC (separados por coma)</span>
+            <input id="emailComposerCc" class="email-compose-input" type="text" maxlength="600" placeholder="gerencia@dominio.com, supervisor@dominio.com">
+          </label>
+          <label class="email-compose-field full">
+            <span class="email-compose-label">Asunto</span>
+            <input id="emailComposerSubject" class="email-compose-input" type="text" maxlength="240" required>
+          </label>
+          <label class="email-compose-field full">
+            <span class="email-compose-label">Mensaje</span>
+            <textarea id="emailComposerBody" class="email-compose-textarea" maxlength="12000" required></textarea>
+          </label>
+        </div>
+        <div class="email-compose-footer">
+          <button id="emailComposerCancelBtn" class="email-compose-btn" type="button">Cancelar</button>
+          <button id="emailComposerSendBtn" class="email-compose-btn primary" type="submit">Enviar correo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="contractComposerModal" class="email-compose-modal hidden" aria-hidden="true">
+    <div class="email-compose-backdrop" data-close-email-modal="contract"></div>
+    <div class="email-compose-content contract-compose-content" role="dialog" aria-modal="true" aria-labelledby="contractComposerTitle">
+      <div class="email-compose-header">
+        <h3 id="contractComposerTitle" class="email-compose-title">Enviar contrato</h3>
+        <button class="email-compose-close modal-close-mac" id="contractComposerCloseBtn" type="button" title="Cerrar"></button>
+      </div>
+      <div class="email-compose-body">
+        <div class="email-contract-contact-grid">
+          <div class="email-contract-contact-item">
+            <small>Numero del cliente</small>
+            <span id="contractContactPhone">No disponible</span>
+          </div>
+          <div class="email-contract-contact-item">
+            <small>Email del cliente</small>
+            <span id="contractContactEmail">No disponible</span>
+          </div>
+        </div>
+        <label class="email-compose-field">
+          <span class="email-compose-label">Asunto del contrato</span>
+          <input id="contractEmailSubject" class="email-compose-input" type="text" maxlength="240" required>
+        </label>
+        <label class="email-compose-field">
+          <span class="email-compose-label">Mensaje breve (encabezado)</span>
+          <textarea id="contractEmailIntro" class="email-compose-textarea" style="min-height:92px;" maxlength="2000"></textarea>
+        </label>
+        <div class="email-compose-field">
+          <span class="email-compose-label">Vista previa del contrato</span>
+          <div class="email-contract-preview">
+            <pre id="contractPreviewBody"></pre>
+          </div>
+        </div>
+        <div class="email-compose-footer">
+          <button id="contractCopyPreviewBtn" class="email-compose-btn" type="button">Copiar vista previa</button>
+          <button id="contractComposerCancelBtn" class="email-compose-btn" type="button">Cancelar</button>
+          <button id="contractSendEmailBtn" class="email-compose-btn primary" type="button">Enviar contrato</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="notesTemplatesModal" class="notes-templates-modal hidden" aria-hidden="true">
     <div id="notesTemplatesModalBackdrop" class="notes-templates-modal-backdrop"></div>
     <div class="notes-templates-modal-content" role="dialog" aria-modal="true" aria-labelledby="notesTemplatesModalTitle">
@@ -7402,7 +7979,7 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260224a"></script>
+  <script src="client.js?v=20260225b"></script>
   <script src="budget.js?v=20260222a"></script>
   <script src="quick-actions.js?v=20260216c"></script>
   <script src="creditors-redesign.js?v=20260222a"></script>

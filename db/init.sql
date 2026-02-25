@@ -1270,3 +1270,27 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications (recipient_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (recipient_username) WHERE read_at IS NULL;
+
+-- ============================================
+-- TABLA: Historial de correos enviados
+-- ============================================
+CREATE TABLE IF NOT EXISTS sent_emails (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT REFERENCES leads(id) ON DELETE SET NULL,
+  author_username VARCHAR(120) NOT NULL,
+  from_email VARCHAR(200),
+  to_email VARCHAR(200) NOT NULL,
+  cc_emails JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subject VARCHAR(240) NOT NULL DEFAULT '',
+  body_preview TEXT NOT NULL DEFAULT '',
+  provider VARCHAR(40) NOT NULL DEFAULT 'mock',
+  provider_message_id VARCHAR(180),
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_sent_emails_author_created ON sent_emails (author_username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_lead_created ON sent_emails (lead_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_status ON sent_emails (status);

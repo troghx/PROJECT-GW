@@ -7,10 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&family=Playfair+Display:ital,wght@1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260224a" />
+    <link rel="stylesheet" href="styles.css?v=20260225a" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -22,21 +22,59 @@
           <img src="reference/CD logo.png" alt="Cero Deuda" />
         </button>
         <h1>Iniciar Sesion</h1>
-        <p class="login-subtitle">Accede para entrar al CRM comercial.</p>
 
         <form id="loginForm" class="login-form">
           <label>
-            Usuario
-            <input type="text" name="username" placeholder="admin" required />
+            Usuario o correo
+            <input
+              id="loginIdentifierInput"
+              type="text"
+              name="identifier"
+              autocomplete="username"
+              required
+            />
           </label>
 
-          <label>
-            Clave
-            <input type="password" name="password" placeholder="1234" required minlength="4" />
-          </label>
+          <div class="pin-auth-wrap">
+            <span class="pin-auth-label">PIN (6 digitos)</span>
+            <div class="pin-input-shell" id="pinInputShell" tabindex="0" role="group" aria-label="PIN de acceso de 6 dígitos">
+              <input
+                id="loginPinInput"
+                class="pin-input-hidden"
+                type="password"
+                name="pin"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="one-time-code"
+              />
+              <div class="pin-dots" id="pinDots" aria-hidden="true">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+              </div>
+            </div>
+            <div class="pin-pad" id="loginPinPad" aria-label="Teclado numérico de PIN">
+              <button type="button" class="pin-pad-btn" data-pin-digit="1">1</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="2">2</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="3">3</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="4">4</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="5">5</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="6">6</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="7">7</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="8">8</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="9">9</button>
+              <button type="button" class="pin-pad-btn pin-pad-btn-action" data-pin-action="clear">C</button>
+              <button type="button" class="pin-pad-btn" data-pin-digit="0">0</button>
+              <button type="button" class="pin-pad-btn pin-pad-btn-action" data-pin-action="backspace" aria-label="Borrar último dígito">⌫</button>
+            </div>
+          </div>
 
           <button type="submit">Entrar</button>
-          <p id="loginStatus" class="status" role="status">Credenciales demo: admin / 1234 | elliot / 1234</p>
+          <p id="loginStatus" class="status" role="status"></p>
         </form>
       </section>
 
@@ -136,7 +174,7 @@
                     </button>
                   </div>
 
-                  <button class="tool-btn" type="button" aria-label="Correos">
+                  <button id="emailsBtn" class="tool-btn" type="button" aria-label="Correos">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <rect x="3" y="5" width="18" height="14" rx="2" />
                       <path d="m4 7 8 6 8-6" />
@@ -617,6 +655,59 @@
         </div>
       </div>
 
+      <!-- VISTA DE CORREOS -->
+      <div id="emailsView" class="leads-view emails-view hidden">
+        <div class="leads-header emails-header">
+          <div class="leads-title-section">
+            <h2>Correos <span class="leads-count" id="emailsCount">(0)</span></h2>
+            <span id="emailsRoleHint" class="emails-role-hint">-</span>
+          </div>
+          <div class="emails-actions-head">
+            <span id="emailsSelectionCount" class="emails-selection-count hidden">0 seleccionados</span>
+            <button id="emailsDeleteSelectedBtn" class="emails-delete-selected-btn hidden" type="button">Eliminar seleccionados</button>
+            <button id="emailsRefreshBtn" class="emails-refresh-btn" type="button">Actualizar</button>
+          </div>
+        </div>
+
+        <div class="emails-table-container">
+          <div class="emails-table-scroll">
+            <table class="emails-table">
+              <thead>
+                <tr>
+                  <th class="emails-select-col">
+                    <label class="email-circle-select" title="Seleccionar todos">
+                      <input id="emailsSelectAll" class="email-select-checkbox" type="checkbox" />
+                      <span class="email-select-circle" aria-hidden="true"></span>
+                    </label>
+                  </th>
+                  <th>Quien lo mando</th>
+                  <th>Relacionado / Destinatario</th>
+                  <th>Asunto</th>
+                  <th>A quien se envio</th>
+                  <th>Fecha de envio</th>
+                  <th>Status</th>
+                  <th class="emails-actions-col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="emailsTableBody">
+                <tr class="email-row empty-state">
+                  <td colspan="8" class="empty-message">
+                    <div class="empty-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                        <path d="m4 7 8 6 8-6"></path>
+                      </svg>
+                      <p>No hay correos para mostrar</p>
+                      <span>Cuando la plataforma envie correos, apareceran aqui.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- MODAL: NUEVO LEAD -->
       <div id="newLeadModal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -681,7 +772,7 @@
     </section>
 
     <script src="crm-helpers.js?v=20260216b"></script>
-    <script src="app.js?v=20260224a"></script>
+    <script src="app.js?v=20260225a"></script>
     <script src="quick-actions.js?v=20260216c"></script>
     <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
     <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
@@ -694,4 +785,3 @@
     </div>
   </body>
 </html>
-

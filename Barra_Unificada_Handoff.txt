@@ -171,3 +171,11 @@ Las paginas escuchan eventos, no manipulan DOM interno de la barra.
 
 Los archivos edge-dom*.html son variantes de prueba y contienen copia de barra.
 No usarlos como fuente principal de verdad para la implementacion final.
+
+==================================================
+8) NUEVA FASE AGREGADA (2026-02-24)
+==================================================
+
+Se agrega la fase de producto:
+- `Fase 06 - Correos + Roles + Cuenta Admin Outlook`
+- Documento detallado: `Fase_Correos_Roles_Obsidian.md`

@@ -13,8 +13,20 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = path.join(__dirname, '..');
 const AUTH_USERS = [
-  { username: 'admin', password: '1234', displayName: 'Admin', role: 'Administrador' },
-  { username: 'elliot', password: '1234', displayName: 'Elliot', role: 'Agente' }
+  {
+    username: 'admin',
+    pin: '112233',
+    displayName: 'Admin',
+    role: 'Admin',
+    email: 'Elliot.Perez@cerodeuda.com'
+  },
+  {
+    username: 'elliot',
+    pin: '654321',
+    displayName: 'Demo Seller',
+    role: 'Seller',
+    email: 'demo.seller@cerodeuda.com'
+  }
 ];
 
 app.use(cors());
@@ -45,6 +57,8 @@ const FILE_ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]);
 const FILE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+let sentEmailsSchemaReady = false;
+let sentEmailsSchemaPromise = null;
 
 const VALID_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -166,13 +180,171 @@ function cleanText(value, maxLength) {
   return text.slice(0, maxLength);
 }
 
-function findAuthUser(username, password) {
-  const normalizedUsername = cleanText(username, 64).toLowerCase();
-  const rawPassword = String(password || '');
-  if (!normalizedUsername || !rawPassword) return null;
-  return AUTH_USERS.find(
-    (user) => user.username === normalizedUsername && user.password === rawPassword
-  ) || null;
+function findAuthUser(identifier, pin) {
+  const normalizedIdentifier = cleanText(identifier, 160).toLowerCase();
+  const normalizedPin = String(pin || '').replace(/\D/g, '');
+  if (!normalizedIdentifier || normalizedPin.length !== 6) return null;
+
+  return AUTH_USERS.find((user) => {
+    const userEmail = cleanText(user.email, 160).toLowerCase();
+    const matchesIdentity = user.username === normalizedIdentifier || userEmail === normalizedIdentifier;
+    return matchesIdentity && user.pin === normalizedPin;
+  }) || null;
+}
+
+function normalizeRoleValue(roleValue) {
+  const normalizedRole = String(roleValue || '').trim().toLowerCase();
+  if (normalizedRole === 'admin') return 'admin';
+  if (normalizedRole === 'seller') return 'seller';
+  return '';
+}
+
+function inferRoleFromIdentity({ role, username, displayName, email }) {
+  const explicitRole = normalizeRoleValue(role);
+  if (explicitRole) return explicitRole;
+
+  const identities = [username, displayName, email]
+    .map((value) => cleanText(value, 160).toLowerCase())
+    .filter(Boolean);
+  if (!identities.length) return '';
+
+  const matchedUser = AUTH_USERS.find((user) => {
+    const options = [
+      cleanText(user.username, 160),
+      cleanText(user.displayName, 160),
+      cleanText(user.email, 160)
+    ]
+      .map((value) => value.toLowerCase())
+      .filter(Boolean);
+    return identities.some((identity) => options.includes(identity));
+  });
+
+  return normalizeRoleValue(matchedUser?.role);
+}
+
+function isAdminRole(roleValue) {
+  return normalizeRoleValue(roleValue) === 'admin';
+}
+
+function parsePositiveInt(value, fallback, min = 1, max = 500) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function getEmailAccessContext(req) {
+  const username = cleanText(req.query.username || req.body?.username, 120).toLowerCase();
+  const displayName = cleanText(req.query.displayName || req.body?.displayName || req.body?.name, 120).toLowerCase();
+  const email = cleanText(req.query.email || req.body?.email, 160).toLowerCase();
+  const role = inferRoleFromIdentity({
+    role: req.query.role || req.body?.role,
+    username,
+    displayName,
+    email
+  });
+  const identities = Array.from(new Set([username, displayName].filter(Boolean)));
+  return { username, displayName, email, role, identities };
+}
+
+function isValidEmailAddress(value) {
+  const normalized = cleanText(value, 200).toLowerCase();
+  if (!normalized) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function normalizeEmailAddressRequired(value, fieldName) {
+  const normalized = cleanText(value, 200).toLowerCase();
+  if (!normalized) {
+    return { ok: false, message: `${fieldName} es obligatorio.` };
+  }
+  if (!isValidEmailAddress(normalized)) {
+    return { ok: false, message: `${fieldName} no tiene un formato valido.` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeEmailAddressOptional(value, fieldName) {
+  const normalized = cleanText(value, 200).toLowerCase();
+  if (!normalized) return { ok: true, value: null };
+  if (!isValidEmailAddress(normalized)) {
+    return { ok: false, message: `${fieldName} no tiene un formato valido.` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeCcEmails(value) {
+  let rawValues = [];
+  if (Array.isArray(value)) {
+    rawValues = value;
+  } else if (typeof value === 'string') {
+    rawValues = value.split(/[,\n;]+/g);
+  } else if (value !== undefined && value !== null) {
+    rawValues = [value];
+  }
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const item of rawValues) {
+    const email = cleanText(item, 200).toLowerCase();
+    if (!email) continue;
+    if (!isValidEmailAddress(email)) {
+      return { ok: false, message: `ccEmails contiene un correo invalido: ${email}` };
+    }
+    if (seen.has(email)) continue;
+    seen.add(email);
+    normalized.push(email);
+  }
+
+  return { ok: true, value: normalized.slice(0, 20) };
+}
+
+function normalizeEmailStatus(value) {
+  const normalized = cleanText(value, 20).toLowerCase();
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'queued') return 'queued';
+  return 'sent';
+}
+
+async function ensureSentEmailsSchema() {
+  if (sentEmailsSchemaReady) return;
+  if (sentEmailsSchemaPromise) {
+    await sentEmailsSchemaPromise;
+    return;
+  }
+
+  sentEmailsSchemaPromise = (async () => {
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS sent_emails (
+         id BIGSERIAL PRIMARY KEY,
+         lead_id BIGINT REFERENCES leads(id) ON DELETE SET NULL,
+         author_username VARCHAR(120) NOT NULL,
+         from_email VARCHAR(200),
+         to_email VARCHAR(200) NOT NULL,
+         cc_emails JSONB NOT NULL DEFAULT '[]'::jsonb,
+         subject VARCHAR(240) NOT NULL DEFAULT '',
+         body_preview TEXT NOT NULL DEFAULT '',
+         provider VARCHAR(40) NOT NULL DEFAULT 'mock',
+         provider_message_id VARCHAR(180),
+         status VARCHAR(20) NOT NULL DEFAULT 'queued',
+         error_message TEXT,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         sent_at TIMESTAMPTZ
+       )`
+    );
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sent_emails_author_created ON sent_emails (author_username, created_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sent_emails_lead_created ON sent_emails (lead_id, created_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sent_emails_status ON sent_emails (status)');
+    sentEmailsSchemaReady = true;
+  })();
+
+  try {
+    await sentEmailsSchemaPromise;
+  } finally {
+    if (!sentEmailsSchemaReady) {
+      sentEmailsSchemaPromise = null;
+    }
+  }
 }
 
 function toNullableText(value, maxLength) {
@@ -2030,11 +2202,18 @@ app.delete('/api/leads/:id/files/:fileId', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const username = cleanText(req.body?.username, 64);
-  const password = String(req.body?.password || '');
+  const identifier = cleanText(
+    req.body?.identifier || req.body?.username || req.body?.email,
+    160
+  );
+  const pin = String(req.body?.pin || req.body?.password || '').replace(/\D/g, '');
 
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Usuario y clave son obligatorios.' });
+  if (!identifier || !pin) {
+    return res.status(400).json({ message: 'Usuario/correo y PIN son obligatorios.' });
+  }
+
+  if (pin.length !== 6) {
+    return res.status(400).json({ message: 'El PIN debe tener 6 digitos.' });
   }
 
   try {
@@ -2043,7 +2222,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(500).json({ message: 'PostgreSQL no esta disponible.' });
   }
 
-  const authUser = findAuthUser(username, password);
+  const authUser = findAuthUser(identifier, pin);
   if (!authUser) {
     return res.status(401).json({ message: 'Credenciales invalidas.' });
   }
@@ -2052,8 +2231,10 @@ app.post('/api/auth/login', async (req, res) => {
     ok: true,
     message: 'Acceso correcto.',
     user: {
-      username: authUser.displayName,
-      role: authUser.role
+      username: authUser.username,
+      displayName: authUser.displayName,
+      role: authUser.role,
+      email: authUser.email || null
     }
   });
 });
@@ -2091,6 +2272,296 @@ app.get('/api/users', async (_req, res) => {
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     return res.status(500).json({ message: 'No se pudieron cargar usuarios.' });
+  }
+});
+
+app.get('/api/emails', async (req, res) => {
+  const access = getEmailAccessContext(req);
+  const role = access.role || 'seller';
+  const limit = parsePositiveInt(req.query.limit, 120, 1, 500);
+
+  if (role !== 'admin' && access.identities.length === 0) {
+    return res.status(400).json({ message: 'username o displayName son obligatorios para Seller.' });
+  }
+
+  try {
+    await ensureSentEmailsSchema();
+
+    const params = [];
+    let whereClause = '';
+
+    if (role !== 'admin') {
+      params.push(access.identities);
+      whereClause = `
+        WHERE (
+          lower(coalesce(se.author_username, '')) = ANY($${params.length}::text[])
+          OR (
+            se.lead_id IS NOT NULL
+            AND lower(coalesce(l.assigned_to, '')) = ANY($${params.length}::text[])
+          )
+        )
+      `;
+    }
+
+    params.push(limit);
+    const limitParam = `$${params.length}`;
+
+    const { rows } = await pool.query(
+      `SELECT
+         se.id,
+         se.lead_id,
+         se.author_username,
+         se.from_email,
+         se.to_email,
+         se.cc_emails,
+         se.subject,
+         se.body_preview,
+         se.provider,
+         se.provider_message_id,
+         se.status,
+         se.error_message,
+         se.created_at,
+         se.sent_at,
+         l.case_id AS lead_case_id,
+         l.full_name AS lead_full_name,
+         l.assigned_to AS lead_assigned_to
+       FROM sent_emails se
+       LEFT JOIN leads l ON l.id = se.lead_id
+       ${whereClause}
+       ORDER BY coalesce(se.sent_at, se.created_at) DESC, se.id DESC
+       LIMIT ${limitParam}`,
+      params
+    );
+
+    return res.json({
+      emails: rows,
+      scope: role === 'admin' ? 'all' : 'seller',
+      canDelete: role === 'admin'
+    });
+  } catch (error) {
+    console.error('Error al obtener correos:', error);
+    return res.status(500).json({ message: 'No se pudieron cargar los correos.' });
+  }
+});
+
+app.post('/api/emails/send', async (req, res) => {
+  const access = getEmailAccessContext(req);
+  const role = access.role || 'seller';
+  const leadId = parsePositiveInteger(req.body?.leadId || req.body?.lead_id);
+  const toEmailInput = req.body?.toEmail ?? req.body?.to_email;
+  const ccInput = req.body?.ccEmails ?? req.body?.cc_emails;
+  const fromInput = req.body?.fromEmail ?? req.body?.from_email ?? access.email;
+  const subject = cleanText(req.body?.subject, 240);
+  const bodyText = String(req.body?.body || '').trim();
+  const provider = cleanText(req.body?.provider, 40) || 'platform';
+  const providerMessageId = cleanText(req.body?.providerMessageId || req.body?.provider_message_id, 180);
+
+  if (!access.username && !access.displayName && !access.email) {
+    return res.status(400).json({ message: 'username/displayName/email son obligatorios para registrar correos.' });
+  }
+
+  if (!leadId) {
+    return res.status(400).json({ message: 'leadId es obligatorio.' });
+  }
+
+  if (!subject) {
+    return res.status(400).json({ message: 'subject es obligatorio.' });
+  }
+
+  if (!bodyText) {
+    return res.status(400).json({ message: 'body es obligatorio.' });
+  }
+
+  const normalizedTo = normalizeEmailAddressRequired(toEmailInput, 'toEmail');
+  if (!normalizedTo.ok) {
+    return res.status(400).json({ message: normalizedTo.message });
+  }
+
+  const normalizedFrom = normalizeEmailAddressOptional(fromInput, 'fromEmail');
+  if (!normalizedFrom.ok) {
+    return res.status(400).json({ message: normalizedFrom.message });
+  }
+
+  const normalizedCc = normalizeCcEmails(ccInput);
+  if (!normalizedCc.ok) {
+    return res.status(400).json({ message: normalizedCc.message });
+  }
+
+  const authorUsername = cleanText(
+    req.body?.authorUsername
+      || req.body?.author_username
+      || access.username
+      || access.displayName
+      || (access.email ? access.email.split('@')[0] : ''),
+    120
+  ).toLowerCase();
+
+  if (!authorUsername) {
+    return res.status(400).json({ message: 'No se pudo resolver authorUsername.' });
+  }
+
+  try {
+    await ensureSentEmailsSchema();
+
+    const { rows: leadRows } = await pool.query(
+      `SELECT id, assigned_to
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!leadRows.length) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    if (!isAdminRole(role)) {
+      if (!access.identities.length) {
+        return res.status(403).json({ message: 'No hay identidad valida para Seller.' });
+      }
+
+      const assignedTo = cleanText(leadRows[0].assigned_to, 120).toLowerCase();
+      if (!assignedTo || !access.identities.includes(assignedTo)) {
+        return res.status(403).json({ message: 'No tienes permisos para enviar correos de este lead.' });
+      }
+    }
+
+    const requestedStatus = normalizeEmailStatus(req.body?.status);
+    const status = requestedStatus;
+    const sentAt = status === 'sent' ? new Date().toISOString() : null;
+    const errorMessage = status === 'failed'
+      ? cleanText(req.body?.errorMessage || req.body?.error_message, 2000)
+      : null;
+    const bodyPreview = cleanText(bodyText.replace(/\s+/g, ' '), 6000);
+    const fallbackMessageId = `platform-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO sent_emails (
+         lead_id,
+         author_username,
+         from_email,
+         to_email,
+         cc_emails,
+         subject,
+         body_preview,
+         provider,
+         provider_message_id,
+         status,
+         error_message,
+         sent_at
+       ) VALUES (
+         $1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12
+       )
+       RETURNING
+         id,
+         lead_id,
+         author_username,
+         from_email,
+         to_email,
+         cc_emails,
+         subject,
+         body_preview,
+         provider,
+         provider_message_id,
+         status,
+         error_message,
+         created_at,
+         sent_at`,
+      [
+        leadId,
+        authorUsername,
+        normalizedFrom.value,
+        normalizedTo.value,
+        JSON.stringify(normalizedCc.value),
+        subject,
+        bodyPreview,
+        provider,
+        providerMessageId || fallbackMessageId,
+        status,
+        errorMessage,
+        sentAt
+      ]
+    );
+
+    return res.status(201).json({
+      ok: true,
+      email: rows[0],
+      message: status === 'sent'
+        ? 'Correo enviado y registrado correctamente.'
+        : 'Correo registrado correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al registrar envio de correo:', error);
+    return res.status(500).json({ message: 'No se pudo registrar el correo.' });
+  }
+});
+
+app.delete('/api/emails/:id', async (req, res) => {
+  const emailId = Number(req.params.id);
+  if (!Number.isInteger(emailId) || emailId <= 0) {
+    return res.status(400).json({ message: 'id de correo invalido.' });
+  }
+
+  const access = getEmailAccessContext(req);
+  const role = access.role || 'seller';
+  if (!isAdminRole(role)) {
+    return res.status(403).json({ message: 'Solo admin puede eliminar correos.' });
+  }
+
+  try {
+    await ensureSentEmailsSchema();
+    const { rows } = await pool.query(
+      `DELETE FROM sent_emails
+       WHERE id = $1
+       RETURNING id`,
+      [emailId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Correo no encontrado.' });
+    }
+
+    return res.json({ ok: true, deletedIds: [Number(rows[0].id)] });
+  } catch (error) {
+    console.error('Error al eliminar correo:', error);
+    return res.status(500).json({ message: 'No se pudo eliminar el correo.' });
+  }
+});
+
+app.post('/api/emails/bulk-delete', async (req, res) => {
+  const access = getEmailAccessContext(req);
+  const role = access.role || 'seller';
+  if (!isAdminRole(role)) {
+    return res.status(403).json({ message: 'Solo admin puede eliminar correos.' });
+  }
+
+  const ids = Array.isArray(req.body?.ids)
+    ? Array.from(new Set(req.body.ids
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)))
+    : [];
+
+  if (!ids.length) {
+    return res.status(400).json({ message: 'ids es obligatorio y debe contener al menos un id valido.' });
+  }
+
+  try {
+    await ensureSentEmailsSchema();
+    const { rows } = await pool.query(
+      `DELETE FROM sent_emails
+       WHERE id = ANY($1::bigint[])
+       RETURNING id`,
+      [ids]
+    );
+
+    const deletedIds = rows.map((row) => Number(row.id)).filter((value) => Number.isInteger(value));
+    return res.json({
+      ok: true,
+      deletedCount: deletedIds.length,
+      deletedIds
+    });
+  } catch (error) {
+    console.error('Error en borrado masivo de correos:', error);
+    return res.status(500).json({ message: 'No se pudieron eliminar los correos.' });
   }
 });
 

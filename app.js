@@ -1,6 +1,13 @@
 ﻿const loginForm = document.getElementById('loginForm');
 const loginStatus = document.getElementById('loginStatus');
+const loginIdentifierInput = document.getElementById('loginIdentifierInput');
+const loginPinInput = document.getElementById('loginPinInput');
+const pinInputShell = document.getElementById('pinInputShell');
+const loginPinPad = document.getElementById('loginPinPad');
+const loginPinDots = Array.from(document.querySelectorAll('#pinDots .pin-dot'));
 const quoteText = document.getElementById('quoteText');
+const quoteContainer = quoteText ? quoteText.closest('.quote-container') : null;
+const pageBg = document.querySelector('.page-bg');
 const authShell = document.getElementById('authShell');
 const dashboardView = document.getElementById('dashboardView');
 const themeSwitch = document.getElementById('themeSwitch');
@@ -25,6 +32,17 @@ const LEAD_SEARCH_DEBOUNCE_MS = 70;
 const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
 const LEAD_SEARCH_SUGGESTION_Z_INDEX = 2147483000;
 const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
+const LOGIN_PIN_LENGTH = 6;
+const LOGIN_BACKGROUND_ROTATE_MS = 6000;
+const LOGIN_BACKGROUND_FADE_OUT_MS = 220;
+const LOGIN_BACKGROUND_FADE_IN_MS = 260;
+const LOGIN_BACKGROUND_IMAGES = [
+  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2100&q=80',
+  'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2100&q=80',
+  'https://images.unsplash.com/photo-1497215842964-222b430dc094?auto=format&fit=crop&w=2100&q=80',
+  'https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&fit=crop&w=2100&q=80',
+  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=2100&q=80'
+];
 
 // Toast notifications
 function showToast(message, type = 'info') {
@@ -55,32 +73,140 @@ function showToast(message, type = 'info') {
 }
 
 const quotes = [
-  'Como gotas de rocÃ­o que alimentan el ocÃ©ano, cada pequeÃ±a acciÃ³n construye mares de transformaciÃ³n.',
-  'En el jardÃ­n de la perseverancia, las semillas de hoy florecen en los bosques del maÃ±ana.',
+  'Como gotas de rocío que alimentan el océano, cada pequeña acción construye mares de transformación.',
+  'En el jardín de la perseverancia, las semillas de hoy florecen en los bosques del mañana.',
   'La excelencia no es un destino, sino el arte de bailar con la disciplina cada amanecer.',
-  'Cuando sirves con el corazÃ³n, cada encuentro se convierte en poesÃ­a y cada gesto, en legado.',
-  'Las montaÃ±as mÃ¡s altas se conquistan un paso a la vez, con la fe de quien sueÃ±a en grande.',
-  'El tiempo es el lienzo; tu dedicaciÃ³n, el pincel. Pinta con pasiÃ³n cada momento.',
-  'Como el faro guÃ­a al navegante perdido, tu compromiso ilumina caminos de esperanza.',
-  'La verdadera riqueza no se mide en nÃºmeros, sino en las vidas que tocas con autenticidad.'
+  'Cuando sirves con el corazón, cada encuentro se convierte en poesía y cada gesto, en legado.',
+  'Las montañas más altas se conquistan un paso a la vez, con la fe de quien sueña en grande.',
+  'El tiempo es el lienzo; tu dedicación, el pincel. Pinta con pasión cada momento.',
+  'Como el faro guía al navegante perdido, tu compromiso ilumina caminos de esperanza.',
+  'La verdadera riqueza no se mide en números, sino en las vidas que tocas con autenticidad.',
+  'El coraje no es la ausencia del miedo, sino la decisión de que algo más importa.',
+  'Cada amanecer es una invitación sin firmar. Tú decides qué harás con ella.',
+  'Las palabras que dices hoy pueden ser el ancla que alguien necesitaba para no hundirse.',
+  'La disciplina es amor propio hecho acción, repetida hasta volverse arte.',
+  'No buscamos clientes; encontramos personas que merecen un nuevo comienzo.',
+  'Hay una diferencia entre trabajar duro y trabajar con propósito. Elige la segunda.',
+  'El éxito más silencioso es el de quien alivia una carga que nadie más vio.',
+  'En cada conversación hay una oportunidad de cambiar el rumbo de una historia.',
+  'Los días difíciles construyen la resistencia que los días fáciles nunca podrían.',
+  'Servir con excelencia es el arte de hacer lo ordinario de manera extraordinaria.',
+  'La confianza se construye gota a gota. Cuídala como si no hubiera manera de rehacerla.',
+  'Detrás de cada número hay una familia, una historia, un sueño que merece ser rescatado.',
+  'El propósito más poderoso no es el que te mueve a ti, sino el que mueve a otros a través de ti.',
+  'Hay días en que el simple hecho de aparecer ya es un acto de valentía. Aparece.',
+  'Lo que haces cuando nadie mira define quién eres cuando todos miran.',
+  'La empatía no es sentir lo que el otro siente; es recordar que también tiene derecho de sentirlo.',
+  'Un momento de escucha verdadera vale más que mil palabras de consuelo vacío.',
+  'El detalle que parece insignificante para ti puede ser el mundo entero para quien lo recibe.',
+  'No medimos nuestro impacto en transacciones; lo medimos en transformaciones.',
+  'La perseverancia es silenciosa. No anuncia su llegada; solo aparece, día tras día.',
+  'Cuando el camino se nubla, el propósito es la brújula que nunca pierde el norte.',
+  'Cada problema resuelto es una puerta que se abre donde antes había un muro.',
+  'La grandeza no grita. Se construye en silencio, con hechos que hablan por sí solos.',
+  'Nadie llega solo a donde quiere llegar. El arte está en ser el impulso de alguien más.',
+  'La paciencia no es esperar; es mantener la calidad de tu trabajo mientras el tiempo hace lo suyo.',
+  'Tu mejor versión no compite con nadie más, solo con quien fuiste ayer.',
+  'Hay una forma de dar que no cuesta dinero: tu presencia, tu atención, tu tiempo.',
+  'El trabajo bien hecho no necesita aplausos; ya lleva su recompensa adentro.',
+  'Cada persona que ayudas a levantarse suma una historia más de valentía al mundo.',
+  'La diferencia entre ordinario y extraordinario es ese pequeño extra que muy pocos están dispuestos a dar.',
+  'Al final del día, no preguntes cuánto lograste. Pregunta cuánto importó.',
+  'Meow',
 ];
 
-let quoteIndex = 0;
+const MEOW_QUOTE = 'Meow';
+const MEOW_EVERY_N_QUOTES = 3;
+const regularQuotes = quotes.filter((quote) => quote !== MEOW_QUOTE);
+let regularQuoteIndex = 0;
+let displayedQuoteCount = 0;
+let loginBackgroundIndex = 0;
+let loginBackgroundTransitionTimer = null;
+
+if (quoteText && regularQuotes.length) {
+  const initialQuote = String(quoteText.textContent || '').trim();
+  const initialIndex = regularQuotes.indexOf(initialQuote);
+  if (initialIndex >= 0) {
+    regularQuoteIndex = (initialIndex + 1) % regularQuotes.length;
+    displayedQuoteCount = 1;
+  }
+}
+
+function getNextQuoteText() {
+  displayedQuoteCount += 1;
+
+  if (displayedQuoteCount % MEOW_EVERY_N_QUOTES === 0) {
+    return MEOW_QUOTE;
+  }
+
+  if (!regularQuotes.length) {
+    return MEOW_QUOTE;
+  }
+
+  const nextQuote = regularQuotes[regularQuoteIndex % regularQuotes.length];
+  regularQuoteIndex = (regularQuoteIndex + 1) % regularQuotes.length;
+  return nextQuote;
+}
+
+function syncQuoteVariant(quoteValue) {
+  if (!quoteContainer) return;
+  const normalizedQuote = String(quoteValue || '').trim();
+  quoteContainer.classList.toggle('quote-meow', normalizedQuote === MEOW_QUOTE);
+}
 
 function rotateQuote() {
   if (!quoteText || authShell.classList.contains('hidden')) {
     return;
   }
 
-  quoteIndex = (quoteIndex + 1) % quotes.length;
+  const nextQuote = getNextQuoteText();
   quoteText.animate([{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], {
     duration: 620,
     easing: 'ease-out'
   });
-  quoteText.textContent = quotes[quoteIndex];
+  quoteText.textContent = nextQuote;
+  syncQuoteVariant(nextQuote);
 }
 
+syncQuoteVariant(quoteText ? quoteText.textContent : '');
+
 setInterval(rotateQuote, 5200);
+
+function applyLoginBackground(index, { animate = false } = {}) {
+  if (!pageBg || !LOGIN_BACKGROUND_IMAGES.length) return;
+  if (document.body.classList.contains('home-active')) return;
+
+  const safeIndex = ((Number(index) || 0) + LOGIN_BACKGROUND_IMAGES.length) % LOGIN_BACKGROUND_IMAGES.length;
+  loginBackgroundIndex = safeIndex;
+
+  const nextImage = LOGIN_BACKGROUND_IMAGES[safeIndex];
+  if (!animate) {
+    pageBg.style.opacity = '1';
+    pageBg.style.backgroundImage = `url('${nextImage}')`;
+    return;
+  }
+
+  if (loginBackgroundTransitionTimer) {
+    clearTimeout(loginBackgroundTransitionTimer);
+    loginBackgroundTransitionTimer = null;
+  }
+
+  pageBg.style.opacity = '0.62';
+  loginBackgroundTransitionTimer = setTimeout(() => {
+    pageBg.style.backgroundImage = `url('${nextImage}')`;
+    pageBg.style.opacity = '1';
+    loginBackgroundTransitionTimer = null;
+  }, LOGIN_BACKGROUND_FADE_OUT_MS);
+}
+
+function rotateLoginBackground() {
+  if (!authShell || authShell.classList.contains('hidden')) return;
+  if (document.body.classList.contains('home-active')) return;
+  const nextIndex = (loginBackgroundIndex + 1) % LOGIN_BACKGROUND_IMAGES.length;
+  applyLoginBackground(nextIndex, { animate: true });
+}
+
+setInterval(rotateLoginBackground, LOGIN_BACKGROUND_ROTATE_MS);
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -92,6 +218,139 @@ async function requestJson(url, options = {}) {
   }
 
   return data;
+}
+
+function sanitizeLoginPin(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, LOGIN_PIN_LENGTH);
+}
+
+function renderLoginPinDots(value = '') {
+  const pinValue = sanitizeLoginPin(value);
+  loginPinDots.forEach((dot, index) => {
+    dot.classList.toggle('filled', index < pinValue.length);
+  });
+}
+
+function setLoginPin(value) {
+  if (!loginPinInput) return;
+  const pinValue = sanitizeLoginPin(value);
+  if (loginPinInput.value !== pinValue) {
+    loginPinInput.value = pinValue;
+  }
+  renderLoginPinDots(pinValue);
+}
+
+function appendLoginPinDigit(digit) {
+  if (!loginPinInput) return;
+  const currentPin = sanitizeLoginPin(loginPinInput.value);
+  if (currentPin.length >= LOGIN_PIN_LENGTH) return;
+  setLoginPin(`${currentPin}${digit}`);
+}
+
+function removeLastLoginPinDigit() {
+  if (!loginPinInput) return;
+  const currentPin = sanitizeLoginPin(loginPinInput.value);
+  if (!currentPin.length) return;
+  setLoginPin(currentPin.slice(0, -1));
+}
+
+function clearLoginPin() {
+  setLoginPin('');
+}
+
+function focusLoginPinInput() {
+  if (!loginPinInput) return;
+  loginPinInput.focus({ preventScroll: true });
+}
+
+function initLoginPinAuth() {
+  if (!loginForm || !loginPinInput) return;
+
+  renderLoginPinDots(loginPinInput.value);
+
+  loginPinInput.addEventListener('input', () => {
+    setLoginPin(loginPinInput.value);
+  });
+
+  loginPinInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      loginForm.requestSubmit();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearLoginPin();
+      return;
+    }
+
+    if (
+      event.key === 'Backspace'
+      || event.key === 'Delete'
+      || event.key === 'Tab'
+      || event.key.startsWith('Arrow')
+    ) {
+      return;
+    }
+
+    if (/^\d$/.test(event.key)) {
+      event.preventDefault();
+      appendLoginPinDigit(event.key);
+      return;
+    }
+
+    if (event.key.length === 1) {
+      event.preventDefault();
+    }
+  });
+
+  if (pinInputShell) {
+    pinInputShell.addEventListener('click', () => {
+      focusLoginPinInput();
+    });
+    pinInputShell.addEventListener('keydown', (event) => {
+      if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+        appendLoginPinDigit(event.key);
+        return;
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault();
+        removeLastLoginPinDigit();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        clearLoginPin();
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        focusLoginPinInput();
+      }
+    });
+  }
+
+  if (loginPinPad) {
+    loginPinPad.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-pin-digit], button[data-pin-action]');
+      if (!button) return;
+
+      const digit = button.dataset.pinDigit;
+      const action = button.dataset.pinAction;
+
+      if (digit && /^\d$/.test(digit)) {
+        appendLoginPinDigit(digit);
+      } else if (action === 'backspace') {
+        removeLastLoginPinDigit();
+      } else if (action === 'clear') {
+        clearLoginPin();
+      }
+
+      focusLoginPinInput();
+    });
+  }
 }
 
 function setAccountMenu(open) {
@@ -369,7 +628,7 @@ function _bindNotifListEvents() {
     if (!item) return;
 
     const notifType = String(item.dataset.type || '').toLowerCase();
-    if (notifType === 'leads_assigned') {
+    if (notifType === 'leads_assigned' || notifType === 'lead_assigned') {
       const session = getSession();
       const username = String(session?.username || '').trim();
       if (username) {
@@ -412,24 +671,42 @@ function showDashboard() {
   authShell.classList.add('hidden');
   dashboardView.classList.remove('hidden');
   document.body.classList.add('home-active');
+  if (loginBackgroundTransitionTimer) {
+    clearTimeout(loginBackgroundTransitionTimer);
+    loginBackgroundTransitionTimer = null;
+  }
+  if (pageBg) pageBg.style.opacity = '1';
+  if (pageBg) pageBg.style.backgroundImage = '';
 }
 
 function showLogin() {
   dashboardView.classList.add('hidden');
   if (calendarView) calendarView.classList.add('hidden');
+  if (emailsView) emailsView.classList.add('hidden');
   authShell.classList.remove('hidden');
   document.body.classList.remove('home-active');
-  loginStatus.textContent = 'Credenciales demo: admin / 1234 | elliot / 1234';
+  applyLoginBackground(loginBackgroundIndex);
+  loginStatus.textContent = '';
+  if (loginForm) loginForm.reset();
+  clearLoginPin();
+  setTimeout(() => {
+    if (loginIdentifierInput) loginIdentifierInput.focus();
+  }, 0);
   _notifUnreadCount = 0;
   syncNotifDotTarget();
   setAccountMenu(false);
   setToolbarExpanded(false);
   isLeadsView = false;
   isCalendarView = false;
+  isEmailsView = false;
   scheduleTasks = [];
   scheduleTasksLoaded = false;
   scheduleOwnerKey = '';
   scheduleNotes = [];
+  allEmailsCache = [];
+  emailsLoaded = false;
+  selectedEmailIds = new Set();
+  updateEmailsCounter(0);
 }
 
 function saveSession(user) {
@@ -451,6 +728,41 @@ function getSession() {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+}
+
+function normalizeSessionRole(roleValue) {
+  const normalizedRole = String(roleValue || '').trim().toLowerCase();
+  if (normalizedRole === 'admin' || normalizedRole === 'administrador') return 'admin';
+  if (normalizedRole === 'seller' || normalizedRole === 'agente') return 'seller';
+  return '';
+}
+
+function getSessionIdentity(session = getSession()) {
+  const username = String(session?.username || session?.name || '').trim();
+  const displayName = String(session?.displayName || session?.name || '').trim();
+  const email = String(session?.email || '').trim();
+  let role = normalizeSessionRole(session?.role);
+  const usernameLower = username.toLowerCase();
+  const displayNameLower = displayName.toLowerCase();
+
+  if (!role) {
+    if (usernameLower === 'admin' || displayNameLower === 'admin' || email.toLowerCase() === 'elliot.perez@cerodeuda.com') {
+      role = 'admin';
+    } else if (usernameLower === 'elliot' || displayNameLower === 'demo seller') {
+      role = 'seller';
+    }
+  }
+
+  return {
+    username,
+    displayName,
+    email,
+    role
+  };
+}
+
+function isCurrentSessionAdmin() {
+  return getSessionIdentity().role === 'admin';
 }
 
 if (themeSwitch) {
@@ -693,9 +1005,11 @@ if (monthSelector) {
 // NavegaciÃ³n entre Dashboard y Leads
 const leadsBtn = document.getElementById('leadsBtn');
 const calendarBtn = document.getElementById('calendarBtn');
+const emailsBtn = document.getElementById('emailsBtn');
 const dashboardGrid = document.querySelector('.dashboard-grid');
 const leadsView = document.getElementById('leadsView');
 const calendarView = document.getElementById('calendarView');
+const emailsView = document.getElementById('emailsView');
 const searchClearBtn = document.getElementById('searchClearBtn');
 const calendarMonthLabel = document.getElementById('calendarMonthLabel');
 const calendarMonthGrid = document.getElementById('calendarMonthGrid');
@@ -710,8 +1024,16 @@ const calendarUpcomingCount = document.getElementById('calendarUpcomingCount');
 const calendarOwnerBadge = document.getElementById('calendarOwnerBadge');
 const calendarNotesBoard = document.getElementById('calendarNotesBoard');
 const calendarAddNoteBtn = document.getElementById('calendarAddNoteBtn');
+const emailsTableBody = document.getElementById('emailsTableBody');
+const emailsCount = document.getElementById('emailsCount');
+const emailsRoleHint = document.getElementById('emailsRoleHint');
+const emailsSelectAll = document.getElementById('emailsSelectAll');
+const emailsDeleteSelectedBtn = document.getElementById('emailsDeleteSelectedBtn');
+const emailsSelectionCount = document.getElementById('emailsSelectionCount');
+const emailsRefreshBtn = document.getElementById('emailsRefreshBtn');
 let isLeadsView = false;
 let isCalendarView = false;
+let isEmailsView = false;
 let allLeadsCache = [];
 let leadSearchIndex = [];
 let currentLeadSearchQuery = '';
@@ -732,10 +1054,16 @@ let scheduleNotes = [];
 let scheduleInteractionsBound = false;
 let scheduleNoteDragState = null;
 let scheduleCompleteLeadInFlight = null;
+let allEmailsCache = [];
+let emailsLoaded = false;
+let emailsRequestInFlight = null;
+let emailsInteractionsBound = false;
+let selectedEmailIds = new Set();
 const SCHEDULE_CALLBACKS_FROM = '2000-01-01';
 const SCHEDULE_NOTES_KEY = 'project_gw_schedule_notes_v1';
 const SCHEDULE_NOTE_MAX_LENGTH = 220;
 const SCHEDULE_NOTE_COLORS = ['yellow', 'pink', 'blue', 'green'];
+const EMAILS_FETCH_LIMIT = 200;
 const LEADS_COLUMN_WIDTHS_KEY = 'project_gw_leads_column_widths_v1';
 const LEADS_COLUMN_MIN_WIDTHS = [30, 130, 78, 90, 86, 76, 76, 88, 64, 56, 64, 64, 40];
 const LEADS_COLUMN_DEFAULT_RATIOS = [3, 16.5, 10, 12, 9.5, 7.5, 7.5, 8.5, 4.5, 5, 6, 6, 4];
@@ -1716,6 +2044,332 @@ function hydrateScheduleForCurrentUser({ forceTasks = false } = {}) {
   void loadScheduleTasks({ force: forceTasks || !scheduleTasksLoaded });
 }
 
+function formatEmailDateTime(dateValue) {
+  if (!dateValue) return '-';
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('es-MX', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function getEmailStatusMeta(statusValue) {
+  const normalized = String(statusValue || '').trim().toLowerCase();
+  if (normalized === 'sent') return { label: 'Enviado', className: 'sent' };
+  if (normalized === 'failed') return { label: 'Fallo', className: 'failed' };
+  return { label: 'En proceso', className: 'queued' };
+}
+
+function updateEmailsCounter(count) {
+  if (!emailsCount) return;
+  const safeCount = Number.isFinite(count) ? count : 0;
+  emailsCount.textContent = `(${safeCount})`;
+}
+
+function updateEmailsRoleUi() {
+  const { role } = getSessionIdentity();
+  const isAdmin = role === 'admin';
+
+  if (emailsView) {
+    emailsView.classList.toggle('is-admin', isAdmin);
+  }
+
+  if (emailsRoleHint) {
+    emailsRoleHint.textContent = isAdmin
+      ? 'Vista global de administracion'
+      : 'Vista Seller: autoria y leads asignados';
+  }
+
+  if (emailsDeleteSelectedBtn) {
+    emailsDeleteSelectedBtn.classList.toggle('hidden', !isAdmin);
+  }
+
+  if (!isAdmin) {
+    selectedEmailIds.clear();
+  }
+}
+
+function syncEmailSelectionUi() {
+  const isAdmin = isCurrentSessionAdmin();
+  const availableIds = new Set(allEmailsCache.map((email) => Number(email.id)));
+  selectedEmailIds = new Set(
+    Array.from(selectedEmailIds).filter((id) => availableIds.has(id))
+  );
+
+  const total = allEmailsCache.length;
+  const selected = selectedEmailIds.size;
+
+  if (emailsSelectionCount) {
+    emailsSelectionCount.classList.toggle('hidden', !(isAdmin && selected > 0));
+    emailsSelectionCount.textContent = `${selected} seleccionado${selected === 1 ? '' : 's'}`;
+  }
+
+  if (emailsDeleteSelectedBtn) {
+    emailsDeleteSelectedBtn.disabled = !(isAdmin && selected > 0);
+  }
+
+  if (emailsSelectAll) {
+    const canSelect = isAdmin && total > 0;
+    emailsSelectAll.disabled = !canSelect;
+    emailsSelectAll.checked = canSelect && selected === total;
+    emailsSelectAll.indeterminate = canSelect && selected > 0 && selected < total;
+  }
+}
+
+function renderEmailsEmptyState(title = 'No hay correos para mostrar', subtitle = 'Cuando la plataforma envie correos, apareceran aqui.') {
+  if (!emailsTableBody) return;
+
+  emailsTableBody.innerHTML = `
+    <tr class="email-row empty-state">
+      <td colspan="8" class="empty-message">
+        <div class="empty-content">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+            <path d="m4 7 8 6 8-6"></path>
+          </svg>
+          <p>${escapeHtml(title)}</p>
+          <span>${escapeHtml(subtitle)}</span>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderEmailsRows(emails) {
+  if (!emailsTableBody) return;
+
+  const rows = Array.isArray(emails) ? emails : [];
+  const isAdmin = isCurrentSessionAdmin();
+  updateEmailsCounter(rows.length);
+  updateEmailsRoleUi();
+
+  if (!rows.length) {
+    renderEmailsEmptyState();
+    syncEmailSelectionUi();
+    return;
+  }
+
+  emailsTableBody.innerHTML = rows.map((email) => {
+    const emailId = Number(email.id);
+    const selected = selectedEmailIds.has(emailId);
+    const statusMeta = getEmailStatusMeta(email.status);
+    const relatedLabel = email.lead_id
+      ? `Lead #${email.lead_case_id || email.lead_id}${email.lead_full_name ? ` · ${email.lead_full_name}` : ''}`
+      : (email.to_email || 'Sin lead relacionado');
+    const relatedCellHtml = email.lead_id
+      ? `<a class="email-related-link" href="/client.html?id=${email.lead_id}">${escapeHtml(relatedLabel)}</a>`
+      : `<span class="email-related-fallback">${escapeHtml(relatedLabel)}</span>`;
+
+    return `
+      <tr class="email-row" data-email-id="${emailId}">
+        <td class="emails-select-col">
+          <label class="email-circle-select" title="Seleccionar correo">
+            <input type="checkbox" class="email-select-checkbox email-row-select" data-email-id="${emailId}" ${selected ? 'checked' : ''} ${isAdmin ? '' : 'disabled'} />
+            <span class="email-select-circle" aria-hidden="true"></span>
+          </label>
+        </td>
+        <td class="email-author">@${escapeHtml(email.author_username || '-')}</td>
+        <td class="email-related">${relatedCellHtml}</td>
+        <td class="email-subject" title="${escapeHtml(email.subject || '')}">${escapeHtml(email.subject || '(Sin asunto)')}</td>
+        <td class="email-destination">${escapeHtml(email.to_email || '-')}</td>
+        <td class="email-date">${formatEmailDateTime(email.sent_at || email.created_at)}</td>
+        <td><span class="email-status-badge ${statusMeta.className}">${statusMeta.label}</span></td>
+        <td class="emails-actions-col">
+          ${isAdmin
+            ? `<button class="email-row-delete-btn" type="button" data-email-id="${emailId}" title="Eliminar correo" aria-label="Eliminar correo">Eliminar</button>`
+            : '<span class="email-no-actions">-</span>'
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  syncEmailSelectionUi();
+}
+
+async function loadEmails(forceReload = false) {
+  if (emailsLoaded && !forceReload) {
+    renderEmailsRows(allEmailsCache);
+    return allEmailsCache;
+  }
+
+  if (emailsRequestInFlight) {
+    return emailsRequestInFlight;
+  }
+
+  emailsRequestInFlight = (async () => {
+    try {
+      const identity = getSessionIdentity();
+      const params = new URLSearchParams();
+      if (identity.username) params.set('username', identity.username);
+      if (identity.displayName) params.set('displayName', identity.displayName);
+      if (identity.email) params.set('email', identity.email);
+      if (identity.role) params.set('role', identity.role);
+      params.set('limit', String(EMAILS_FETCH_LIMIT));
+
+      const data = await requestJson(`/api/emails?${params.toString()}`, { cache: 'no-store' });
+      allEmailsCache = Array.isArray(data?.emails) ? data.emails : [];
+      emailsLoaded = true;
+      renderEmailsRows(allEmailsCache);
+      return allEmailsCache;
+    } catch (error) {
+      console.error('Error cargando correos:', error);
+      allEmailsCache = [];
+      emailsLoaded = false;
+      renderEmailsEmptyState('No se pudieron cargar los correos', error.message || 'Intenta actualizar nuevamente.');
+      updateEmailsCounter(0);
+      return [];
+    } finally {
+      emailsRequestInFlight = null;
+    }
+  })();
+
+  return emailsRequestInFlight;
+}
+
+async function deleteEmailById(emailId) {
+  const numericId = Number(emailId);
+  if (!Number.isInteger(numericId) || numericId <= 0) return;
+  if (!isCurrentSessionAdmin()) {
+    showToast('Solo admins pueden eliminar correos.', 'error');
+    return;
+  }
+
+  const targetEmail = allEmailsCache.find((entry) => Number(entry.id) === numericId);
+  const subjectPreview = String(targetEmail?.subject || '').trim() || `ID ${numericId}`;
+  if (!window.confirm(`Eliminar correo "${subjectPreview}"?`)) return;
+
+  const identity = getSessionIdentity();
+  const params = new URLSearchParams();
+  if (identity.role) params.set('role', identity.role);
+  if (identity.username) params.set('username', identity.username);
+  if (identity.displayName) params.set('displayName', identity.displayName);
+  if (identity.email) params.set('email', identity.email);
+  const query = params.toString();
+
+  await requestJson(`/api/emails/${numericId}${query ? `?${query}` : ''}`, {
+    method: 'DELETE'
+  });
+
+  allEmailsCache = allEmailsCache.filter((entry) => Number(entry.id) !== numericId);
+  selectedEmailIds.delete(numericId);
+  renderEmailsRows(allEmailsCache);
+  showToast('Correo eliminado correctamente.', 'success');
+}
+
+async function deleteSelectedEmails() {
+  if (!isCurrentSessionAdmin()) {
+    showToast('Solo admins pueden eliminar correos.', 'error');
+    return;
+  }
+
+  const ids = Array.from(selectedEmailIds).filter((id) => Number.isInteger(id) && id > 0);
+  if (!ids.length) {
+    showToast('Selecciona al menos un correo.', 'info');
+    return;
+  }
+
+  if (!window.confirm(`Eliminar ${ids.length} correo${ids.length === 1 ? '' : 's'} seleccionados?`)) {
+    return;
+  }
+
+  const identity = getSessionIdentity();
+  const data = await requestJson('/api/emails/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ids,
+      role: identity.role,
+      username: identity.username,
+      displayName: identity.displayName,
+      email: identity.email
+    })
+  });
+
+  const deletedIds = Array.isArray(data?.deletedIds) ? data.deletedIds.map((value) => Number(value)) : ids;
+  const deletedSet = new Set(deletedIds);
+  allEmailsCache = allEmailsCache.filter((entry) => !deletedSet.has(Number(entry.id)));
+  selectedEmailIds = new Set(Array.from(selectedEmailIds).filter((id) => !deletedSet.has(id)));
+  renderEmailsRows(allEmailsCache);
+  showToast(`Se eliminaron ${deletedSet.size || ids.length} correos.`, 'success');
+}
+
+function initializeEmailsInteractions() {
+  if (emailsInteractionsBound) return;
+  emailsInteractionsBound = true;
+
+  if (emailsTableBody) {
+    emailsTableBody.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (!target.classList.contains('email-row-select')) return;
+
+      const emailId = Number(target.dataset.emailId);
+      if (!Number.isInteger(emailId) || emailId <= 0) return;
+      if (!isCurrentSessionAdmin()) return;
+
+      if (target.checked) {
+        selectedEmailIds.add(emailId);
+      } else {
+        selectedEmailIds.delete(emailId);
+      }
+      syncEmailSelectionUi();
+    });
+
+    emailsTableBody.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const deleteBtn = target.closest('.email-row-delete-btn');
+      if (!deleteBtn) return;
+      const emailId = Number(deleteBtn.dataset.emailId);
+      if (!Number.isInteger(emailId) || emailId <= 0) return;
+
+      deleteEmailById(emailId).catch((error) => {
+        console.error('Error eliminando correo:', error);
+        showToast(error.message || 'No se pudo eliminar el correo.', 'error');
+      });
+    });
+  }
+
+  if (emailsSelectAll) {
+    emailsSelectAll.addEventListener('change', (event) => {
+      if (!isCurrentSessionAdmin()) return;
+      const checked = Boolean(event.target.checked);
+      const ids = allEmailsCache.map((email) => Number(email.id)).filter((id) => Number.isInteger(id) && id > 0);
+      selectedEmailIds = checked ? new Set(ids) : new Set();
+
+      if (emailsTableBody) {
+        emailsTableBody.querySelectorAll('.email-row-select').forEach((checkbox) => {
+          checkbox.checked = checked;
+        });
+      }
+      syncEmailSelectionUi();
+    });
+  }
+
+  if (emailsDeleteSelectedBtn) {
+    emailsDeleteSelectedBtn.addEventListener('click', () => {
+      deleteSelectedEmails().catch((error) => {
+        console.error('Error en borrado masivo de correos:', error);
+        showToast(error.message || 'No se pudieron eliminar los correos.', 'error');
+      });
+    });
+  }
+
+  if (emailsRefreshBtn) {
+    emailsRefreshBtn.addEventListener('click', () => {
+      loadEmails(true).catch((error) => {
+        console.error('Error al refrescar correos:', error);
+        showToast(error.message || 'No se pudieron actualizar los correos.', 'error');
+      });
+    });
+  }
+}
+
 function setToolbarRouteButtonState(routeName) {
   if (leadsBtn) {
     const leadsActive = routeName === 'leads';
@@ -1727,11 +2381,17 @@ function setToolbarRouteButtonState(routeName) {
     calendarBtn.style.background = calendarActive ? 'var(--accent)' : '';
     calendarBtn.style.color = calendarActive ? '#000' : '';
   }
+  if (emailsBtn) {
+    const emailsActive = routeName === 'emails';
+    emailsBtn.style.background = emailsActive ? 'var(--accent)' : '';
+    emailsBtn.style.color = emailsActive ? '#000' : '';
+  }
 }
 
 function showCalendarView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
+  if (emailsView) emailsView.classList.add('hidden');
   if (calendarView) {
     calendarView.classList.remove('hidden');
     calendarView.animate(
@@ -1747,10 +2407,39 @@ function showCalendarView() {
   }
   isLeadsView = false;
   isCalendarView = true;
+  isEmailsView = false;
   setToolbarRouteButtonState('calendar');
   hideLeadSearchSuggestions();
   initializeScheduleInteractions();
   hydrateScheduleForCurrentUser({ forceTasks: true });
+}
+
+function showEmailsView() {
+  if (dashboardGrid) dashboardGrid.classList.add('hidden');
+  if (leadsView) leadsView.classList.add('hidden');
+  if (calendarView) calendarView.classList.add('hidden');
+  if (emailsView) {
+    emailsView.classList.remove('hidden');
+    emailsView.animate(
+      [
+        { opacity: 0, transform: 'translateY(14px)' },
+        { opacity: 1, transform: 'translateY(0)' }
+      ],
+      {
+        duration: 360,
+        easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+      }
+    );
+  }
+
+  isLeadsView = false;
+  isCalendarView = false;
+  isEmailsView = true;
+  setToolbarRouteButtonState('emails');
+  hideLeadSearchSuggestions();
+  updateEmailsRoleUi();
+  initializeEmailsInteractions();
+  void loadEmails();
 }
 
 function initializeScheduleInteractions() {
@@ -1911,6 +2600,7 @@ function initializeScheduleInteractions() {
 function showLeadsView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
   if (calendarView) calendarView.classList.add('hidden');
+  if (emailsView) emailsView.classList.add('hidden');
   if (leadsView) {
     leadsView.classList.remove('hidden');
     leadsView.animate([
@@ -1925,6 +2615,7 @@ function showLeadsView() {
   }
   isLeadsView = true;
   isCalendarView = false;
+  isEmailsView = false;
   setToolbarRouteButtonState('leads');
   void loadLeads();
 }
@@ -1944,6 +2635,7 @@ function initializeStateTypes() {
 function showDashboardView() {
   if (calendarView) calendarView.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
+  if (emailsView) emailsView.classList.add('hidden');
   if (dashboardGrid) {
     dashboardGrid.classList.remove('hidden');
     dashboardGrid.animate([
@@ -1957,6 +2649,7 @@ function showDashboardView() {
   isLeadsView = false;
   // Restaurar estado del botÃ³n
   isCalendarView = false;
+  isEmailsView = false;
   setToolbarRouteButtonState('dashboard');
 }
 
@@ -1966,6 +2659,8 @@ function applyDashboardRouteFromHash() {
     showLeadsView();
   } else if (route === 'calendar') {
     showCalendarView();
+  } else if (route === 'emails') {
+    showEmailsView();
   } else {
     showDashboardView();
   }
@@ -1985,6 +2680,15 @@ if (calendarBtn) {
     showCalendarView();
     if (window.location.hash !== '#calendar') {
       window.location.hash = 'calendar';
+    }
+  });
+}
+
+if (emailsBtn) {
+  emailsBtn.addEventListener('click', () => {
+    showEmailsView();
+    if (window.location.hash !== '#emails') {
+      window.location.hash = 'emails';
     }
   });
 }
@@ -2852,14 +3556,26 @@ function getLeadBadgesCell(lead, leadMapById) {
   `;
 }
 if (loginForm) {
+  initLoginPinAuth();
+
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const formData = new FormData(loginForm);
     const payload = {
-      username: String(formData.get('username') || '').trim(),
-      password: String(formData.get('password') || '')
+      identifier: String(formData.get('identifier') || '').trim(),
+      pin: sanitizeLoginPin(formData.get('pin'))
     };
+
+    if (!payload.identifier) {
+      loginStatus.textContent = 'Ingresa usuario o correo.';
+      return;
+    }
+    if (payload.pin.length !== LOGIN_PIN_LENGTH) {
+      loginStatus.textContent = 'El PIN debe tener 6 digitos.';
+      focusLoginPinInput();
+      return;
+    }
 
     loginStatus.textContent = 'Validando acceso...';
 
