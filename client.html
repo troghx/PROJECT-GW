@@ -575,6 +575,161 @@
       cursor: not-allowed;
       transform: none;
     }
+
+    .pull-credit-btn {
+      height: 30px;
+      border: 1px solid rgba(56, 189, 248, 0.42);
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.16);
+      color: #bae6fd;
+      padding: 0 12px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, color 0.18s ease;
+      white-space: nowrap;
+    }
+
+    .pull-credit-btn:hover {
+      background: rgba(56, 189, 248, 0.24);
+      border-color: rgba(125, 211, 252, 0.58);
+      color: #e0f2fe;
+      transform: translateY(-1px);
+    }
+
+    .pull-credit-btn.unlock-flash {
+      animation: pull-credit-unlock-flash 1.1s ease-in-out 2;
+    }
+
+    @keyframes pull-credit-unlock-flash {
+      0% {
+        opacity: 0.28;
+        box-shadow: 0 0 0 rgba(125, 211, 252, 0);
+      }
+      35% {
+        opacity: 1;
+        box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.12);
+      }
+      65% {
+        opacity: 0.46;
+        box-shadow: 0 0 0 8px rgba(125, 211, 252, 0);
+      }
+      100% {
+        opacity: 1;
+        box-shadow: 0 0 0 rgba(125, 211, 252, 0);
+      }
+    }
+
+    .pull-credit-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .pull-credit-modal.hidden {
+      display: none;
+    }
+
+    .pull-credit-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(8px);
+    }
+
+    .pull-credit-modal-content {
+      position: relative;
+      z-index: 1;
+      width: min(460px, 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(14, 116, 144, 0.22) 100%);
+      box-shadow: 0 28px 64px rgba(2, 6, 23, 0.58);
+      padding: 18px 18px 20px;
+    }
+
+    .pull-credit-modal-header {
+      margin-bottom: 16px;
+      padding-right: 38px;
+    }
+
+    .pull-credit-modal-close.modal-close-mac {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+    }
+
+    .pull-credit-modal-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.95);
+      letter-spacing: 0.2px;
+    }
+
+    .pull-credit-modal-subtitle {
+      margin: 6px 0 0;
+      font-size: 0.82rem;
+      color: rgba(226, 232, 240, 0.82);
+      line-height: 1.35;
+    }
+
+    .pull-credit-modal-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .pull-credit-option-btn {
+      width: 100%;
+      border: 1px solid rgba(56, 189, 248, 0.34);
+      border-radius: 11px;
+      background: rgba(15, 118, 110, 0.18);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 11px 12px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, color 0.18s ease;
+    }
+
+    .pull-credit-option-btn:hover {
+      border-color: rgba(125, 211, 252, 0.62);
+      background: rgba(14, 165, 233, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .pull-credit-option-btn strong {
+      display: block;
+      font-size: 0.86rem;
+      line-height: 1.2;
+    }
+
+    .pull-credit-option-btn small {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.74rem;
+      color: rgba(226, 232, 240, 0.78);
+      line-height: 1.25;
+    }
+
+    .pull-credit-option-btn:disabled,
+    .pull-credit-option-btn.disabled {
+      border-color: rgba(148, 163, 184, 0.32);
+      background: rgba(71, 85, 105, 0.32);
+      color: rgba(148, 163, 184, 0.9);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .pull-credit-option-btn:disabled small,
+    .pull-credit-option-btn.disabled small {
+      color: rgba(148, 163, 184, 0.8);
+    }
     
     .action-icon-btn {
       width: 36px;
@@ -4434,6 +4589,60 @@
       color: rgba(15, 23, 42, 0.58);
     }
 
+    body.home-active.theme-light .pull-credit-btn {
+      border-color: rgba(2, 132, 199, 0.36);
+      background: rgba(14, 165, 233, 0.14);
+      color: rgba(8, 47, 73, 0.95);
+    }
+
+    body.home-active.theme-light .pull-credit-btn:hover {
+      border-color: rgba(2, 132, 199, 0.54);
+      background: rgba(14, 165, 233, 0.2);
+      color: rgba(3, 37, 65, 0.96);
+    }
+
+    body.home-active.theme-light .pull-credit-modal-content {
+      border-color: rgba(15, 23, 42, 0.16);
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.99) 0%, rgba(239, 246, 255, 0.95) 100%);
+      box-shadow: 0 24px 52px rgba(15, 23, 42, 0.2);
+    }
+
+    body.home-active.theme-light .pull-credit-modal-title {
+      color: rgba(15, 23, 42, 0.93);
+    }
+
+    body.home-active.theme-light .pull-credit-modal-subtitle {
+      color: rgba(15, 23, 42, 0.7);
+    }
+
+    body.home-active.theme-light .pull-credit-option-btn {
+      border-color: rgba(2, 132, 199, 0.28);
+      background: rgba(14, 165, 233, 0.1);
+      color: rgba(15, 23, 42, 0.9);
+    }
+
+    body.home-active.theme-light .pull-credit-option-btn:hover {
+      border-color: rgba(2, 132, 199, 0.46);
+      background: rgba(14, 165, 233, 0.16);
+      color: rgba(12, 74, 110, 0.95);
+    }
+
+    body.home-active.theme-light .pull-credit-option-btn small {
+      color: rgba(15, 23, 42, 0.66);
+    }
+
+    body.home-active.theme-light .pull-credit-option-btn:disabled,
+    body.home-active.theme-light .pull-credit-option-btn.disabled {
+      border-color: rgba(148, 163, 184, 0.46);
+      background: rgba(226, 232, 240, 0.82);
+      color: rgba(100, 116, 139, 0.9);
+    }
+
+    body.home-active.theme-light .pull-credit-option-btn:disabled small,
+    body.home-active.theme-light .pull-credit-option-btn.disabled small {
+      color: rgba(100, 116, 139, 0.82);
+    }
+
     body.home-active.theme-light .notes-panel {
       border-color: rgba(15, 23, 42, 0.16);
       background:
@@ -6782,6 +6991,9 @@
             
             <!-- Botones de acción al lado del Case ID -->
             <div class="case-id-actions">
+              <button id="pullCreditBtn" class="pull-credit-btn hidden" type="button" title="Pull Credit report">
+                Pull Credit
+              </button>
               <div class="lead-assignee-wrap">
                 <div class="lead-assignee-meta">
                   <span class="lead-assignee-label">Assigned To</span>
@@ -7877,6 +8089,27 @@
           <button id="contractComposerCancelBtn" class="email-compose-btn" type="button">Cancelar</button>
           <button id="contractSendEmailBtn" class="email-compose-btn primary" type="button">Enviar contrato</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pullCreditModal" class="pull-credit-modal hidden" aria-hidden="true">
+    <div id="pullCreditModalBackdrop" class="pull-credit-modal-backdrop"></div>
+    <div class="pull-credit-modal-content" role="dialog" aria-modal="true" aria-labelledby="pullCreditModalTitle">
+      <button class="modal-close-mac pull-credit-modal-close" id="pullCreditModalCloseBtn" type="button" title="Cerrar"></button>
+      <div class="pull-credit-modal-header">
+        <h3 id="pullCreditModalTitle" class="pull-credit-modal-title">Pull Credit Report</h3>
+        <p class="pull-credit-modal-subtitle">Selecciona de quien quieres ejecutar el credit pull.</p>
+      </div>
+      <div class="pull-credit-modal-actions">
+        <button id="pullCreditApplicantBtn" class="pull-credit-option-btn" type="button">
+          <strong>Applicant</strong>
+          <small id="pullCreditApplicantText">-</small>
+        </button>
+        <button id="pullCreditCoappBtn" class="pull-credit-option-btn" type="button">
+          <strong>Co-Applicant</strong>
+          <small id="pullCreditCoappText">Completa datos del coapp para habilitar.</small>
+        </button>
       </div>
     </div>
   </div>

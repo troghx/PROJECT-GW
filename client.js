@@ -797,6 +797,14 @@
     const leadAssigneeSuggestions = document.getElementById('leadAssigneeSuggestions');
     const leadAssigneeToggleBtn = document.getElementById('leadAssigneeToggleBtn');
     const confirmAssigneeBtn = document.getElementById('confirmAssigneeBtn');
+    const pullCreditBtn = document.getElementById('pullCreditBtn');
+    const pullCreditModal = document.getElementById('pullCreditModal');
+    const pullCreditModalBackdrop = document.getElementById('pullCreditModalBackdrop');
+    const pullCreditModalCloseBtn = document.getElementById('pullCreditModalCloseBtn');
+    const pullCreditApplicantBtn = document.getElementById('pullCreditApplicantBtn');
+    const pullCreditCoappBtn = document.getElementById('pullCreditCoappBtn');
+    const pullCreditApplicantText = document.getElementById('pullCreditApplicantText');
+    const pullCreditCoappText = document.getElementById('pullCreditCoappText');
     let originalName = '';
     let caseIdValue = '';
     let currentLeadId = null;
@@ -809,6 +817,8 @@
     let assigneeSuggestionsOpen = false;
     let assigneeActiveIndex = -1;
     let assigneeVisibleUsers = [];
+    let pullCreditModalOpen = false;
+    let pullCreditWasVisible = false;
     let relatedBadgeRequestVersion = 0;
     const zipLocationCache = new Map();
     const notesBtn = document.getElementById('notesBtn');
@@ -982,6 +992,7 @@
       syncBestTimeSelectValue(lead);
       syncLeadStatusBadge(lead);
       syncLeadAssigneeControl(lead);
+      updatePullCreditAvailability(lead);
     }
 
     function normalizeAssigneeName(value) {
@@ -1254,6 +1265,172 @@
           closeAssigneeSuggestions();
         }
       });
+    }
+
+    function hasRequiredPullCreditValue(value) {
+      return String(value ?? '').trim() !== '';
+    }
+
+    function getApplicantPullCreditEligibility(lead = currentLeadData) {
+      const sourceLead = lead && typeof lead === 'object' ? lead : {};
+      const requiredValues = [
+        formatPhoneValue(sourceLead.home_phone || sourceLead.phone || ''),
+        formatPhoneValue(sourceLead.cell_phone || sourceLead.phone || ''),
+        toIsoDateOnly(sourceLead.dob),
+        String(sourceLead.email || '').trim(),
+        String(sourceLead.ssn || '').trim(),
+        String(sourceLead.city || '').trim(),
+        formatZipCodeValue(sourceLead.zip_code || '')
+      ];
+      const missingCount = requiredValues.filter((value) => !hasRequiredPullCreditValue(value)).length;
+      return { isEligible: missingCount === 0, missingCount };
+    }
+
+    function getCoappPullCreditEligibility(lead = currentLeadData) {
+      const sourceLead = lead && typeof lead === 'object' ? lead : {};
+      const requiredValues = [
+        normalizePersonName(sourceLead.co_applicant_name || ''),
+        formatPhoneValue(sourceLead.co_applicant_home_phone || ''),
+        formatPhoneValue(sourceLead.co_applicant_cell_phone || ''),
+        toIsoDateOnly(sourceLead.co_applicant_dob),
+        String(sourceLead.co_applicant_email || '').trim(),
+        String(sourceLead.co_applicant_ssn || '').trim()
+      ];
+      const missingCount = requiredValues.filter((value) => !hasRequiredPullCreditValue(value)).length;
+      return { isEligible: missingCount === 0, missingCount };
+    }
+
+    function updatePullCreditModalOptions(lead = currentLeadData) {
+      if (!pullCreditApplicantBtn || !pullCreditCoappBtn) return;
+      const sourceLead = lead && typeof lead === 'object' ? lead : {};
+      const applicantName = normalizePersonName(sourceLead.full_name || applicantData.fullName || '') || 'Applicant';
+      const coappName = normalizePersonName(sourceLead.co_applicant_name || coApplicantData.fullName || '');
+      const applicantEligibility = getApplicantPullCreditEligibility(sourceLead);
+      const coappEligibility = getCoappPullCreditEligibility(sourceLead);
+
+      pullCreditApplicantBtn.disabled = !applicantEligibility.isEligible;
+      pullCreditApplicantBtn.classList.toggle('disabled', !applicantEligibility.isEligible);
+      if (pullCreditApplicantText) {
+        pullCreditApplicantText.textContent = applicantName;
+      }
+
+      pullCreditCoappBtn.disabled = !coappEligibility.isEligible;
+      pullCreditCoappBtn.classList.toggle('disabled', !coappEligibility.isEligible);
+      if (pullCreditCoappText) {
+        pullCreditCoappText.textContent = coappEligibility.isEligible
+          ? (coappName || 'Co-Applicant')
+          : 'Completa datos de contacto del coapp para habilitar.';
+      }
+    }
+
+    function setPullCreditModalOpen(isOpen) {
+      if (!pullCreditModal) return;
+      const shouldOpen = Boolean(isOpen);
+      pullCreditModalOpen = shouldOpen;
+      pullCreditModal.classList.toggle('hidden', !shouldOpen);
+      pullCreditModal.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+
+      if (shouldOpen) {
+        updatePullCreditModalOptions(currentLeadData);
+        const targetFocus = !pullCreditApplicantBtn?.disabled ? pullCreditApplicantBtn : pullCreditCoappBtn;
+        setTimeout(() => targetFocus?.focus(), 0);
+      }
+    }
+
+    function updatePullCreditAvailability(lead = currentLeadData) {
+      if (!pullCreditBtn) return;
+      const applicantEligibility = getApplicantPullCreditEligibility(lead);
+      const canShowButton = applicantEligibility.isEligible;
+      pullCreditBtn.classList.toggle('hidden', !canShowButton);
+      if (canShowButton && !pullCreditWasVisible) {
+        pullCreditBtn.classList.remove('unlock-flash');
+        void pullCreditBtn.offsetWidth;
+        pullCreditBtn.classList.add('unlock-flash');
+      } else if (!canShowButton) {
+        pullCreditBtn.classList.remove('unlock-flash');
+      }
+      pullCreditWasVisible = canShowButton;
+
+      if (!canShowButton && pullCreditModalOpen) {
+        setPullCreditModalOpen(false);
+      }
+
+      updatePullCreditModalOptions(lead);
+    }
+
+    function triggerPullCreditSelection(party) {
+      const normalizedParty = party === 'coapp' ? 'coapp' : 'applicant';
+      if (normalizedParty === 'coapp' && !getCoappPullCreditEligibility(currentLeadData).isEligible) {
+        return;
+      }
+      if (normalizedParty === 'applicant' && !getApplicantPullCreditEligibility(currentLeadData).isEligible) {
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent('lead:pull-credit-requested', {
+        detail: {
+          leadId: Number(currentLeadId || 0) || null,
+          party: normalizedParty,
+          lead: currentLeadData || null
+        }
+      }));
+
+      showToast(
+        normalizedParty === 'coapp'
+          ? 'Pull Credit listo para Co-Applicant. Integracion API pendiente.'
+          : 'Pull Credit listo para Applicant. Integracion API pendiente.',
+        'info'
+      );
+      setPullCreditModalOpen(false);
+    }
+
+    function initPullCreditControls() {
+      if (!pullCreditBtn || !pullCreditModal || !pullCreditApplicantBtn || !pullCreditCoappBtn) return;
+      if (pullCreditBtn.dataset.bound === '1') return;
+      pullCreditBtn.dataset.bound = '1';
+
+      pullCreditBtn.addEventListener('click', () => {
+        const applicantEligibility = getApplicantPullCreditEligibility(currentLeadData);
+        if (!applicantEligibility.isEligible) {
+          showToast('Completa Informacion de Contacto, City y ZIP Code antes de Pull Credit.', 'info');
+          updatePullCreditAvailability(currentLeadData);
+          return;
+        }
+        setPullCreditModalOpen(true);
+      });
+
+      pullCreditBtn.addEventListener('animationend', (event) => {
+        if (event.animationName === 'pull-credit-unlock-flash') {
+          pullCreditBtn.classList.remove('unlock-flash');
+        }
+      });
+
+      pullCreditModalBackdrop?.addEventListener('click', () => {
+        setPullCreditModalOpen(false);
+      });
+
+      pullCreditModalCloseBtn?.addEventListener('click', () => {
+        setPullCreditModalOpen(false);
+      });
+
+      pullCreditApplicantBtn.addEventListener('click', () => {
+        if (pullCreditApplicantBtn.disabled) return;
+        triggerPullCreditSelection('applicant');
+      });
+
+      pullCreditCoappBtn.addEventListener('click', () => {
+        if (pullCreditCoappBtn.disabled) return;
+        triggerPullCreditSelection('coapp');
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && pullCreditModalOpen) {
+          event.preventDefault();
+          setPullCreditModalOpen(false);
+        }
+      });
+
+      updatePullCreditAvailability(currentLeadData);
     }
 
     function setPartyFieldDisplay(fieldElement, value) {
@@ -7743,6 +7920,7 @@
     initEmailPanel();
     initLeadStatusBadgeControl();
     initLeadAssigneeControls();
+    initPullCreditControls();
     loadLead();
 
 
