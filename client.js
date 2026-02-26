@@ -47,9 +47,11 @@
       'Transferred to CCCF'
     ];
     const SESSION_KEY = 'project_gw_session';
+    const AUTH_TOKEN_KEY = 'project_gw_auth_token';
     const THEME_KEY = 'project_gw_theme';
     const COLOR_KEY = 'project_gw_accent_color';
     const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
+    const sessionHandleTag = document.getElementById('sessionHandleTag');
 
     function normalizePreferenceOwner(owner) {
       return String(owner || '')
@@ -66,6 +68,81 @@
         return parsed && typeof parsed === 'object' ? parsed : null;
       } catch (_error) {
         return null;
+      }
+    }
+
+    function isSessionAdmin(session = readSessionUser()) {
+      const role = String(session?.role || '').trim().toLowerCase();
+      const username = String(session?.username || session?.name || '').trim().toLowerCase();
+      const displayName = String(session?.displayName || '').trim().toLowerCase();
+      const email = String(session?.email || '').trim().toLowerCase();
+      if (role === 'admin') return true;
+      return username === 'admin' || displayName === 'admin' || email === 'elliot.perez@cerodeuda.com';
+    }
+
+    function readAuthToken() {
+      return String(localStorage.getItem(AUTH_TOKEN_KEY) || '').trim();
+    }
+
+    function clearAuthState() {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+
+    function ensureAuthFetchPatched() {
+      if (window.__crmAuthFetchPatched) return;
+      window.__crmAuthFetchPatched = true;
+
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = async (input, init = {}) => {
+        const requestUrl = typeof input === 'string'
+          ? input
+          : (input instanceof Request ? input.url : String(input || ''));
+        const parsedUrl = new URL(requestUrl, window.location.origin);
+        const sameOrigin = parsedUrl.origin === window.location.origin;
+        const isApiRequest = sameOrigin && parsedUrl.pathname.startsWith('/api/');
+        const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login' || parsedUrl.pathname === '/api/health';
+
+        if (!isApiRequest || isPublicAuthRoute) {
+          return nativeFetch(input, init);
+        }
+
+        const headers = new Headers(
+          init.headers || (input instanceof Request ? input.headers : undefined)
+        );
+        const token = readAuthToken();
+        if (token && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
+
+        const response = await nativeFetch(input, { ...init, headers });
+        if (response.status === 401) {
+          clearAuthState();
+          window.location.href = 'index.html';
+        }
+        return response;
+      };
+    }
+
+    ensureAuthFetchPatched();
+
+    function getSessionHandleLabel(session = readSessionUser()) {
+      const displayName = String(session?.displayName || session?.name || '').trim();
+      const username = String(session?.username || session?.name || '').trim();
+      const handleBase = displayName || username;
+      if (!handleBase) return '';
+      return `@${handleBase}`;
+    }
+
+    function syncSessionHandleTag(session = readSessionUser()) {
+      if (!sessionHandleTag) return;
+      const nextHandle = getSessionHandleLabel(session);
+      sessionHandleTag.textContent = nextHandle;
+      sessionHandleTag.classList.toggle('hidden', !nextHandle);
+      if (nextHandle) {
+        sessionHandleTag.setAttribute('title', nextHandle);
+      } else {
+        sessionHandleTag.removeAttribute('title');
       }
     }
 
@@ -145,6 +222,12 @@
     }
 
     const initialSessionUser = readSessionUser();
+    const initialAuthToken = readAuthToken();
+    if (!initialSessionUser || !initialAuthToken) {
+      clearAuthState();
+      window.location.href = 'index.html';
+    }
+    syncSessionHandleTag(initialSessionUser);
     applyTheme(getInitialTheme(initialSessionUser), { owner: initialSessionUser });
     applyAccentColor(getInitialAccentColor(initialSessionUser), { owner: initialSessionUser });
 
@@ -303,6 +386,7 @@
     // ============================================
     const accountBtn = document.getElementById('accountBtn');
     const accountMenu = document.getElementById('accountMenu');
+    const manageUsersBtnClient = document.getElementById('manageUsersBtnClient');
     
     if (accountBtn && accountMenu) {
       accountBtn.addEventListener('click', (e) => {
@@ -324,12 +408,21 @@
         accountBtn.setAttribute('aria-expanded', 'false');
       });
     }
+
+    if (manageUsersBtnClient) {
+      manageUsersBtnClient.classList.toggle('hidden', !isSessionAdmin());
+      manageUsersBtnClient.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.href = 'index.html#admin-users';
+      });
+    }
     
     // Cerrar sesión
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem(SESSION_KEY);
+        clearAuthState();
         window.location.href = 'index.html';
       });
     }

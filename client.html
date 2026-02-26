@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260224a">
+  <link rel="stylesheet" href="styles.css?v=20260226f">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <link rel="stylesheet" href="budget.css?v=20260219d">
@@ -28,7 +28,7 @@
       min-height: var(--lead-viewport-height);
       height: var(--lead-viewport-height);
       position: relative;
-      z-index: 1;
+      z-index: 5;
       overflow-y: auto;
       overflow-x: hidden;
       display: flex;
@@ -6760,6 +6760,7 @@
 <body class="home-active theme-dark">
   <div class="page-bg"></div>
   <div class="page-overlay"></div>
+  <div class="page-watermark" aria-hidden="true"></div>
   
   <main class="lead-view-wrapper">
     <div class="lead-floating">
@@ -6864,6 +6865,7 @@
 
       <!-- Account Actions -->
       <div class="home-actions" aria-label="Cuenta y ajustes">
+        <span id="sessionHandleTag" class="session-handle-tag hidden" aria-live="polite"></span>
         <button
           id="accountBtn"
           class="account-icon-btn"
@@ -6909,6 +6911,16 @@
           </div>
 
           <div class="account-menu-divider" role="separator"></div>
+
+          <button id="manageUsersBtnClient" class="account-action-btn hidden" type="button" role="menuitem">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="8" cy="8" r="3.2"></circle>
+              <circle cx="17" cy="8" r="2.8"></circle>
+              <path d="M3.5 19c0-2.4 2-4.4 4.5-4.4h2c2.5 0 4.5 2 4.5 4.4"></path>
+              <path d="M14 19c0-1.9 1.5-3.5 3.4-3.5h.3c1.9 0 3.3 1.3 3.3 3"></path>
+            </svg>
+            <span>Gestionar usuarios</span>
+          </button>
 
           <button id="logoutBtn" class="logout-btn" type="button" role="menuitem">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -8212,7 +8224,7 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260218b"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260225b"></script>
+  <script src="client.js?v=20260225e"></script>
   <script src="budget.js?v=20260222a"></script>
   <script src="quick-actions.js?v=20260216c"></script>
   <script src="creditors-redesign.js?v=20260222a"></script>
@@ -8227,6 +8239,7 @@
   </div>
 </body>
 </html>
+
 
 
 

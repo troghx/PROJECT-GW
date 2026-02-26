@@ -12,19 +12,37 @@ const authShell = document.getElementById('authShell');
 const dashboardView = document.getElementById('dashboardView');
 const themeSwitch = document.getElementById('themeSwitch');
 const accountBtn = document.getElementById('accountBtn');
+const sessionHandleTag = document.getElementById('sessionHandleTag');
 const accountMenu = document.getElementById('accountMenu');
+const manageUsersBtn = document.getElementById('manageUsersBtn');
 const toolbarToggle = document.getElementById('toolbarToggle');
 const toolbarWrap = document.getElementById('toolbarWrap');
 const homeSearchInput = document.getElementById('homeSearch');
 const crmHelpers = window.CrmHelpers || {};
+const usersAdminView = document.getElementById('usersAdminView');
+const refreshUsersAdminBtn = document.getElementById('refreshUsersAdminBtn');
+const usersAdminList = document.getElementById('usersAdminList');
+const usersAdminStatus = document.getElementById('usersAdminStatus');
+const usersAdminForm = document.getElementById('usersAdminForm');
+const usersAdminFormTitle = document.getElementById('usersAdminFormTitle');
+const usersAdminId = document.getElementById('usersAdminId');
+const usersAdminUsername = document.getElementById('usersAdminUsername');
+const usersAdminDisplayName = document.getElementById('usersAdminDisplayName');
+const usersAdminEmail = document.getElementById('usersAdminEmail');
+const usersAdminRole = document.getElementById('usersAdminRole');
+const usersAdminPin = document.getElementById('usersAdminPin');
+const usersAdminIsActive = document.getElementById('usersAdminIsActive');
+const usersAdminResetBtn = document.getElementById('usersAdminResetBtn');
 
 const notifBtn = document.getElementById('notifBtn');
 let notifPanel = document.getElementById('notifPanel');
 let notifBadge = document.getElementById('notifBadge');
 let notifList = document.getElementById('notifList');
 let notifMarkAll = document.getElementById('notifMarkAll');
+let adminUsersCache = [];
 
 const SESSION_KEY = 'project_gw_session';
+const AUTH_TOKEN_KEY = 'project_gw_auth_token';
 const THEME_KEY = 'project_gw_theme';
 const COLOR_KEY = 'project_gw_accent_color';
 const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
@@ -43,6 +61,57 @@ const LOGIN_BACKGROUND_IMAGES = [
   'https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&fit=crop&w=2100&q=80',
   'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=2100&q=80'
 ];
+
+function saveAuthToken(tokenValue) {
+  const token = String(tokenValue || '').trim();
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+function getAuthToken() {
+  return String(localStorage.getItem(AUTH_TOKEN_KEY) || '').trim();
+}
+
+function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function ensureAuthFetchPatched() {
+  if (window.__crmAuthFetchPatched) return;
+  window.__crmAuthFetchPatched = true;
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const requestUrl = typeof input === 'string'
+      ? input
+      : (input instanceof Request ? input.url : String(input || ''));
+    const parsedUrl = new URL(requestUrl, window.location.origin);
+    const sameOrigin = parsedUrl.origin === window.location.origin;
+    const isApiRequest = sameOrigin && parsedUrl.pathname.startsWith('/api/');
+    const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login' || parsedUrl.pathname === '/api/health';
+
+    if (!isApiRequest || isPublicAuthRoute) {
+      return nativeFetch(input, init);
+    }
+
+    const headers = new Headers(
+      init.headers || (input instanceof Request ? input.headers : undefined)
+    );
+    const token = getAuthToken();
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await nativeFetch(input, { ...init, headers });
+    if (response.status === 401) {
+      clearSession();
+      showLogin();
+    }
+    return response;
+  };
+}
+
+ensureAuthFetchPatched();
 
 // Toast notifications
 function showToast(message, type = 'info') {
@@ -213,6 +282,9 @@ async function requestJson(url, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401 && !String(url).includes('/api/auth/login')) {
+      throw new Error('Sesion expirada. Inicia sesion nuevamente.');
+    }
     const message = typeof data.message === 'string' ? data.message : 'Error en la solicitud.';
     throw new Error(message);
   }
@@ -671,6 +743,8 @@ function showDashboard() {
   authShell.classList.add('hidden');
   dashboardView.classList.remove('hidden');
   document.body.classList.add('home-active');
+  updateSessionHandleTag();
+  syncManageUsersButtonVisibility();
   if (loginBackgroundTransitionTimer) {
     clearTimeout(loginBackgroundTransitionTimer);
     loginBackgroundTransitionTimer = null;
@@ -683,6 +757,7 @@ function showLogin() {
   dashboardView.classList.add('hidden');
   if (calendarView) calendarView.classList.add('hidden');
   if (emailsView) emailsView.classList.add('hidden');
+  if (usersAdminView) usersAdminView.classList.add('hidden');
   authShell.classList.remove('hidden');
   document.body.classList.remove('home-active');
   applyLoginBackground(loginBackgroundIndex);
@@ -707,10 +782,13 @@ function showLogin() {
   emailsLoaded = false;
   selectedEmailIds = new Set();
   updateEmailsCounter(0);
+  updateSessionHandleTag(null);
+  syncManageUsersButtonVisibility();
 }
 
 function saveSession(user) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  updateSessionHandleTag(user);
 }
 
 function getSession() {
@@ -728,6 +806,28 @@ function getSession() {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  clearAuthToken();
+  updateSessionHandleTag(null);
+}
+
+function getSessionHandleLabel(session = getSession()) {
+  const displayName = String(session?.displayName || session?.name || '').trim();
+  const username = String(session?.username || session?.name || '').trim();
+  const handleBase = displayName || username;
+  if (!handleBase) return '';
+  return `@${handleBase}`;
+}
+
+function updateSessionHandleTag(session = getSession()) {
+  if (!sessionHandleTag) return;
+  const nextHandle = getSessionHandleLabel(session);
+  sessionHandleTag.textContent = nextHandle;
+  sessionHandleTag.classList.toggle('hidden', !nextHandle);
+  if (nextHandle) {
+    sessionHandleTag.setAttribute('title', nextHandle);
+  } else {
+    sessionHandleTag.removeAttribute('title');
+  }
 }
 
 function normalizeSessionRole(roleValue) {
@@ -765,6 +865,92 @@ function isCurrentSessionAdmin() {
   return getSessionIdentity().role === 'admin';
 }
 
+function userEscapeHtml(text) {
+  if (crmHelpers.escapeHtml) return crmHelpers.escapeHtml(text);
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function syncManageUsersButtonVisibility() {
+  if (!manageUsersBtn) return;
+  manageUsersBtn.classList.toggle('hidden', !isCurrentSessionAdmin());
+}
+
+function setUsersAdminStatus(message) {
+  if (!usersAdminStatus) return;
+  usersAdminStatus.textContent = message || '';
+}
+
+function resetUsersAdminForm(user = null) {
+  if (!usersAdminForm) return;
+  const hasUser = Boolean(user && user.id);
+
+  if (usersAdminId) usersAdminId.value = hasUser ? String(user.id) : '';
+  if (usersAdminUsername) {
+    usersAdminUsername.value = hasUser ? String(user.username || '') : '';
+    usersAdminUsername.disabled = hasUser;
+  }
+  if (usersAdminDisplayName) usersAdminDisplayName.value = hasUser ? String(user.display_name || '') : '';
+  if (usersAdminEmail) usersAdminEmail.value = hasUser ? String(user.email || '') : '';
+  if (usersAdminRole) usersAdminRole.value = hasUser ? String(user.role || 'seller').toLowerCase() : 'seller';
+  if (usersAdminPin) usersAdminPin.value = '';
+  if (usersAdminIsActive) usersAdminIsActive.checked = hasUser ? Boolean(user.is_active) : true;
+  if (usersAdminFormTitle) usersAdminFormTitle.textContent = hasUser ? `Editar usuario @${user.username}` : 'Nuevo usuario';
+}
+
+function renderAdminUsersList(users = []) {
+  if (!usersAdminList) return;
+  if (!users.length) {
+    usersAdminList.innerHTML = '<p class="users-admin-status">No hay usuarios registrados.</p>';
+    return;
+  }
+
+  usersAdminList.innerHTML = users.map((user) => {
+    const role = String(user.role || 'seller').toLowerCase();
+    const roleClass = role === 'admin' ? 'admin' : 'seller';
+    const inactiveClass = user.is_active ? '' : ' inactive';
+    const displayName = userEscapeHtml(String(user.display_name || user.username || ''));
+    const username = userEscapeHtml(String(user.username || ''));
+    const email = userEscapeHtml(String(user.email || 'Sin email'));
+    const lastLoginRaw = user.last_login_at ? new Date(user.last_login_at) : null;
+    const lastLogin = lastLoginRaw && !Number.isNaN(lastLoginRaw.getTime())
+      ? lastLoginRaw.toLocaleString('es-ES')
+      : 'Nunca';
+
+    return `
+      <article class="users-admin-item${inactiveClass}">
+        <div class="users-admin-item-head">
+          <span class="users-admin-item-name">${displayName}</span>
+          <span class="users-admin-role ${roleClass}">${role}</span>
+        </div>
+        <div class="users-admin-item-meta">@${username}</div>
+        <div class="users-admin-item-meta">${email}</div>
+        <div class="users-admin-item-meta">Ultimo login: ${userEscapeHtml(lastLogin)}</div>
+        <div class="users-admin-item-actions">
+          <button class="users-admin-item-btn" type="button" data-user-id="${user.id}">Editar</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function loadAdminUsers({ silent = false } = {}) {
+  if (!isCurrentSessionAdmin()) return [];
+  try {
+    if (!silent) setUsersAdminStatus('Cargando usuarios...');
+    const data = await requestJson('/api/admin/users', { cache: 'no-store' });
+    adminUsersCache = Array.isArray(data.users) ? data.users : [];
+    renderAdminUsersList(adminUsersCache);
+    setUsersAdminStatus(`Usuarios cargados: ${adminUsersCache.length}`);
+    return adminUsersCache;
+  } catch (error) {
+    setUsersAdminStatus(error.message || 'No se pudieron cargar usuarios.');
+    return [];
+  }
+}
+
 if (themeSwitch) {
   themeSwitch.addEventListener('change', () => {
     applyTheme(themeSwitch.checked ? 'light' : 'dark');
@@ -775,6 +961,89 @@ if (accountMenu) {
   accountMenu.addEventListener('click', (event) => {
     const swatch = event.target.closest('.accent-swatch[data-color]');
     if (swatch) applyAccentColor(swatch.dataset.color);
+  });
+}
+
+if (manageUsersBtn) {
+  manageUsersBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setAccountMenu(false);
+    if (window.location.hash !== '#admin-users') {
+      window.location.hash = 'admin-users';
+    } else {
+      showUsersAdminView();
+    }
+  });
+}
+
+if (refreshUsersAdminBtn) {
+  refreshUsersAdminBtn.addEventListener('click', () => {
+    void loadAdminUsers();
+  });
+}
+
+if (usersAdminView) {
+  usersAdminView.addEventListener('click', (event) => {
+    const editBtn = event.target.closest('.users-admin-item-btn[data-user-id]');
+    if (!editBtn) return;
+    const userId = Number(editBtn.dataset.userId || 0);
+    const selectedUser = adminUsersCache.find((entry) => Number(entry.id) === userId);
+    if (!selectedUser) return;
+    resetUsersAdminForm(selectedUser);
+  });
+}
+
+if (usersAdminResetBtn) {
+  usersAdminResetBtn.addEventListener('click', () => {
+    resetUsersAdminForm(null);
+  });
+}
+
+if (usersAdminForm) {
+  usersAdminForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const userId = Number(usersAdminId?.value || 0);
+    const isEditing = Number.isInteger(userId) && userId > 0;
+
+    const payload = {
+      displayName: String(usersAdminDisplayName?.value || '').trim(),
+      email: String(usersAdminEmail?.value || '').trim(),
+      role: String(usersAdminRole?.value || 'seller').trim().toLowerCase(),
+      isActive: Boolean(usersAdminIsActive?.checked)
+    };
+    const pin = String(usersAdminPin?.value || '').replace(/\D/g, '');
+    if (pin) payload.pin = pin;
+    if (!isEditing) {
+      payload.username = String(usersAdminUsername?.value || '').trim().toLowerCase();
+      if (!payload.pin) {
+        showToast('PIN obligatorio para crear usuario.', 'error');
+        usersAdminPin?.focus();
+        return;
+      }
+    }
+
+    try {
+      if (isEditing) {
+        await requestJson(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showToast('Usuario actualizado.', 'success');
+      } else {
+        await requestJson('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showToast('Usuario creado.', 'success');
+      }
+      resetUsersAdminForm(null);
+      await loadAdminUsers({ silent: true });
+    } catch (error) {
+      showToast(error.message || 'No se pudo guardar el usuario.', 'error');
+    }
   });
 }
 
@@ -2392,6 +2661,7 @@ function showCalendarView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
   if (emailsView) emailsView.classList.add('hidden');
+  if (usersAdminView) usersAdminView.classList.add('hidden');
   if (calendarView) {
     calendarView.classList.remove('hidden');
     calendarView.animate(
@@ -2418,6 +2688,7 @@ function showEmailsView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
   if (calendarView) calendarView.classList.add('hidden');
+  if (usersAdminView) usersAdminView.classList.add('hidden');
   if (emailsView) {
     emailsView.classList.remove('hidden');
     emailsView.animate(
@@ -2440,6 +2711,39 @@ function showEmailsView() {
   updateEmailsRoleUi();
   initializeEmailsInteractions();
   void loadEmails();
+}
+
+function showUsersAdminView() {
+  if (!isCurrentSessionAdmin()) {
+    showDashboardView();
+    return;
+  }
+
+  if (dashboardGrid) dashboardGrid.classList.add('hidden');
+  if (leadsView) leadsView.classList.add('hidden');
+  if (calendarView) calendarView.classList.add('hidden');
+  if (emailsView) emailsView.classList.add('hidden');
+  if (usersAdminView) {
+    usersAdminView.classList.remove('hidden');
+    usersAdminView.animate(
+      [
+        { opacity: 0, transform: 'translateY(14px)' },
+        { opacity: 1, transform: 'translateY(0)' }
+      ],
+      {
+        duration: 360,
+        easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+      }
+    );
+  }
+
+  isLeadsView = false;
+  isCalendarView = false;
+  isEmailsView = false;
+  setToolbarRouteButtonState('admin-users');
+  hideLeadSearchSuggestions();
+  void loadAdminUsers();
+  resetUsersAdminForm(null);
 }
 
 function initializeScheduleInteractions() {
@@ -2601,6 +2905,7 @@ function showLeadsView() {
   if (dashboardGrid) dashboardGrid.classList.add('hidden');
   if (calendarView) calendarView.classList.add('hidden');
   if (emailsView) emailsView.classList.add('hidden');
+  if (usersAdminView) usersAdminView.classList.add('hidden');
   if (leadsView) {
     leadsView.classList.remove('hidden');
     leadsView.animate([
@@ -2636,6 +2941,7 @@ function showDashboardView() {
   if (calendarView) calendarView.classList.add('hidden');
   if (leadsView) leadsView.classList.add('hidden');
   if (emailsView) emailsView.classList.add('hidden');
+  if (usersAdminView) usersAdminView.classList.add('hidden');
   if (dashboardGrid) {
     dashboardGrid.classList.remove('hidden');
     dashboardGrid.animate([
@@ -2661,6 +2967,12 @@ function applyDashboardRouteFromHash() {
     showCalendarView();
   } else if (route === 'emails') {
     showEmailsView();
+  } else if (route === 'admin-users') {
+    if (isCurrentSessionAdmin()) {
+      showUsersAdminView();
+    } else {
+      showDashboardView();
+    }
   } else {
     showDashboardView();
   }
@@ -3586,6 +3898,10 @@ if (loginForm) {
         body: JSON.stringify(payload)
       });
 
+      if (!data?.token) {
+        throw new Error('No se recibio token de sesion. Contacta al administrador.');
+      }
+      saveAuthToken(data.token);
       saveSession(data.user);
       applyTheme(getInitialTheme(data.user), { owner: data.user });
       applyAccentColor(getInitialAccentColor(data.user), { owner: data.user });
@@ -3603,10 +3919,15 @@ if (loginForm) {
 
 const transferredLeadSearchQuery = consumeTransferredLeadSearchQuery();
 const existingSession = getSession();
+const existingAuthToken = getAuthToken();
+const hasStoredAuth = Boolean(existingSession && existingAuthToken);
 applyTheme(getInitialTheme(existingSession), { owner: existingSession });
 applyAccentColor(getInitialAccentColor(existingSession), { owner: existingSession });
 setToolbarExpanded(false);
-if (existingSession) {
+if (!hasStoredAuth && (existingSession || existingAuthToken)) {
+  clearSession();
+}
+if (hasStoredAuth) {
   if (transferredLeadSearchQuery) {
     setLeadSearchQuery(transferredLeadSearchQuery, { syncInput: true });
     if (window.location.hash !== '#leads') {
@@ -3623,8 +3944,8 @@ if (existingSession) {
 }
 
 // Carga inicial de notificaciones + polling cada 60 s
-if (existingSession) void refreshNotifications();
-setInterval(() => { if (getSession()) void refreshNotifications(); }, 60000);
+if (hasStoredAuth) void refreshNotifications();
+setInterval(() => { if (getSession() && getAuthToken()) void refreshNotifications(); }, 60000);
 
 // ============================================
 // RANKINGS WHEEL - Efecto ruleta para rankings laterales

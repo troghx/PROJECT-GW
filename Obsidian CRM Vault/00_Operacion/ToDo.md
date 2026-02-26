@@ -51,3 +51,11 @@ Pedir al jefe/equipo:
 - Mantener secretos solo en `.env`/secret manager.
 - No compartir tokens por chat sin canal seguro.
 
+## Actualizacion operativa 2026-02-26
+- [x] Migracion de autenticacion a JWT + validacion de token en API.
+- [x] RBAC base aplicado en backend.
+- [x] Modelo `app_users` en DB con hash/salt de PIN.
+- [x] Vista admin `#admin-users` para gestion de usuarios.
+- [ ] Crear tabla `audit_log` para trazabilidad completa.
+- [ ] Completar permisos granulares por modulo/accion.
+- [ ] Definir plan de rollout para Pull Credit Fase 07 con compliance.

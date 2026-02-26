@@ -1294,3 +1294,95 @@ CREATE TABLE IF NOT EXISTS sent_emails (
 CREATE INDEX IF NOT EXISTS idx_sent_emails_author_created ON sent_emails (author_username, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sent_emails_lead_created ON sent_emails (lead_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sent_emails_status ON sent_emails (status);
+
+-- ============================================
+-- TABLA: Usuarios de la app (autenticacion + RBAC)
+-- ============================================
+CREATE TABLE IF NOT EXISTS app_users (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(120) NOT NULL UNIQUE,
+  display_name VARCHAR(120) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'seller',
+  email VARCHAR(160),
+  pin_salt VARCHAR(200) NOT NULL DEFAULT '',
+  pin_hash VARCHAR(300) NOT NULL DEFAULT '',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'display_name'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT 'Usuario';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'role'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'seller';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'email'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN email VARCHAR(160);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'pin_salt'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN pin_salt VARCHAR(200) NOT NULL DEFAULT '';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'pin_hash'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN pin_hash VARCHAR(300) NOT NULL DEFAULT '';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'is_active'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'last_login_at'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN last_login_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  UPDATE app_users SET username = lower(btrim(username));
+  UPDATE app_users SET display_name = 'Usuario' WHERE display_name IS NULL OR btrim(display_name) = '';
+  UPDATE app_users SET role = lower(btrim(role));
+  UPDATE app_users SET role = 'seller' WHERE role IS NULL OR role NOT IN ('admin', 'seller');
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_username_lower ON app_users ((lower(username)));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_email_lower ON app_users ((lower(email))) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_app_users_role_active ON app_users (role, is_active);

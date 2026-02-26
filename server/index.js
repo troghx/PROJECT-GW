@@ -1,8 +1,10 @@
 const path = require('path');
 const fs = require('fs/promises');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
 
 // Cargar .env desde el directorio padre (raíz del proyecto)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -12,19 +14,20 @@ const { pool } = require('./db');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = path.join(__dirname, '..');
-const AUTH_USERS = [
+const PUBLIC_API_PATHS = new Set(['/health', '/auth/login']);
+const DEFAULT_AUTH_USERS = [
   {
     username: 'admin',
     pin: '112233',
     displayName: 'Admin',
-    role: 'Admin',
+    role: 'admin',
     email: 'Elliot.Perez@cerodeuda.com'
   },
   {
     username: 'elliot',
     pin: '654321',
     displayName: 'Demo Seller',
-    role: 'Seller',
+    role: 'seller',
     email: 'demo.seller@cerodeuda.com'
   }
 ];
@@ -32,6 +35,66 @@ const AUTH_USERS = [
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(ROOT_DIR));
+
+function getJwtSecret() {
+  const configuredSecret = cleanText(process.env.JWT_SECRET, 500);
+  if (configuredSecret) return configuredSecret;
+  return 'project-gw-dev-only-secret-change-me';
+}
+
+function buildAuthToken(user) {
+  return jwt.sign(
+    {
+      username: cleanText(user?.username, 120).toLowerCase(),
+      displayName: cleanText(user?.displayName || user?.username, 120),
+      email: cleanText(user?.email, 160).toLowerCase(),
+      role: normalizeRoleValue(user?.role)
+    },
+    getJwtSecret(),
+    { expiresIn: process.env.JWT_EXPIRES_IN || '12h' }
+  );
+}
+
+function readBearerToken(req) {
+  const headerValue = String(req.headers?.authorization || '').trim();
+  const match = headerValue.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : '';
+}
+
+function requireAuth(req, res, next) {
+  const token = readBearerToken(req);
+  if (!token) {
+    return res.status(401).json({ message: 'No autorizado. Inicia sesion.' });
+  }
+
+  try {
+    const payload = jwt.verify(token, getJwtSecret());
+    const username = cleanText(payload?.username, 120).toLowerCase();
+    const displayName = cleanText(payload?.displayName, 120);
+    const email = cleanText(payload?.email, 160).toLowerCase();
+    const role = inferRoleFromIdentity({
+      role: payload?.role,
+      username,
+      displayName,
+      email
+    });
+
+    if (!username) {
+      return res.status(401).json({ message: 'Sesion invalida. Inicia sesion nuevamente.' });
+    }
+
+    req.auth = { username, displayName, email, role };
+    return next();
+  } catch (_error) {
+    return res.status(401).json({ message: 'Sesion expirada o invalida. Inicia sesion nuevamente.' });
+  }
+}
+
+app.use('/api', (req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
+  return requireAuth(req, res, next);
+});
 
 // Lista de estados Green (los demas son Red)
 const GREEN_STATES = [
@@ -180,16 +243,108 @@ function cleanText(value, maxLength) {
   return text.slice(0, maxLength);
 }
 
-function findAuthUser(identifier, pin) {
+function normalizeUsername(value) {
+  return cleanText(value, 120).toLowerCase();
+}
+
+function createPinHash(pin, saltHex = crypto.randomBytes(16).toString('hex')) {
+  const hashHex = crypto.scryptSync(String(pin || ''), saltHex, 64).toString('hex');
+  return { pinSalt: saltHex, pinHash: hashHex };
+}
+
+function verifyPinHash(pin, pinSalt, pinHash) {
+  if (!pinSalt || !pinHash) return false;
+  try {
+    const computed = Buffer.from(crypto.scryptSync(String(pin || ''), String(pinSalt), 64).toString('hex'), 'hex');
+    const expected = Buffer.from(String(pinHash), 'hex');
+    if (computed.length !== expected.length) return false;
+    return crypto.timingSafeEqual(computed, expected);
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function ensureDefaultAuthUsersSeed() {
+  for (const user of DEFAULT_AUTH_USERS) {
+    const username = normalizeUsername(user.username);
+    const displayName = cleanText(user.displayName || user.username, 120) || username;
+    const email = cleanText(user.email, 160).toLowerCase() || null;
+    const role = normalizeRoleValue(user.role) || 'seller';
+    const pin = String(user.pin || '').replace(/\D/g, '');
+
+    const { rows } = await pool.query(
+      `SELECT id, pin_salt, pin_hash
+       FROM app_users
+       WHERE username = $1
+       LIMIT 1`,
+      [username]
+    );
+
+    if (rows.length === 0) {
+      const credentials = createPinHash(pin);
+      await pool.query(
+        `INSERT INTO app_users (
+           username, display_name, role, email, pin_salt, pin_hash, is_active
+         ) VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [username, displayName, role, email, credentials.pinSalt, credentials.pinHash]
+      );
+      continue;
+    }
+
+    const current = rows[0];
+    const updates = [];
+    const values = [];
+
+    if (!current.pin_salt || !current.pin_hash) {
+      const credentials = createPinHash(pin);
+      updates.push(`pin_salt = $${updates.length + 1}`);
+      values.push(credentials.pinSalt);
+      updates.push(`pin_hash = $${updates.length + 1}`);
+      values.push(credentials.pinHash);
+    }
+
+    updates.push(`display_name = COALESCE(NULLIF(display_name, ''), $${updates.length + 1})`);
+    values.push(displayName);
+    updates.push(`role = COALESCE(NULLIF(role, ''), $${updates.length + 1})`);
+    values.push(role);
+    updates.push(`email = COALESCE(email, $${updates.length + 1})`);
+    values.push(email);
+
+    values.push(current.id);
+    await pool.query(
+      `UPDATE app_users
+       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}`,
+      values
+    );
+  }
+}
+
+async function findAuthUser(identifier, pin) {
   const normalizedIdentifier = cleanText(identifier, 160).toLowerCase();
   const normalizedPin = String(pin || '').replace(/\D/g, '');
   if (!normalizedIdentifier || normalizedPin.length !== 6) return null;
 
-  return AUTH_USERS.find((user) => {
-    const userEmail = cleanText(user.email, 160).toLowerCase();
-    const matchesIdentity = user.username === normalizedIdentifier || userEmail === normalizedIdentifier;
-    return matchesIdentity && user.pin === normalizedPin;
-  }) || null;
+  const { rows } = await pool.query(
+    `SELECT id, username, display_name, role, email, pin_salt, pin_hash, is_active
+     FROM app_users
+     WHERE username = $1 OR lower(coalesce(email, '')) = $1
+     LIMIT 1`,
+    [normalizedIdentifier]
+  );
+
+  if (!rows.length) return null;
+  const authUser = rows[0];
+  if (!authUser.is_active) return null;
+  if (!verifyPinHash(normalizedPin, authUser.pin_salt, authUser.pin_hash)) return null;
+
+  return {
+    id: Number(authUser.id),
+    username: normalizeUsername(authUser.username),
+    displayName: cleanText(authUser.display_name || authUser.username, 120),
+    role: normalizeRoleValue(authUser.role) || 'seller',
+    email: cleanText(authUser.email, 160).toLowerCase() || null
+  };
 }
 
 function normalizeRoleValue(roleValue) {
@@ -208,7 +363,7 @@ function inferRoleFromIdentity({ role, username, displayName, email }) {
     .filter(Boolean);
   if (!identities.length) return '';
 
-  const matchedUser = AUTH_USERS.find((user) => {
+  const matchedUser = DEFAULT_AUTH_USERS.find((user) => {
     const options = [
       cleanText(user.username, 160),
       cleanText(user.displayName, 160),
@@ -226,6 +381,31 @@ function isAdminRole(roleValue) {
   return normalizeRoleValue(roleValue) === 'admin';
 }
 
+function normalizeUserRoleForMutation(value) {
+  const normalized = normalizeRoleValue(value);
+  if (!normalized) return { ok: false, message: 'role debe ser admin o seller.' };
+  return { ok: true, value: normalized };
+}
+
+function normalizeRequiredUsername(value) {
+  const normalized = normalizeUsername(value);
+  if (!normalized) {
+    return { ok: false, message: 'username es obligatorio.' };
+  }
+  if (!/^[a-z0-9._-]{3,40}$/.test(normalized)) {
+    return { ok: false, message: 'username debe tener 3-40 caracteres [a-z0-9._-].' };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizePinForMutation(value, fieldName = 'pin') {
+  const normalizedPin = String(value || '').replace(/\D/g, '');
+  if (normalizedPin.length !== 6) {
+    return { ok: false, message: `${fieldName} debe tener 6 digitos.` };
+  }
+  return { ok: true, value: normalizedPin };
+}
+
 function parsePositiveInt(value, fallback, min = 1, max = 500) {
   const parsed = Number.parseInt(String(value || ''), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -233,6 +413,20 @@ function parsePositiveInt(value, fallback, min = 1, max = 500) {
 }
 
 function getEmailAccessContext(req) {
+  if (req.auth?.username) {
+    const username = cleanText(req.auth.username, 120).toLowerCase();
+    const displayName = cleanText(req.auth.displayName, 120).toLowerCase();
+    const email = cleanText(req.auth.email, 160).toLowerCase();
+    const role = inferRoleFromIdentity({
+      role: req.auth.role,
+      username,
+      displayName,
+      email
+    });
+    const identities = Array.from(new Set([username, displayName].filter(Boolean)));
+    return { username, displayName, email, role, identities };
+  }
+
   const username = cleanText(req.query.username || req.body?.username, 120).toLowerCase();
   const displayName = cleanText(req.query.displayName || req.body?.displayName || req.body?.name, 120).toLowerCase();
   const email = cleanText(req.query.email || req.body?.email, 160).toLowerCase();
@@ -667,10 +861,11 @@ function normalizeNoteColorTag(value, fieldName = 'colorTag') {
 }
 
 function resolveRequestUsername(req, fallback = 'admin') {
+  const fromAuth = req.auth?.username;
   const fromHeader = req.headers?.['x-user'];
   const fromBody = req.body?.username;
   const fromQuery = req.query?.username;
-  const candidate = [fromHeader, fromBody, fromQuery]
+  const candidate = [fromAuth, fromHeader, fromBody, fromQuery]
     .map((value) => cleanText(value, 120))
     .find((value) => Boolean(value));
   return candidate || fallback;
@@ -1081,6 +1276,32 @@ function parsePositiveInteger(value) {
   const normalized = Number(value);
   if (!Number.isInteger(normalized) || normalized <= 0) return null;
   return normalized;
+}
+
+function getAuthIdentities(authContext = {}) {
+  return Array.from(new Set(
+    [authContext?.username, authContext?.displayName]
+      .map((value) => cleanText(value, 120).toLowerCase())
+      .filter(Boolean)
+  ));
+}
+
+function canAccessAssignedLead(authContext, assignedToValue) {
+  if (isAdminRole(authContext?.role)) return true;
+  const identities = getAuthIdentities(authContext);
+  if (!identities.length) return false;
+  const assignedTo = cleanText(assignedToValue, 120).toLowerCase();
+  if (!assignedTo) return true;
+  return identities.includes(assignedTo);
+}
+
+function canSetLeadAssignee(authContext, nextAssignedToValue) {
+  if (isAdminRole(authContext?.role)) return true;
+  const identities = getAuthIdentities(authContext);
+  if (!identities.length) return false;
+  const nextAssignedTo = cleanText(nextAssignedToValue, 120).toLowerCase();
+  if (!nextAssignedTo) return false;
+  return identities.includes(nextAssignedTo);
 }
 
 function normalizeOptionalMoney(value, fieldName) {
@@ -1792,6 +2013,43 @@ app.delete('/api/note-templates/:id', async (req, res) => {
   }
 });
 
+app.use('/api/leads', async (req, res, next) => {
+  const leadPathMatch = String(req.path || '').match(/^\/(\d+)(?:\/|$)/);
+  if (!leadPathMatch) return next();
+
+  const leadId = Number(leadPathMatch[1]);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, assigned_to
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    if (!canAccessAssignedLead(req.auth, rows[0].assigned_to)) {
+      return res.status(403).json({ message: 'No tienes acceso a este lead.' });
+    }
+
+    req.leadAccess = {
+      id: leadId,
+      assignedTo: cleanText(rows[0].assigned_to, 120) || null
+    };
+    return next();
+  } catch (error) {
+    console.error('Error validando acceso a lead:', error);
+    return res.status(500).json({ message: 'No se pudo validar acceso al lead.' });
+  }
+});
+
 app.get('/api/leads/:id/notes', async (req, res) => {
   const leadId = Number(req.params.id);
   if (!Number.isInteger(leadId) || leadId <= 0) {
@@ -2222,10 +2480,18 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(500).json({ message: 'PostgreSQL no esta disponible.' });
   }
 
-  const authUser = findAuthUser(identifier, pin);
+  const authUser = await findAuthUser(identifier, pin);
   if (!authUser) {
     return res.status(401).json({ message: 'Credenciales invalidas.' });
   }
+
+  await pool.query(
+    `UPDATE app_users
+     SET last_login_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [authUser.id]
+  );
 
   return res.json({
     ok: true,
@@ -2235,19 +2501,35 @@ app.post('/api/auth/login', async (req, res) => {
       displayName: authUser.displayName,
       role: authUser.role,
       email: authUser.email || null
-    }
+    },
+    token: buildAuthToken(authUser)
   });
 });
 
-app.get('/api/users', async (_req, res) => {
+app.get('/api/users', async (req, res) => {
+  const access = req.auth || {};
+  if (!isAdminRole(access.role)) {
+    const selfLabel = cleanText(access.displayName || access.username, 120)
+      || cleanText(access.username, 120)
+      || '';
+    const users = selfLabel ? [selfLabel] : [];
+    return res.json({ users });
+  }
+
   try {
-    const { rows } = await pool.query(
+    const { rows: leadAssignedRows } = await pool.query(
       `SELECT DISTINCT assigned_to AS username
        FROM leads
        WHERE assigned_to IS NOT NULL
          AND btrim(assigned_to) <> ''
        ORDER BY assigned_to ASC
        LIMIT 500`
+    );
+    const { rows: appUsersRows } = await pool.query(
+      `SELECT username, display_name
+       FROM app_users
+       WHERE is_active = TRUE
+       ORDER BY username ASC`
     );
 
     const userMap = new Map();
@@ -2258,11 +2540,11 @@ app.get('/api/users', async (_req, res) => {
       if (!userMap.has(key)) userMap.set(key, normalized);
     };
 
-    AUTH_USERS.forEach((user) => {
-      pushUser(user.displayName);
+    appUsersRows.forEach((user) => {
+      pushUser(user.display_name);
       pushUser(user.username);
     });
-    rows.forEach((row) => pushUser(row.username));
+    leadAssignedRows.forEach((row) => pushUser(row.username));
 
     const users = Array.from(userMap.values()).sort((a, b) =>
       a.localeCompare(b, 'es', { sensitivity: 'base' })
@@ -2272,6 +2554,188 @@ app.get('/api/users', async (_req, res) => {
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     return res.status(500).json({ message: 'No se pudieron cargar usuarios.' });
+  }
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  if (!isAdminRole(req.auth?.role)) {
+    return res.status(403).json({ message: 'Solo admin puede gestionar usuarios.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at
+       FROM app_users
+       ORDER BY lower(username) ASC`
+    );
+    return res.json({ users: rows });
+  } catch (error) {
+    console.error('Error al listar usuarios admin:', error);
+    return res.status(500).json({ message: 'No se pudieron cargar usuarios admin.' });
+  }
+});
+
+app.post('/api/admin/users', async (req, res) => {
+  if (!isAdminRole(req.auth?.role)) {
+    return res.status(403).json({ message: 'Solo admin puede crear usuarios.' });
+  }
+
+  const normalizedUsername = normalizeRequiredUsername(req.body?.username);
+  if (!normalizedUsername.ok) {
+    return res.status(400).json({ message: normalizedUsername.message });
+  }
+
+  const normalizedPin = normalizePinForMutation(req.body?.pin, 'pin');
+  if (!normalizedPin.ok) {
+    return res.status(400).json({ message: normalizedPin.message });
+  }
+
+  const normalizedRole = normalizeUserRoleForMutation(req.body?.role || 'seller');
+  if (!normalizedRole.ok) {
+    return res.status(400).json({ message: normalizedRole.message });
+  }
+
+  const displayName = cleanText(req.body?.displayName || req.body?.display_name || normalizedUsername.value, 120);
+  const normalizedEmail = normalizeEmailAddressOptional(req.body?.email, 'email');
+  if (!normalizedEmail.ok) {
+    return res.status(400).json({ message: normalizedEmail.message });
+  }
+
+  try {
+    const credentials = createPinHash(normalizedPin.value);
+    const { rows } = await pool.query(
+      `INSERT INTO app_users (
+         username, display_name, role, email, pin_salt, pin_hash, is_active
+       ) VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+       RETURNING id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at`,
+      [
+        normalizedUsername.value,
+        displayName || normalizedUsername.value,
+        normalizedRole.value,
+        normalizedEmail.value,
+        credentials.pinSalt,
+        credentials.pinHash
+      ]
+    );
+
+    return res.status(201).json({
+      ok: true,
+      user: rows[0],
+      message: 'Usuario creado correctamente.'
+    });
+  } catch (error) {
+    if (String(error?.message || '').toLowerCase().includes('duplicate')) {
+      return res.status(409).json({ message: 'Username o email ya existe.' });
+    }
+    console.error('Error al crear usuario admin:', error);
+    return res.status(500).json({ message: 'No se pudo crear el usuario.' });
+  }
+});
+
+app.patch('/api/admin/users/:id', async (req, res) => {
+  if (!isAdminRole(req.auth?.role)) {
+    return res.status(403).json({ message: 'Solo admin puede editar usuarios.' });
+  }
+
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'ID de usuario invalido.' });
+  }
+
+  try {
+    const { rows: targetRows } = await pool.query(
+      `SELECT id, username, role, is_active
+       FROM app_users
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (!targetRows.length) {
+      return res.status(404).json({ message: 'Usuario no encontrado.' });
+    }
+
+    const targetUser = targetRows[0];
+    const updates = [];
+    const values = [];
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'displayName')
+      || Object.prototype.hasOwnProperty.call(req.body || {}, 'display_name')) {
+      const displayName = cleanText(req.body?.displayName || req.body?.display_name, 120);
+      updates.push(`display_name = $${updates.length + 1}`);
+      values.push(displayName || targetUser.username);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'role')) {
+      const normalizedRole = normalizeUserRoleForMutation(req.body?.role);
+      if (!normalizedRole.ok) {
+        return res.status(400).json({ message: normalizedRole.message });
+      }
+      updates.push(`role = $${updates.length + 1}`);
+      values.push(normalizedRole.value);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'email')) {
+      const normalizedEmail = normalizeEmailAddressOptional(req.body?.email, 'email');
+      if (!normalizedEmail.ok) {
+        return res.status(400).json({ message: normalizedEmail.message });
+      }
+      updates.push(`email = $${updates.length + 1}`);
+      values.push(normalizedEmail.value);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'isActive')
+      || Object.prototype.hasOwnProperty.call(req.body || {}, 'is_active')) {
+      const activeRaw = pickFirstDefined(req.body || {}, ['isActive', 'is_active']);
+      const normalizedActive = normalizeBoolean(activeRaw, 'isActive');
+      if (!normalizedActive.ok) {
+        return res.status(400).json({ message: normalizedActive.message });
+      }
+
+      if (normalizeUsername(req.auth?.username) === normalizeUsername(targetUser.username) && !normalizedActive.value) {
+        return res.status(400).json({ message: 'No puedes desactivar tu propio usuario.' });
+      }
+
+      updates.push(`is_active = $${updates.length + 1}`);
+      values.push(normalizedActive.value);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'pin')) {
+      const normalizedPin = normalizePinForMutation(req.body?.pin, 'pin');
+      if (!normalizedPin.ok) {
+        return res.status(400).json({ message: normalizedPin.message });
+      }
+      const credentials = createPinHash(normalizedPin.value);
+      updates.push(`pin_salt = $${updates.length + 1}`);
+      values.push(credentials.pinSalt);
+      updates.push(`pin_hash = $${updates.length + 1}`);
+      values.push(credentials.pinHash);
+    }
+
+    if (!updates.length) {
+      return res.status(400).json({ message: 'No hay campos validos para actualizar.' });
+    }
+
+    values.push(userId);
+    const { rows } = await pool.query(
+      `UPDATE app_users
+       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}
+       RETURNING id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at`,
+      values
+    );
+
+    return res.json({
+      ok: true,
+      user: rows[0],
+      message: 'Usuario actualizado correctamente.'
+    });
+  } catch (error) {
+    if (String(error?.message || '').toLowerCase().includes('duplicate')) {
+      return res.status(409).json({ message: 'Username o email ya existe.' });
+    }
+    console.error('Error al actualizar usuario admin:', error);
+    return res.status(500).json({ message: 'No se pudo actualizar el usuario.' });
   }
 });
 
@@ -2565,14 +3029,32 @@ app.post('/api/emails/bulk-delete', async (req, res) => {
   }
 });
 
-app.get('/api/leads', async (_req, res) => {
+app.get('/api/leads', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT ${LEAD_SELECT_COLUMNS}
-       FROM leads
-       ORDER BY created_at DESC
-       LIMIT 100`
-    );
+    let rows = [];
+    if (isAdminRole(req.auth?.role)) {
+      ({ rows } = await pool.query(
+        `SELECT ${LEAD_SELECT_COLUMNS}
+         FROM leads
+         ORDER BY created_at DESC
+         LIMIT 100`
+      ));
+    } else {
+      const identities = getAuthIdentities(req.auth);
+      if (!identities.length) {
+        return res.status(403).json({ message: 'No autorizado para listar leads.' });
+      }
+
+      ({ rows } = await pool.query(
+        `SELECT ${LEAD_SELECT_COLUMNS}
+         FROM leads
+         WHERE assigned_to IS NULL
+            OR lower(coalesce(assigned_to, '')) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [identities]
+      ));
+    }
 
     const leadsWithStateType = rows.map((lead) => ({
       ...lead,
@@ -2598,18 +3080,45 @@ app.get('/api/leads/duplicates', async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(
-      `SELECT ${LEAD_SELECT_COLUMNS}
-       FROM leads
-       WHERE right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10) = $1
-          OR right(regexp_replace(coalesce(home_phone, ''), '\\D', '', 'g'), 10) = $1
-          OR right(regexp_replace(coalesce(cell_phone, ''), '\\D', '', 'g'), 10) = $1
-          OR right(regexp_replace(coalesce(co_applicant_home_phone, ''), '\\D', '', 'g'), 10) = $1
-          OR right(regexp_replace(coalesce(co_applicant_cell_phone, ''), '\\D', '', 'g'), 10) = $1
-       ORDER BY created_at DESC
-       LIMIT 25`,
-      [normalizedPhone.digits]
-    );
+    let rows = [];
+    if (isAdminRole(req.auth?.role)) {
+      ({ rows } = await pool.query(
+        `SELECT ${LEAD_SELECT_COLUMNS}
+         FROM leads
+         WHERE right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10) = $1
+            OR right(regexp_replace(coalesce(home_phone, ''), '\\D', '', 'g'), 10) = $1
+            OR right(regexp_replace(coalesce(cell_phone, ''), '\\D', '', 'g'), 10) = $1
+            OR right(regexp_replace(coalesce(co_applicant_home_phone, ''), '\\D', '', 'g'), 10) = $1
+            OR right(regexp_replace(coalesce(co_applicant_cell_phone, ''), '\\D', '', 'g'), 10) = $1
+         ORDER BY created_at DESC
+         LIMIT 25`,
+        [normalizedPhone.digits]
+      ));
+    } else {
+      const identities = getAuthIdentities(req.auth);
+      if (!identities.length) {
+        return res.status(403).json({ message: 'No autorizado para buscar duplicados.' });
+      }
+
+      ({ rows } = await pool.query(
+        `SELECT ${LEAD_SELECT_COLUMNS}
+         FROM leads
+         WHERE (
+              right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10) = $1
+           OR right(regexp_replace(coalesce(home_phone, ''), '\\D', '', 'g'), 10) = $1
+           OR right(regexp_replace(coalesce(cell_phone, ''), '\\D', '', 'g'), 10) = $1
+           OR right(regexp_replace(coalesce(co_applicant_home_phone, ''), '\\D', '', 'g'), 10) = $1
+           OR right(regexp_replace(coalesce(co_applicant_cell_phone, ''), '\\D', '', 'g'), 10) = $1
+         )
+           AND (
+              assigned_to IS NULL
+              OR lower(coalesce(assigned_to, '')) = ANY($2::text[])
+           )
+         ORDER BY created_at DESC
+         LIMIT 25`,
+        [normalizedPhone.digits, identities]
+      ));
+    }
 
     const matches = rows.map((lead) => ({
       ...lead,
@@ -2636,7 +3145,7 @@ app.post('/api/leads', async (req, res) => {
   const phone = normalizedPhone.value;
   const isTest = req.body?.isTest === true;
   const stateCode = cleanText(req.body?.stateCode, 2) || null;
-  const assignedTo = cleanText(req.body?.assignedTo, 120) || null;
+  let assignedTo = cleanText(req.body?.assignedTo, 120) || null;
   const notes = cleanText(req.body?.notes, 1000);
   const relatedLeadIdRaw = pickFirstDefined(req.body || {}, ['relatedLeadId', 'related_lead_id']);
   const normalizedRelatedLeadId = normalizeRelatedLeadId(relatedLeadIdRaw, 'relatedLeadId');
@@ -2650,6 +3159,18 @@ app.post('/api/leads', async (req, res) => {
 
   if (!fullName || !phone) {
     return res.status(400).json({ message: 'Nombre y telefono son obligatorios.' });
+  }
+
+  if (!isAdminRole(req.auth?.role)) {
+    const defaultAssignee = cleanText(req.auth?.displayName || req.auth?.username, 120)
+      || cleanText(req.auth?.username, 120)
+      || null;
+
+    if (assignedTo && !canSetLeadAssignee(req.auth, assignedTo)) {
+      return res.status(403).json({ message: 'No puedes asignar leads a otros usuarios.' });
+    }
+
+    assignedTo = assignedTo || defaultAssignee;
   }
 
   try {
@@ -2740,6 +3261,13 @@ app.patch('/api/leads/:id', async (req, res) => {
     return res.status(400).json({ message: 'No hay campos para actualizar.' });
   }
 
+  if (
+    Object.prototype.hasOwnProperty.call(changes, 'assigned_to')
+    && !canSetLeadAssignee(req.auth, changes.assigned_to)
+  ) {
+    return res.status(403).json({ message: 'No puedes reasignar este lead a otro usuario.' });
+  }
+
   try {
     let effectiveStateCode = changes.state_code;
     if (effectiveStateCode === undefined) {
@@ -2819,7 +3347,7 @@ app.patch('/api/leads/:id', async (req, res) => {
 // ============================================
 
 app.get('/api/notifications', async (req, res) => {
-  const username = cleanText(req.query.username, 120).toLowerCase();
+  const username = cleanText(req.auth?.username || req.query.username, 120).toLowerCase();
   if (!username) return res.status(400).json({ message: 'username requerido.' });
 
   try {
@@ -2840,7 +3368,7 @@ app.get('/api/notifications', async (req, res) => {
 });
 
 app.patch('/api/notifications/read', async (req, res) => {
-  const username = cleanText(req.body?.username, 120).toLowerCase();
+  const username = cleanText(req.auth?.username || req.body?.username, 120).toLowerCase();
   const ids = req.body?.ids;
   if (!username) return res.status(400).json({ message: 'username requerido.' });
 
@@ -2871,7 +3399,7 @@ app.delete('/api/notifications/:id', async (req, res) => {
     return res.status(400).json({ message: 'id de notificacion invalido.' });
   }
 
-  const username = cleanText(req.body?.username || req.query.username, 120).toLowerCase();
+  const username = cleanText(req.auth?.username || req.body?.username || req.query.username, 120).toLowerCase();
   if (!username) return res.status(400).json({ message: 'username requerido.' });
 
   try {
@@ -2901,21 +3429,46 @@ app.get('/api/callbacks', async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(
-      `SELECT
-         id AS lead_id,
-         case_id,
-         full_name,
-         callback_date,
-         callback_completed_at,
-         assigned_to
-       FROM leads
-       WHERE callback_date IS NOT NULL
-         AND callback_date >= $1::date
-       ORDER BY callback_date ASC, case_id ASC NULLS LAST, id ASC
-       LIMIT 500`,
-      [fromDate]
-    );
+    let rows = [];
+    if (isAdminRole(req.auth?.role)) {
+      ({ rows } = await pool.query(
+        `SELECT
+           id AS lead_id,
+           case_id,
+           full_name,
+           callback_date,
+           callback_completed_at,
+           assigned_to
+         FROM leads
+         WHERE callback_date IS NOT NULL
+           AND callback_date >= $1::date
+         ORDER BY callback_date ASC, case_id ASC NULLS LAST, id ASC
+         LIMIT 500`,
+        [fromDate]
+      ));
+    } else {
+      const identities = getAuthIdentities(req.auth);
+      if (!identities.length) {
+        return res.status(403).json({ message: 'No autorizado para ver callbacks.' });
+      }
+
+      ({ rows } = await pool.query(
+        `SELECT
+           id AS lead_id,
+           case_id,
+           full_name,
+           callback_date,
+           callback_completed_at,
+           assigned_to
+         FROM leads
+         WHERE callback_date IS NOT NULL
+           AND callback_date >= $1::date
+           AND lower(coalesce(assigned_to, '')) = ANY($2::text[])
+         ORDER BY callback_date ASC, case_id ASC NULLS LAST, id ASC
+         LIMIT 500`,
+        [fromDate, identities]
+      ));
+    }
 
     const normalizeCallbackDateForApi = (value) => {
       if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -2963,6 +3516,7 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
       `SELECT id,
               callback_date::date AS callback_date,
               callback_completed_at,
+              assigned_to,
               CURRENT_DATE::date AS server_today
        FROM leads
        WHERE id = $1
@@ -2975,6 +3529,14 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
     }
 
     const lead = leadRows[0];
+    if (!isAdminRole(req.auth?.role)) {
+      const identities = getAuthIdentities(req.auth);
+      const assignedTo = cleanText(lead.assigned_to, 120).toLowerCase();
+      if (!assignedTo || !identities.includes(assignedTo)) {
+        return res.status(403).json({ message: 'No tienes permisos para completar esta task.' });
+      }
+    }
+
     const callbackDate = lead.callback_date ? String(lead.callback_date).slice(0, 10) : '';
     const serverToday = lead.server_today ? String(lead.server_today).slice(0, 10) : '';
 
@@ -3029,6 +3591,10 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
 
 app.delete('/api/leads/:id', async (req, res) => {
   const leadId = req.params.id;
+
+  if (!isAdminRole(req.auth?.role)) {
+    return res.status(403).json({ message: 'Solo admin puede eliminar leads.' });
+  }
 
   try {
     await pool.query('BEGIN');
@@ -4010,6 +4576,7 @@ app.get('/client.html', (_req, res) => {
 
 async function startServer() {
   await runMigrations();
+  await ensureDefaultAuthUsersSeed();
 
   app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);
