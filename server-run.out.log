@@ -1,6 +1,2 @@
-
-> project-gw@1.0.0 start
-> node server/index.js
-
-[dotenv@17.3.1] injecting env (8) from .env -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+[dotenv@17.3.1] injecting env (11) from .env -- tip: ⚙️  override existing env vars with { override: true }
 Servidor activo en http://localhost:3000

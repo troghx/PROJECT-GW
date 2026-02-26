@@ -875,12 +875,19 @@
     }
   });
 
+  let _qaMouseTicking = false;
   doc.addEventListener('mousemove', (event) => {
     pointer.x = event.clientX;
     pointer.y = event.clientY;
-    syncRadialVisibility();
-    if (!menuOpen && isHomeActive()) {
-      setMenuPosition(pointer.x, pointer.y);
+    if (!_qaMouseTicking) {
+      globalScope.requestAnimationFrame(() => {
+        syncRadialVisibility();
+        if (!menuOpen && isHomeActive()) {
+          setMenuPosition(pointer.x, pointer.y);
+        }
+        _qaMouseTicking = false;
+      });
+      _qaMouseTicking = true;
     }
   });
 
@@ -909,11 +916,18 @@
     }
   });
 
+  let _qaResizeTicking = false;
   globalScope.addEventListener('resize', () => {
-    closeRadialMenu();
-    syncRadialVisibility();
+    if (!_qaResizeTicking) {
+      globalScope.requestAnimationFrame(() => {
+        closeRadialMenu();
+        syncRadialVisibility();
+        _qaResizeTicking = false;
+      });
+      _qaResizeTicking = true;
+    }
   });
-  globalScope.addEventListener('scroll', closeRadialMenu, true);
+  globalScope.addEventListener('scroll', closeRadialMenu, { capture: true, passive: true });
 
   syncRadialVisibility();
   setMenuPosition(pointer.x, pointer.y);

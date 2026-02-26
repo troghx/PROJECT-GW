@@ -14,44 +14,66 @@ const { pool } = require('./db');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = path.join(__dirname, '..');
-const PUBLIC_API_PATHS = new Set(['/health', '/auth/login']);
-const DEFAULT_AUTH_USERS = [
-  {
-    username: 'admin',
-    pin: '112233',
-    displayName: 'Admin',
-    role: 'admin',
-    email: 'Elliot.Perez@cerodeuda.com'
-  },
-  {
-    username: 'elliot',
-    pin: '654321',
-    displayName: 'Demo Seller',
-    role: 'seller',
-    email: 'demo.seller@cerodeuda.com'
-  }
-];
+const PUBLIC_API_PATHS = new Set(['/health', '/auth/login', '/auth/refresh', '/auth/logout']);
+const ACCESS_TOKEN_EXPIRES_IN = cleanText(process.env.JWT_EXPIRES_IN, 40) || '15m';
+const REFRESH_COOKIE_NAME = 'project_gw_refresh_token';
+const REFRESH_COOKIE_PATH = '/api/auth';
+const REFRESH_TOKEN_TTL_DAYS = parsePositiveInt(process.env.REFRESH_TOKEN_TTL_DAYS, 14, 1, 60);
+const REFRESH_TOKEN_TTL_MS = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_BYTES = 48;
+const DEFAULT_CORS_ORIGINS = new Set([
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+]);
 
-app.use(cors());
+function buildCorsOptions() {
+  const configuredRaw = cleanText(process.env.CORS_ORIGIN, 4000);
+  const configuredOrigins = configuredRaw
+    .split(',')
+    .map((value) => cleanText(value, 300))
+    .filter(Boolean);
+  const fallbackOrigins = Array.from(DEFAULT_CORS_ORIGINS);
+  const allowAll = configuredOrigins.includes('*');
+  const allowedOrigins = allowAll
+    ? []
+    : new Set(configuredOrigins.length ? configuredOrigins : fallbackOrigins);
+
+  return {
+    credentials: true,
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowAll || allowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error('Origen no permitido por CORS.'));
+    }
+  };
+}
+
+app.use(cors(buildCorsOptions()));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(ROOT_DIR));
 
 function getJwtSecret() {
   const configuredSecret = cleanText(process.env.JWT_SECRET, 500);
-  if (configuredSecret) return configuredSecret;
-  return 'project-gw-dev-only-secret-change-me';
+  if (!configuredSecret) {
+    throw new Error('JWT_SECRET no esta configurado. Define JWT_SECRET en .env');
+  }
+  return configuredSecret;
 }
 
 function buildAuthToken(user) {
+  const normalizedId = Number(user?.id);
+  const normalizedSessionId = Number(user?.sessionId);
   return jwt.sign(
     {
+      id: Number.isInteger(normalizedId) && normalizedId > 0 ? normalizedId : undefined,
+      sid: Number.isInteger(normalizedSessionId) && normalizedSessionId > 0 ? normalizedSessionId : undefined,
       username: cleanText(user?.username, 120).toLowerCase(),
       displayName: cleanText(user?.displayName || user?.username, 120),
       email: cleanText(user?.email, 160).toLowerCase(),
       role: normalizeRoleValue(user?.role)
     },
     getJwtSecret(),
-    { expiresIn: process.env.JWT_EXPIRES_IN || '12h' }
+    { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
   );
 }
 
@@ -61,7 +83,7 @@ function readBearerToken(req) {
   return match ? match[1] : '';
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const token = readBearerToken(req);
   if (!token) {
     return res.status(401).json({ message: 'No autorizado. Inicia sesion.' });
@@ -69,23 +91,77 @@ function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, getJwtSecret());
+    const userId = Number(payload?.id);
+    const sessionId = Number(payload?.sid);
     const username = cleanText(payload?.username, 120).toLowerCase();
     const displayName = cleanText(payload?.displayName, 120);
     const email = cleanText(payload?.email, 160).toLowerCase();
-    const role = inferRoleFromIdentity({
-      role: payload?.role,
-      username,
-      displayName,
-      email
-    });
+    const hasValidUserId = Number.isInteger(userId) && userId > 0;
+    const hasValidSessionId = Number.isInteger(sessionId) && sessionId > 0;
 
-    if (!username) {
-      return res.status(401).json({ message: 'Sesion invalida. Inicia sesion nuevamente.' });
+    if (!hasValidUserId || !hasValidSessionId) {
+      return res.status(401).json({ message: 'Sesion invalida u obsoleta. Inicia sesion nuevamente.' });
     }
 
-    req.auth = { username, displayName, email, role };
+    const { rows } = await pool.query(
+      `SELECT s.id AS session_id, s.user_id, s.revoked_at, s.refresh_token_expires_at,
+              u.username, u.display_name, u.email, u.role, u.is_active
+       FROM auth_sessions s
+       JOIN app_users u ON u.id = s.user_id
+       WHERE s.id = $1
+       LIMIT 1`,
+      [sessionId]
+    );
+
+    if (!rows.length) {
+      return res.status(401).json({ message: 'Sesion no encontrada. Inicia sesion nuevamente.' });
+    }
+
+    const row = rows[0];
+    const dbUserId = Number(row.user_id);
+    if (!Number.isInteger(dbUserId) || dbUserId !== userId) {
+      return res.status(401).json({ message: 'Sesion invalida. Inicia sesion nuevamente.' });
+    }
+    if (!row.is_active) {
+      return res.status(401).json({ message: 'Tu usuario esta inactivo.' });
+    }
+    if (row.revoked_at) {
+      return res.status(401).json({ message: 'Sesion cerrada. Inicia sesion nuevamente.' });
+    }
+    if (row.refresh_token_expires_at && new Date(row.refresh_token_expires_at).getTime() <= Date.now()) {
+      return res.status(401).json({ message: 'Sesion expirada. Inicia sesion nuevamente.' });
+    }
+
+    const dbUsername = normalizeUsername(row.username);
+    const dbDisplayName = cleanText(row.display_name || row.username, 120);
+    const dbEmail = cleanText(row.email, 160).toLowerCase();
+    const role = inferRoleFromIdentity({
+      role: row.role,
+      username: dbUsername,
+      displayName: dbDisplayName,
+      email: dbEmail
+    });
+
+    req.auth = {
+      id: dbUserId,
+      sessionId,
+      username: dbUsername,
+      displayName: dbDisplayName,
+      email: dbEmail,
+      role,
+      tokenRole: inferRoleFromIdentity({
+        role: payload?.role,
+        username,
+        displayName,
+        email
+      })
+    };
     return next();
-  } catch (_error) {
+  } catch (error) {
+    if (error?.name === 'JsonWebTokenError' || error?.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Sesion expirada o invalida. Inicia sesion nuevamente.' });
+    }
+    console.error('Error al validar sesion:', error);
     return res.status(401).json({ message: 'Sesion expirada o invalida. Inicia sesion nuevamente.' });
   }
 }
@@ -93,7 +169,7 @@ function requireAuth(req, res, next) {
 app.use('/api', (req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (PUBLIC_API_PATHS.has(req.path)) return next();
-  return requireAuth(req, res, next);
+  return void requireAuth(req, res, next);
 });
 
 // Lista de estados Green (los demas son Red)
@@ -122,6 +198,81 @@ const FILE_ALLOWED_MIME_TYPES = new Set([
 const FILE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 let sentEmailsSchemaReady = false;
 let sentEmailsSchemaPromise = null;
+const PERMISSION_CATALOG = [
+  { key: 'users.manage', module: 'usuarios', label: 'Gestionar usuarios', description: 'Crear, editar, activar o desactivar usuarios.' },
+  { key: 'users.permissions.manage', module: 'usuarios', label: 'Gestionar permisos', description: 'Asignar o revocar permisos granulares por usuario.' },
+  { key: 'leads.view_all', module: 'leads', label: 'Ver todos los leads', description: 'Acceso global al listado de leads.' },
+  { key: 'leads.view_assigned', module: 'leads', label: 'Ver leads asignados', description: 'Ver leads asignados al usuario.' },
+  { key: 'leads.create', module: 'leads', label: 'Crear leads', description: 'Crear nuevos leads.' },
+  { key: 'leads.edit', module: 'leads', label: 'Editar leads', description: 'Modificar datos de leads.' },
+  { key: 'leads.assign', module: 'leads', label: 'Asignar leads', description: 'Reasignar leads a otros usuarios.' },
+  { key: 'leads.delete', module: 'leads', label: 'Eliminar leads', description: 'Eliminar leads del sistema.' },
+  { key: 'notes.manage', module: 'leads', label: 'Gestionar notas', description: 'Crear, editar y eliminar notas de leads.' },
+  { key: 'emails.view_all', module: 'correos', label: 'Ver todos los correos', description: 'Acceso global al historial de correos.' },
+  { key: 'emails.send', module: 'correos', label: 'Enviar/registrar correos', description: 'Registrar y enviar correos desde el CRM.' },
+  { key: 'emails.delete', module: 'correos', label: 'Eliminar correos', description: 'Eliminar correos individuales o en lote.' },
+  { key: 'callbacks.view_all', module: 'operacion', label: 'Ver callbacks globales', description: 'Ver callbacks de todos los asesores.' },
+  { key: 'callbacks.complete_assigned', module: 'operacion', label: 'Completar callbacks asignados', description: 'Completar callbacks de leads asignados.' },
+  { key: 'files.manage', module: 'documentos', label: 'Gestionar archivos', description: 'Subir, consultar y eliminar archivos de leads.' },
+  { key: 'tasks.manage', module: 'operacion', label: 'Gestionar tareas', description: 'Crear y actualizar tareas operativas.' }
+];
+const PERMISSION_KEYS = new Set(PERMISSION_CATALOG.map((entry) => entry.key));
+const ROLE_PERMISSION_MATRIX = {
+  admin: {
+    'users.manage': true,
+    'users.permissions.manage': true,
+    'leads.view_all': true,
+    'leads.view_assigned': true,
+    'leads.create': true,
+    'leads.edit': true,
+    'leads.assign': true,
+    'leads.delete': true,
+    'notes.manage': true,
+    'emails.view_all': true,
+    'emails.send': true,
+    'emails.delete': true,
+    'callbacks.view_all': true,
+    'callbacks.complete_assigned': true,
+    'files.manage': true,
+    'tasks.manage': true
+  },
+  supervisor: {
+    'users.manage': false,
+    'users.permissions.manage': false,
+    'leads.view_all': true,
+    'leads.view_assigned': true,
+    'leads.create': true,
+    'leads.edit': true,
+    'leads.assign': true,
+    'leads.delete': true,
+    'notes.manage': true,
+    'emails.view_all': true,
+    'emails.send': true,
+    'emails.delete': true,
+    'callbacks.view_all': true,
+    'callbacks.complete_assigned': true,
+    'files.manage': true,
+    'tasks.manage': true
+  },
+  seller: {
+    'users.manage': false,
+    'users.permissions.manage': false,
+    'leads.view_all': false,
+    'leads.view_assigned': true,
+    'leads.create': true,
+    'leads.edit': true,
+    'leads.assign': false,
+    'leads.delete': false,
+    'notes.manage': true,
+    'emails.view_all': false,
+    'emails.send': true,
+    'emails.delete': false,
+    'callbacks.view_all': false,
+    'callbacks.complete_assigned': true,
+    'files.manage': true,
+    'tasks.manage': true
+  }
+};
 
 const VALID_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -264,60 +415,295 @@ function verifyPinHash(pin, pinSalt, pinHash) {
   }
 }
 
-async function ensureDefaultAuthUsersSeed() {
-  for (const user of DEFAULT_AUTH_USERS) {
-    const username = normalizeUsername(user.username);
-    const displayName = cleanText(user.displayName || user.username, 120) || username;
-    const email = cleanText(user.email, 160).toLowerCase() || null;
-    const role = normalizeRoleValue(user.role) || 'seller';
-    const pin = String(user.pin || '').replace(/\D/g, '');
+function hashRefreshToken(refreshToken) {
+  return crypto.createHash('sha256').update(String(refreshToken || '')).digest('hex');
+}
 
-    const { rows } = await pool.query(
-      `SELECT id, pin_salt, pin_hash
-       FROM app_users
-       WHERE username = $1
-       LIMIT 1`,
-      [username]
+function createRefreshToken() {
+  return crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
+}
+
+function getRefreshCookieBaseOptions() {
+  const env = cleanText(process.env.NODE_ENV, 40).toLowerCase();
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: env === 'production',
+    path: REFRESH_COOKIE_PATH
+  };
+}
+
+function setRefreshTokenCookie(res, refreshToken) {
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    ...getRefreshCookieBaseOptions(),
+    maxAge: REFRESH_TOKEN_TTL_MS
+  });
+}
+
+function clearRefreshTokenCookie(res) {
+  res.clearCookie(REFRESH_COOKIE_NAME, getRefreshCookieBaseOptions());
+}
+
+function parseCookiesFromRequest(req) {
+  const headerValue = String(req.headers?.cookie || '').trim();
+  if (!headerValue) return {};
+
+  return headerValue
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((acc, pair) => {
+      const separatorIndex = pair.indexOf('=');
+      if (separatorIndex <= 0) return acc;
+      const key = pair.slice(0, separatorIndex).trim();
+      const value = pair.slice(separatorIndex + 1).trim();
+      if (!key) return acc;
+      try {
+        acc[key] = decodeURIComponent(value);
+      } catch (_error) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+}
+
+function readRefreshToken(req) {
+  const cookies = parseCookiesFromRequest(req);
+  const cookieToken = cleanText(cookies[REFRESH_COOKIE_NAME], 700);
+  const headerToken = cleanText(req.headers?.['x-refresh-token'], 700);
+  return cookieToken || headerToken || '';
+}
+
+function getRequestIp(req) {
+  const forwarded = cleanText(req.headers?.['x-forwarded-for'], 200);
+  if (forwarded) {
+    const firstIp = forwarded.split(',')[0];
+    return cleanText(firstIp, 80) || null;
+  }
+  const remoteAddress = cleanText(req.socket?.remoteAddress, 80);
+  return remoteAddress || null;
+}
+
+function mapAuthUserForClient(user) {
+  return {
+    id: Number(user?.id),
+    username: normalizeUsername(user?.username),
+    displayName: cleanText(user?.displayName || user?.display_name || user?.username, 120),
+    role: normalizeRoleValue(user?.role) || 'seller',
+    email: cleanText(user?.email, 160).toLowerCase() || null
+  };
+}
+
+async function createAuthSession(userId, req, client = pool) {
+  const refreshToken = createRefreshToken();
+  const refreshTokenHash = hashRefreshToken(refreshToken);
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
+  const ipAddress = getRequestIp(req);
+  const userAgent = cleanText(req.headers?.['user-agent'], 300) || null;
+
+  const { rows } = await client.query(
+    `INSERT INTO auth_sessions (
+       user_id, refresh_token_hash, refresh_token_expires_at,
+       created_ip, created_user_agent, last_seen_at
+     ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+     RETURNING id, refresh_token_expires_at`,
+    [userId, refreshTokenHash, expiresAt, ipAddress, userAgent]
+  );
+
+  return {
+    id: Number(rows[0].id),
+    refreshToken,
+    refreshTokenExpiresAt: rows[0].refresh_token_expires_at
+  };
+}
+
+async function revokeAuthSessionById(sessionId, reason = 'logout', client = pool) {
+  const normalizedSessionId = Number(sessionId);
+  if (!Number.isInteger(normalizedSessionId) || normalizedSessionId <= 0) return 0;
+  const { rowCount } = await client.query(
+    `UPDATE auth_sessions
+     SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+         revoked_reason = COALESCE(revoked_reason, $2),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [normalizedSessionId, cleanText(reason, 160) || 'logout']
+  );
+  return Number(rowCount || 0);
+}
+
+async function revokeAuthSessionByRefreshToken(refreshToken, reason = 'logout', client = pool) {
+  const tokenHash = hashRefreshToken(refreshToken);
+  if (!tokenHash) return 0;
+  const { rowCount } = await client.query(
+    `UPDATE auth_sessions
+     SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+         revoked_reason = COALESCE(revoked_reason, $2),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE refresh_token_hash = $1`,
+    [tokenHash, cleanText(reason, 160) || 'logout']
+  );
+  return Number(rowCount || 0);
+}
+
+async function rotateAuthSessionByRefreshToken(refreshToken, req) {
+  const tokenHash = hashRefreshToken(refreshToken);
+  if (!tokenHash) return null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `SELECT s.id AS session_id, s.user_id, s.revoked_at, s.refresh_token_expires_at,
+              u.id AS user_id_ref, u.username, u.display_name, u.role, u.email, u.is_active
+       FROM auth_sessions s
+       JOIN app_users u ON u.id = s.user_id
+       WHERE s.refresh_token_hash = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [tokenHash]
     );
 
-    if (rows.length === 0) {
-      const credentials = createPinHash(pin);
-      await pool.query(
-        `INSERT INTO app_users (
-           username, display_name, role, email, pin_salt, pin_hash, is_active
-         ) VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
-        [username, displayName, role, email, credentials.pinSalt, credentials.pinHash]
-      );
-      continue;
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return null;
     }
 
     const current = rows[0];
-    const updates = [];
-    const values = [];
-
-    if (!current.pin_salt || !current.pin_hash) {
-      const credentials = createPinHash(pin);
-      updates.push(`pin_salt = $${updates.length + 1}`);
-      values.push(credentials.pinSalt);
-      updates.push(`pin_hash = $${updates.length + 1}`);
-      values.push(credentials.pinHash);
+    const expiresAt = new Date(current.refresh_token_expires_at).getTime();
+    if (!current.is_active || current.revoked_at || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      await revokeAuthSessionById(current.session_id, 'refresh_expired_or_revoked', client);
+      await client.query('COMMIT');
+      return null;
     }
 
-    updates.push(`display_name = COALESCE(NULLIF(display_name, ''), $${updates.length + 1})`);
-    values.push(displayName);
-    updates.push(`role = COALESCE(NULLIF(role, ''), $${updates.length + 1})`);
-    values.push(role);
-    updates.push(`email = COALESCE(email, $${updates.length + 1})`);
-    values.push(email);
-
-    values.push(current.id);
-    await pool.query(
-      `UPDATE app_users
-       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $${values.length}`,
-      values
+    const nextSession = await createAuthSession(current.user_id, req, client);
+    await client.query(
+      `UPDATE auth_sessions
+       SET revoked_at = CURRENT_TIMESTAMP,
+           revoked_reason = 'refresh_rotated',
+           replaced_by_session_id = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [current.session_id, nextSession.id]
     );
+
+    await client.query(
+      `UPDATE app_users
+       SET last_seen_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [current.user_id]
+    );
+
+    await client.query(
+      `DELETE FROM auth_sessions
+       WHERE user_id = $1
+         AND revoked_at IS NOT NULL
+         AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 days'`,
+      [current.user_id]
+    );
+
+    await client.query('COMMIT');
+    return {
+      session: nextSession,
+      user: mapAuthUserForClient({
+        id: current.user_id_ref,
+        username: current.username,
+        displayName: current.display_name,
+        role: current.role,
+        email: current.email
+      })
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}
+
+function getBootstrapAdminSeed() {
+  const username = normalizeUsername(process.env.BOOTSTRAP_ADMIN_USERNAME);
+  const pin = String(process.env.BOOTSTRAP_ADMIN_PIN || '').replace(/\D/g, '');
+  const displayName = cleanText(process.env.BOOTSTRAP_ADMIN_DISPLAY_NAME || username, 120) || username;
+  const email = cleanText(process.env.BOOTSTRAP_ADMIN_EMAIL, 160).toLowerCase() || null;
+
+  const hasAnySeedInput = Boolean(username || pin || displayName || email);
+  if (!hasAnySeedInput || (!username && !pin)) return null;
+
+  if (!username) {
+    throw new Error('BOOTSTRAP_ADMIN_USERNAME es obligatorio si configuras BOOTSTRAP_ADMIN_PIN.');
+  }
+  if (pin.length !== 6) {
+    throw new Error('BOOTSTRAP_ADMIN_PIN debe tener 6 digitos.');
+  }
+
+  return {
+    username,
+    pin,
+    displayName: displayName || username,
+    role: 'admin',
+    email
+  };
+}
+
+async function ensureBootstrapAdminSeed() {
+  const bootstrapAdmin = getBootstrapAdminSeed();
+  if (!bootstrapAdmin) return;
+
+  const { rows } = await pool.query(
+    `SELECT id, pin_salt, pin_hash
+     FROM app_users
+     WHERE username = $1
+     LIMIT 1`,
+    [bootstrapAdmin.username]
+  );
+
+  if (rows.length === 0) {
+    const credentials = createPinHash(bootstrapAdmin.pin);
+    await pool.query(
+      `INSERT INTO app_users (
+         username, display_name, role, email, pin_salt, pin_hash, is_active
+       ) VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+      [
+        bootstrapAdmin.username,
+        bootstrapAdmin.displayName,
+        bootstrapAdmin.role,
+        bootstrapAdmin.email,
+        credentials.pinSalt,
+        credentials.pinHash
+      ]
+    );
+    return;
+  }
+
+  const current = rows[0];
+  const updates = [];
+  const values = [];
+
+  if (!current.pin_salt || !current.pin_hash) {
+    const credentials = createPinHash(bootstrapAdmin.pin);
+    updates.push(`pin_salt = $${updates.length + 1}`);
+    values.push(credentials.pinSalt);
+    updates.push(`pin_hash = $${updates.length + 1}`);
+    values.push(credentials.pinHash);
+  }
+
+  updates.push(`display_name = COALESCE(NULLIF(display_name, ''), $${updates.length + 1})`);
+  values.push(bootstrapAdmin.displayName);
+  updates.push(`role = COALESCE(NULLIF(role, ''), $${updates.length + 1})`);
+  values.push(bootstrapAdmin.role);
+  updates.push(`email = COALESCE(email, $${updates.length + 1})`);
+  values.push(bootstrapAdmin.email);
+
+  values.push(current.id);
+  await pool.query(
+    `UPDATE app_users
+     SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $${values.length}`,
+    values
+  );
 }
 
 async function findAuthUser(identifier, pin) {
@@ -350,40 +736,208 @@ async function findAuthUser(identifier, pin) {
 function normalizeRoleValue(roleValue) {
   const normalizedRole = String(roleValue || '').trim().toLowerCase();
   if (normalizedRole === 'admin') return 'admin';
+  if (normalizedRole === 'supervisor') return 'supervisor';
   if (normalizedRole === 'seller') return 'seller';
   return '';
 }
 
-function inferRoleFromIdentity({ role, username, displayName, email }) {
+function inferRoleFromIdentity({ role }) {
   const explicitRole = normalizeRoleValue(role);
   if (explicitRole) return explicitRole;
-
-  const identities = [username, displayName, email]
-    .map((value) => cleanText(value, 160).toLowerCase())
-    .filter(Boolean);
-  if (!identities.length) return '';
-
-  const matchedUser = DEFAULT_AUTH_USERS.find((user) => {
-    const options = [
-      cleanText(user.username, 160),
-      cleanText(user.displayName, 160),
-      cleanText(user.email, 160)
-    ]
-      .map((value) => value.toLowerCase())
-      .filter(Boolean);
-    return identities.some((identity) => options.includes(identity));
-  });
-
-  return normalizeRoleValue(matchedUser?.role);
+  return '';
 }
 
 function isAdminRole(roleValue) {
   return normalizeRoleValue(roleValue) === 'admin';
 }
 
+function hasGlobalAccessRole(roleValue) {
+  const role = normalizeRoleValue(roleValue);
+  return role === 'admin' || role === 'supervisor';
+}
+
+function normalizePermissionKey(permissionKey) {
+  const normalized = cleanText(permissionKey, 120).toLowerCase();
+  if (!normalized || !PERMISSION_KEYS.has(normalized)) return '';
+  return normalized;
+}
+
+function getRolePermissionBaseMap(roleValue) {
+  const normalizedRole = normalizeRoleValue(roleValue) || 'seller';
+  const base = ROLE_PERMISSION_MATRIX[normalizedRole] || ROLE_PERMISSION_MATRIX.seller;
+  return { ...base };
+}
+
+function getRolePermissionBaseValue(roleValue, permissionKey) {
+  const normalizedKey = normalizePermissionKey(permissionKey);
+  if (!normalizedKey) return false;
+  const base = getRolePermissionBaseMap(roleValue);
+  return Boolean(base[normalizedKey]);
+}
+
+function buildPermissionMatrixForRoles() {
+  const roles = ['admin', 'supervisor', 'seller'];
+  const matrix = {};
+  roles.forEach((role) => {
+    matrix[role] = getRolePermissionBaseMap(role);
+  });
+  return matrix;
+}
+
+async function getEffectivePermissionSetForUser(userId, roleValue, client = pool) {
+  const normalizedUserId = Number(userId);
+  const normalizedRole = normalizeRoleValue(roleValue) || 'seller';
+  const effectiveMap = getRolePermissionBaseMap(normalizedRole);
+
+  const { rows: roleRows } = await client.query(
+    `SELECT permission_key, allowed
+     FROM role_permissions
+     WHERE role = $1`,
+    [normalizedRole]
+  );
+  roleRows.forEach((row) => {
+    const key = normalizePermissionKey(row.permission_key);
+    if (!key) return;
+    effectiveMap[key] = Boolean(row.allowed);
+  });
+
+  if (Number.isInteger(normalizedUserId) && normalizedUserId > 0) {
+    const { rows: userRows } = await client.query(
+      `SELECT permission_key, allowed
+       FROM user_permissions
+       WHERE user_id = $1`,
+      [normalizedUserId]
+    );
+    userRows.forEach((row) => {
+      const key = normalizePermissionKey(row.permission_key);
+      if (!key) return;
+      effectiveMap[key] = Boolean(row.allowed);
+    });
+  }
+
+  return new Set(
+    Object.entries(effectiveMap)
+      .filter(([, allowed]) => Boolean(allowed))
+      .map(([key]) => key)
+  );
+}
+
+function hasPermissionInSet(permissionSet, permissionKey) {
+  const normalizedKey = normalizePermissionKey(permissionKey);
+  if (!normalizedKey) return false;
+  if (!(permissionSet instanceof Set)) return false;
+  return permissionSet.has(normalizedKey);
+}
+
+function hasAuthPermission(authContext, permissionKey) {
+  const normalizedKey = normalizePermissionKey(permissionKey);
+  if (!normalizedKey) return false;
+  if (!authContext || typeof authContext !== 'object') return false;
+  if (hasPermissionInSet(authContext.permissionSet, normalizedKey)) return true;
+
+  if (Array.isArray(authContext.permissions)) {
+    const normalizedPermissions = authContext.permissions
+      .map((value) => normalizePermissionKey(value))
+      .filter(Boolean);
+    if (normalizedPermissions.includes(normalizedKey)) return true;
+  }
+
+  return getRolePermissionBaseValue(authContext.role, normalizedKey);
+}
+
+async function hydrateAuthPermissions(req) {
+  if (!req?.auth || typeof req.auth !== 'object') return new Set();
+  if (req.auth.permissionSet instanceof Set) return req.auth.permissionSet;
+
+  const permissionSet = await getEffectivePermissionSetForUser(req.auth.id, req.auth.role);
+  req.auth.permissionSet = permissionSet;
+  req.auth.permissions = Array.from(permissionSet).sort((a, b) =>
+    a.localeCompare(b, 'es', { sensitivity: 'base' })
+  );
+  return permissionSet;
+}
+
+async function hasRequestPermission(req, permissionKey) {
+  await hydrateAuthPermissions(req);
+  return hasAuthPermission(req.auth, permissionKey);
+}
+
+function requirePermission(permissionKey, errorMessage = 'No tienes permisos para realizar esta accion.') {
+  return async (req, res, next) => {
+    try {
+      const allowed = await hasRequestPermission(req, permissionKey);
+      if (!allowed) {
+        return res.status(403).json({ message: errorMessage });
+      }
+      return next();
+    } catch (error) {
+      console.error(`Error validando permiso ${permissionKey}:`, error);
+      return res.status(500).json({ message: 'No se pudo validar permisos.' });
+    }
+  };
+}
+
+async function buildPermissionRowsForUser(userId, roleValue, client = pool) {
+  const normalizedUserId = Number(userId);
+  const normalizedRole = normalizeRoleValue(roleValue) || 'seller';
+  const roleBase = getRolePermissionBaseMap(normalizedRole);
+
+  const { rows: roleRows } = await client.query(
+    `SELECT permission_key, allowed
+     FROM role_permissions
+     WHERE role = $1`,
+    [normalizedRole]
+  );
+  roleRows.forEach((row) => {
+    const key = normalizePermissionKey(row.permission_key);
+    if (!key) return;
+    roleBase[key] = Boolean(row.allowed);
+  });
+
+  const userOverrideMap = new Map();
+  if (Number.isInteger(normalizedUserId) && normalizedUserId > 0) {
+    const { rows: userRows } = await client.query(
+      `SELECT permission_key, allowed
+       FROM user_permissions
+       WHERE user_id = $1`,
+      [normalizedUserId]
+    );
+    userRows.forEach((row) => {
+      const key = normalizePermissionKey(row.permission_key);
+      if (!key) return;
+      userOverrideMap.set(key, Boolean(row.allowed));
+    });
+  }
+
+  return PERMISSION_CATALOG.map((permission) => {
+    const key = permission.key;
+    const roleAllowed = Boolean(roleBase[key]);
+    const overrideAllowed = userOverrideMap.has(key) ? userOverrideMap.get(key) : null;
+    const effectiveAllowed = overrideAllowed === null ? roleAllowed : Boolean(overrideAllowed);
+    return {
+      key,
+      module: permission.module,
+      label: permission.label,
+      description: permission.description,
+      roleAllowed,
+      overrideAllowed,
+      effectiveAllowed
+    };
+  });
+}
+
+async function buildClientUserPayload(user, client = pool) {
+  const mappedUser = mapAuthUserForClient(user);
+  const permissionSet = await getEffectivePermissionSetForUser(mappedUser.id, mappedUser.role, client);
+  return {
+    ...mappedUser,
+    permissions: Array.from(permissionSet).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+  };
+}
+
 function normalizeUserRoleForMutation(value) {
   const normalized = normalizeRoleValue(value);
-  if (!normalized) return { ok: false, message: 'role debe ser admin o seller.' };
+  if (!normalized) return { ok: false, message: 'role debe ser admin, supervisor o seller.' };
   return { ok: true, value: normalized };
 }
 
@@ -424,7 +978,14 @@ function getEmailAccessContext(req) {
       email
     });
     const identities = Array.from(new Set([username, displayName].filter(Boolean)));
-    return { username, displayName, email, role, identities };
+    return {
+      username,
+      displayName,
+      email,
+      role,
+      identities,
+      permissions: Array.isArray(req.auth.permissions) ? req.auth.permissions : []
+    };
   }
 
   const username = cleanText(req.query.username || req.body?.username, 120).toLowerCase();
@@ -437,7 +998,7 @@ function getEmailAccessContext(req) {
     email
   });
   const identities = Array.from(new Set([username, displayName].filter(Boolean)));
-  return { username, displayName, email, role, identities };
+  return { username, displayName, email, role, identities, permissions: [] };
 }
 
 function isValidEmailAddress(value) {
@@ -1287,7 +1848,7 @@ function getAuthIdentities(authContext = {}) {
 }
 
 function canAccessAssignedLead(authContext, assignedToValue) {
-  if (isAdminRole(authContext?.role)) return true;
+  if (hasAuthPermission(authContext, 'leads.view_all') || hasGlobalAccessRole(authContext?.role)) return true;
   const identities = getAuthIdentities(authContext);
   if (!identities.length) return false;
   const assignedTo = cleanText(assignedToValue, 120).toLowerCase();
@@ -1296,7 +1857,7 @@ function canAccessAssignedLead(authContext, assignedToValue) {
 }
 
 function canSetLeadAssignee(authContext, nextAssignedToValue) {
-  if (isAdminRole(authContext?.role)) return true;
+  if (hasAuthPermission(authContext, 'leads.assign') || hasGlobalAccessRole(authContext?.role)) return true;
   const identities = getAuthIdentities(authContext);
   if (!identities.length) return false;
   const nextAssignedTo = cleanText(nextAssignedToValue, 120).toLowerCase();
@@ -2485,30 +3046,155 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ message: 'Credenciales invalidas.' });
   }
 
-  await pool.query(
-    `UPDATE app_users
-     SET last_login_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1`,
-    [authUser.id]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  return res.json({
-    ok: true,
-    message: 'Acceso correcto.',
-    user: {
-      username: authUser.username,
-      displayName: authUser.displayName,
-      role: authUser.role,
-      email: authUser.email || null
-    },
-    token: buildAuthToken(authUser)
-  });
+    await client.query(
+      `UPDATE app_users
+       SET last_login_at = CURRENT_TIMESTAMP,
+           last_seen_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [authUser.id]
+    );
+
+    const authSession = await createAuthSession(authUser.id, req, client);
+    await client.query('COMMIT');
+
+    setRefreshTokenCookie(res, authSession.refreshToken);
+    const user = await buildClientUserPayload(authUser, client);
+    return res.json({
+      ok: true,
+      message: 'Acceso correcto.',
+      user,
+      token: buildAuthToken({ ...user, sessionId: authSession.id })
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al iniciar sesion:', error);
+    return res.status(500).json({ message: 'No se pudo crear la sesion.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const refreshToken = readRefreshToken(req);
+  if (!refreshToken) {
+    clearRefreshTokenCookie(res);
+    return res.status(401).json({ message: 'Refresh token no disponible.' });
+  }
+
+  try {
+    const rotated = await rotateAuthSessionByRefreshToken(refreshToken, req);
+    if (!rotated) {
+      clearRefreshTokenCookie(res);
+      return res.status(401).json({ message: 'Sesion expirada. Inicia sesion nuevamente.' });
+    }
+
+    setRefreshTokenCookie(res, rotated.session.refreshToken);
+    const user = await buildClientUserPayload(rotated.user);
+    return res.json({
+      ok: true,
+      message: 'Sesion renovada.',
+      user,
+      token: buildAuthToken({ ...user, sessionId: rotated.session.id })
+    });
+  } catch (error) {
+    console.error('Error al renovar sesion:', error);
+    clearRefreshTokenCookie(res);
+    return res.status(500).json({ message: 'No se pudo renovar la sesion.' });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  const refreshToken = readRefreshToken(req);
+  const bearerToken = readBearerToken(req);
+  let revokedSessions = 0;
+
+  try {
+    if (refreshToken) {
+      revokedSessions += await revokeAuthSessionByRefreshToken(refreshToken, 'logout');
+    }
+
+    if (!revokedSessions && bearerToken) {
+      try {
+        const payload = jwt.verify(bearerToken, getJwtSecret(), { ignoreExpiration: true });
+        revokedSessions += await revokeAuthSessionById(payload?.sid, 'logout');
+      } catch (_error) {
+        // Ignorar token invalido; logout local igual debe continuar
+      }
+    }
+
+    clearRefreshTokenCookie(res);
+    return res.json({ ok: true, revokedSessions });
+  } catch (error) {
+    console.error('Error al cerrar sesion:', error);
+    clearRefreshTokenCookie(res);
+    return res.status(500).json({ message: 'No se pudo cerrar sesion.' });
+  }
+});
+
+app.post('/api/ping', async (req, res) => {
+  const userId = Number(req.auth?.id);
+  const sessionId = Number(req.auth?.sessionId);
+  const username = cleanText(req.auth?.username, 120).toLowerCase();
+  const hasValidId = Number.isInteger(userId) && userId > 0;
+  if (!hasValidId && !username) return res.status(401).json({ ok: false });
+
+  try {
+    let result;
+    if (hasValidId) {
+      result = await pool.query(
+        `UPDATE app_users
+         SET last_seen_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [userId]
+      );
+    } else {
+      result = await pool.query(
+        `UPDATE app_users
+         SET last_seen_at = CURRENT_TIMESTAMP
+         WHERE lower(username) = $1`,
+        [username]
+      );
+    }
+
+    if (!result?.rowCount && username) {
+      result = await pool.query(
+        `UPDATE app_users
+         SET last_seen_at = CURRENT_TIMESTAMP
+         WHERE lower(username) = $1`,
+        [username]
+      );
+    }
+
+    if (!result?.rowCount) {
+      return res.status(404).json({ ok: false });
+    }
+
+    if (Number.isInteger(sessionId) && sessionId > 0) {
+      await pool.query(
+        `UPDATE auth_sessions
+         SET last_seen_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND revoked_at IS NULL`,
+        [sessionId]
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ ok: false });
+  }
 });
 
 app.get('/api/users', async (req, res) => {
+  await hydrateAuthPermissions(req);
   const access = req.auth || {};
-  if (!isAdminRole(access.role)) {
+  if (!hasAuthPermission(access, 'leads.view_all')) {
     const selfLabel = cleanText(access.displayName || access.username, 120)
       || cleanText(access.username, 120)
       || '';
@@ -2557,14 +3243,10 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.get('/api/admin/users', async (req, res) => {
-  if (!isAdminRole(req.auth?.role)) {
-    return res.status(403).json({ message: 'Solo admin puede gestionar usuarios.' });
-  }
-
+app.get('/api/admin/users', requirePermission('users.manage', 'No tienes permiso para gestionar usuarios.'), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at
+      `SELECT id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at, last_seen_at
        FROM app_users
        ORDER BY lower(username) ASC`
     );
@@ -2575,11 +3257,7 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-app.post('/api/admin/users', async (req, res) => {
-  if (!isAdminRole(req.auth?.role)) {
-    return res.status(403).json({ message: 'Solo admin puede crear usuarios.' });
-  }
-
+app.post('/api/admin/users', requirePermission('users.manage', 'No tienes permiso para crear usuarios.'), async (req, res) => {
   const normalizedUsername = normalizeRequiredUsername(req.body?.username);
   if (!normalizedUsername.ok) {
     return res.status(400).json({ message: normalizedUsername.message });
@@ -2632,11 +3310,7 @@ app.post('/api/admin/users', async (req, res) => {
   }
 });
 
-app.patch('/api/admin/users/:id', async (req, res) => {
-  if (!isAdminRole(req.auth?.role)) {
-    return res.status(403).json({ message: 'Solo admin puede editar usuarios.' });
-  }
-
+app.patch('/api/admin/users/:id', requirePermission('users.manage', 'No tienes permiso para editar usuarios.'), async (req, res) => {
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId) || userId <= 0) {
     return res.status(400).json({ message: 'ID de usuario invalido.' });
@@ -2739,12 +3413,133 @@ app.patch('/api/admin/users/:id', async (req, res) => {
   }
 });
 
-app.get('/api/emails', async (req, res) => {
-  const access = getEmailAccessContext(req);
-  const role = access.role || 'seller';
-  const limit = parsePositiveInt(req.query.limit, 120, 1, 500);
+app.get('/api/admin/permissions/catalog', requirePermission('users.permissions.manage', 'No tienes permiso para gestionar permisos.'), async (_req, res) => {
+  return res.json({
+    permissions: PERMISSION_CATALOG,
+    roleMatrix: buildPermissionMatrixForRoles()
+  });
+});
 
-  if (role !== 'admin' && access.identities.length === 0) {
+app.get('/api/admin/users/:id/permissions', requirePermission('users.permissions.manage', 'No tienes permiso para gestionar permisos.'), async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'ID de usuario invalido.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, display_name, role, email, is_active
+       FROM app_users
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Usuario no encontrado.' });
+    }
+
+    const targetUser = rows[0];
+    const permissionRows = await buildPermissionRowsForUser(targetUser.id, targetUser.role);
+    return res.json({
+      user: targetUser,
+      permissions: permissionRows
+    });
+  } catch (error) {
+    console.error('Error al obtener permisos del usuario:', error);
+    return res.status(500).json({ message: 'No se pudieron cargar los permisos del usuario.' });
+  }
+});
+
+app.patch('/api/admin/users/:id/permissions', requirePermission('users.permissions.manage', 'No tienes permiso para gestionar permisos.'), async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'ID de usuario invalido.' });
+  }
+
+  const permissionKey = normalizePermissionKey(req.body?.permissionKey || req.body?.permission_key);
+  if (!permissionKey) {
+    return res.status(400).json({ message: 'permissionKey es invalido.' });
+  }
+
+  const allowedRaw = Object.prototype.hasOwnProperty.call(req.body || {}, 'allowed')
+    ? req.body.allowed
+    : req.body?.isAllowed;
+  const shouldReset = allowedRaw === null || String(allowedRaw).trim().toLowerCase() === 'null';
+
+  const actorId = Number(req.auth?.id);
+  const actorUserId = Number.isInteger(actorId) && actorId > 0 ? actorId : null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: targetRows } = await client.query(
+      `SELECT id, username, display_name, role, email, is_active
+       FROM app_users
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (!targetRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Usuario no encontrado.' });
+    }
+
+    if (shouldReset) {
+      await client.query(
+        `DELETE FROM user_permissions
+         WHERE user_id = $1
+           AND permission_key = $2`,
+        [userId, permissionKey]
+      );
+    } else {
+      const normalizedAllowed = normalizeBoolean(allowedRaw, 'allowed');
+      if (!normalizedAllowed.ok) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: normalizedAllowed.message });
+      }
+
+      await client.query(
+        `INSERT INTO user_permissions (user_id, permission_key, allowed, updated_by_user_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, permission_key) DO UPDATE
+         SET allowed = EXCLUDED.allowed,
+             updated_by_user_id = EXCLUDED.updated_by_user_id,
+             updated_at = CURRENT_TIMESTAMP`,
+        [userId, permissionKey, normalizedAllowed.value, actorUserId]
+      );
+    }
+
+    const targetUser = targetRows[0];
+    const permissionRows = await buildPermissionRowsForUser(targetUser.id, targetUser.role, client);
+
+    await client.query('COMMIT');
+    return res.json({
+      ok: true,
+      user: targetUser,
+      permissions: permissionRows,
+      message: shouldReset ? 'Permiso restablecido a matriz por rol.' : 'Permiso actualizado.'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al actualizar permiso del usuario:', error);
+    return res.status(500).json({ message: 'No se pudo actualizar el permiso.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/emails', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  const access = getEmailAccessContext(req);
+  const limit = parsePositiveInt(req.query.limit, 120, 1, 500);
+  const canViewAllEmails = hasAuthPermission(req.auth, 'emails.view_all');
+  const canDeleteEmails = hasAuthPermission(req.auth, 'emails.delete');
+
+  if (!canViewAllEmails && access.identities.length === 0) {
     return res.status(400).json({ message: 'username o displayName son obligatorios para Seller.' });
   }
 
@@ -2754,7 +3549,7 @@ app.get('/api/emails', async (req, res) => {
     const params = [];
     let whereClause = '';
 
-    if (role !== 'admin') {
+    if (!canViewAllEmails) {
       params.push(access.identities);
       whereClause = `
         WHERE (
@@ -2799,8 +3594,8 @@ app.get('/api/emails', async (req, res) => {
 
     return res.json({
       emails: rows,
-      scope: role === 'admin' ? 'all' : 'seller',
-      canDelete: role === 'admin'
+      scope: canViewAllEmails ? 'all' : 'seller',
+      canDelete: canDeleteEmails
     });
   } catch (error) {
     console.error('Error al obtener correos:', error);
@@ -2809,8 +3604,10 @@ app.get('/api/emails', async (req, res) => {
 });
 
 app.post('/api/emails/send', async (req, res) => {
+  await hydrateAuthPermissions(req);
   const access = getEmailAccessContext(req);
-  const role = access.role || 'seller';
+  const canSendEmails = hasAuthPermission(req.auth, 'emails.send');
+  const canViewAllEmails = hasAuthPermission(req.auth, 'emails.view_all');
   const leadId = parsePositiveInteger(req.body?.leadId || req.body?.lead_id);
   const toEmailInput = req.body?.toEmail ?? req.body?.to_email;
   const ccInput = req.body?.ccEmails ?? req.body?.cc_emails;
@@ -2819,6 +3616,10 @@ app.post('/api/emails/send', async (req, res) => {
   const bodyText = String(req.body?.body || '').trim();
   const provider = cleanText(req.body?.provider, 40) || 'platform';
   const providerMessageId = cleanText(req.body?.providerMessageId || req.body?.provider_message_id, 180);
+
+  if (!canSendEmails) {
+    return res.status(403).json({ message: 'No tienes permisos para enviar correos.' });
+  }
 
   if (!access.username && !access.displayName && !access.email) {
     return res.status(400).json({ message: 'username/displayName/email son obligatorios para registrar correos.' });
@@ -2878,7 +3679,7 @@ app.post('/api/emails/send', async (req, res) => {
       return res.status(404).json({ message: 'Lead no encontrado.' });
     }
 
-    if (!isAdminRole(role)) {
+    if (!canViewAllEmails) {
       if (!access.identities.length) {
         return res.status(403).json({ message: 'No hay identidad valida para Seller.' });
       }
@@ -2967,8 +3768,8 @@ app.delete('/api/emails/:id', async (req, res) => {
 
   const access = getEmailAccessContext(req);
   const role = access.role || 'seller';
-  if (!isAdminRole(role)) {
-    return res.status(403).json({ message: 'Solo admin puede eliminar correos.' });
+  if (!hasGlobalAccessRole(role)) {
+    return res.status(403).json({ message: 'Solo admin o supervisor puede eliminar correos.' });
   }
 
   try {
@@ -2992,10 +3793,9 @@ app.delete('/api/emails/:id', async (req, res) => {
 });
 
 app.post('/api/emails/bulk-delete', async (req, res) => {
-  const access = getEmailAccessContext(req);
-  const role = access.role || 'seller';
-  if (!isAdminRole(role)) {
-    return res.status(403).json({ message: 'Solo admin puede eliminar correos.' });
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'emails.delete')) {
+    return res.status(403).json({ message: 'No tienes permisos para eliminar correos.' });
   }
 
   const ids = Array.isArray(req.body?.ids)
@@ -3031,8 +3831,9 @@ app.post('/api/emails/bulk-delete', async (req, res) => {
 
 app.get('/api/leads', async (req, res) => {
   try {
+    await hydrateAuthPermissions(req);
     let rows = [];
-    if (isAdminRole(req.auth?.role)) {
+    if (hasAuthPermission(req.auth, 'leads.view_all')) {
       ({ rows } = await pool.query(
         `SELECT ${LEAD_SELECT_COLUMNS}
          FROM leads
@@ -3080,8 +3881,9 @@ app.get('/api/leads/duplicates', async (req, res) => {
   }
 
   try {
+    await hydrateAuthPermissions(req);
     let rows = [];
-    if (isAdminRole(req.auth?.role)) {
+    if (hasAuthPermission(req.auth, 'leads.view_all')) {
       ({ rows } = await pool.query(
         `SELECT ${LEAD_SELECT_COLUMNS}
          FROM leads
@@ -3137,6 +3939,11 @@ app.get('/api/leads/duplicates', async (req, res) => {
 });
 
 app.post('/api/leads', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'leads.create')) {
+    return res.status(403).json({ message: 'No tienes permisos para crear leads.' });
+  }
+
   const fullName = cleanText(req.body?.fullName, 120);
   const normalizedPhone = normalizePhone(req.body?.phone, 'phone');
   if (!normalizedPhone.ok) {
@@ -3161,7 +3968,7 @@ app.post('/api/leads', async (req, res) => {
     return res.status(400).json({ message: 'Nombre y telefono son obligatorios.' });
   }
 
-  if (!isAdminRole(req.auth?.role)) {
+  if (!hasGlobalAccessRole(req.auth?.role)) {
     const defaultAssignee = cleanText(req.auth?.displayName || req.auth?.username, 120)
       || cleanText(req.auth?.username, 120)
       || null;
@@ -3247,6 +4054,11 @@ app.get('/api/leads/:id', async (req, res) => {
 });
 
 app.patch('/api/leads/:id', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'leads.edit')) {
+    return res.status(403).json({ message: 'No tienes permisos para editar leads.' });
+  }
+
   const leadId = req.params.id;
   const parsed = parseLeadPatchBody(req.body || {});
 
@@ -3429,8 +4241,10 @@ app.get('/api/callbacks', async (req, res) => {
   }
 
   try {
+    await hydrateAuthPermissions(req);
+    const canViewAllCallbacks = hasAuthPermission(req.auth, 'callbacks.view_all');
     let rows = [];
-    if (isAdminRole(req.auth?.role)) {
+    if (canViewAllCallbacks) {
       ({ rows } = await pool.query(
         `SELECT
            id AS lead_id,
@@ -3512,6 +4326,11 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
   }
 
   try {
+    await hydrateAuthPermissions(req);
+    if (!hasAuthPermission(req.auth, 'callbacks.complete_assigned')) {
+      return res.status(403).json({ message: 'No tienes permisos para completar callbacks.' });
+    }
+
     const { rows: leadRows } = await pool.query(
       `SELECT id,
               callback_date::date AS callback_date,
@@ -3529,7 +4348,7 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
     }
 
     const lead = leadRows[0];
-    if (!isAdminRole(req.auth?.role)) {
+    if (!hasAuthPermission(req.auth, 'callbacks.view_all')) {
       const identities = getAuthIdentities(req.auth);
       const assignedTo = cleanText(lead.assigned_to, 120).toLowerCase();
       if (!assignedTo || !identities.includes(assignedTo)) {
@@ -3592,8 +4411,9 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
 app.delete('/api/leads/:id', async (req, res) => {
   const leadId = req.params.id;
 
-  if (!isAdminRole(req.auth?.role)) {
-    return res.status(403).json({ message: 'Solo admin puede eliminar leads.' });
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'leads.delete')) {
+    return res.status(403).json({ message: 'No tienes permisos para eliminar leads.' });
   }
 
   try {
@@ -4575,8 +5395,9 @@ app.get('/client.html', (_req, res) => {
 });
 
 async function startServer() {
+  getJwtSecret();
   await runMigrations();
-  await ensureDefaultAuthUsersSeed();
+  await ensureBootstrapAdminSeed();
 
   app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);
@@ -4587,4 +5408,3 @@ startServer().catch((error) => {
   console.error('Error de arranque:', error.message);
   process.exit(1);
 });
-

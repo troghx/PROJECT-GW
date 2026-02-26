@@ -1,10 +1,26 @@
 # Atajos Operativos (PROJECT-GW)
 
-Fecha: 2026-02-23
+Fecha: 2026-02-26
+
+## Post-Pull Obligatorio (antes de levantar servidor)
+1. Actualizar repo:
+   - `git pull origin main`
+2. Sincronizar dependencias del backend:
+   - `npm install`
+3. Verificar variables criticas de auth en `.env`:
+   - `JWT_SECRET=...`
+   - `JWT_EXPIRES_IN=12h`
+   - `CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000`
+4. Si aparece error `Cannot find module 'jsonwebtoken'` al correr `npm start`:
+   - Ejecutar de nuevo `npm install`
+   - Reintentar `npm start`
+5. Si aparece error `JWT_SECRET no esta configurado`:
+   - Agregar `JWT_SECRET` en `.env`
+   - Reintentar `npm start`
 
 ## Arranque Diario (SIEMPRE PostgreSQL)
 1. Entrar al proyecto:
-   - `cd C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW`
+   - `cd C:\Users\trolo\Desktop\PROJECT-GW`
 2. Levantar PostgreSQL local (puerto `5433`):
    - `npm run db:start-local`
 3. Levantar backend real:
@@ -14,12 +30,11 @@ Fecha: 2026-02-23
    - Esperado: `{"ok":true,"message":"Server y PostgreSQL conectados."}`
 
 ## Comando Rapido (copiar/pegar)
-`cd C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW; npm run db:start-local; npm start`
+`cd C:\Users\trolo\Desktop\PROJECT-GW; npm run db:start-local; npm start`
 
-## Regla Clave (para no romper flujo)
-- NO usar `npm run start:mock` para trabajo normal.
-- `start:mock` solo sirve para pruebas aisladas sin PostgreSQL.
-- Si corres `start:mock`, callbacks/notificaciones no reflejan la DB real.
+## Regla Clave (obligatoria)
+- El proyecto se ejecuta SOLO con backend real (`server/index.js`) y PostgreSQL real.
+- Comando valido para backend: `npm start`.
 
 ## Cuando Si Correr `db:init-local`
 - Primera vez en la maquina.
@@ -48,6 +63,17 @@ Nota:
   - `http://localhost:3000/api/notifications?username=admin`
 - Callbacks (PostgreSQL):
   - `http://localhost:3000/api/callbacks?from=2026-02-23`
+
+## Troubleshooting Rapido (presencia / conectado)
+- Sintoma: en consola del navegador aparece `POST /api/ping 404` y usuarios salen desconectados.
+- Causa comun: backend viejo en memoria o arranque en modo incorrecto.
+- Solucion:
+  1. Confirmar que estas en backend real: usa `npm start`.
+  2. Reiniciar backend en puerto 3000:
+     - Cerrar proceso actual en 3000.
+     - Correr de nuevo `npm run db:start-local` y `npm start`.
+  3. En navegador hacer hard refresh (`Ctrl+F5`).
+  4. Si sigue igual, cerrar sesion y volver a entrar para refrescar token/sesion.
 
 ## Checklist de Arranque Correcto
 - En consola debe aparecer: `Servidor activo en http://localhost:3000`

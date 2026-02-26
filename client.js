@@ -52,6 +52,7 @@
     const COLOR_KEY = 'project_gw_accent_color';
     const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
     const sessionHandleTag = document.getElementById('sessionHandleTag');
+    let authRefreshPromise = null;
 
     function normalizePreferenceOwner(owner) {
       return String(owner || '')
@@ -94,6 +95,31 @@
       window.__crmAuthFetchPatched = true;
 
       const nativeFetch = window.fetch.bind(window);
+      const refreshAuthToken = async () => {
+        if (authRefreshPromise) return authRefreshPromise;
+
+        authRefreshPromise = (async () => {
+          const response = await nativeFetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'same-origin'
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data?.token || !data?.user) {
+            throw new Error(typeof data?.message === 'string' ? data.message : 'No se pudo renovar la sesion.');
+          }
+          localStorage.setItem(AUTH_TOKEN_KEY, String(data.token));
+          localStorage.setItem(SESSION_KEY, JSON.stringify(data.user));
+          syncSessionHandleTag(data.user);
+          return data;
+        })();
+
+        try {
+          return await authRefreshPromise;
+        } finally {
+          authRefreshPromise = null;
+        }
+      };
+
       window.fetch = async (input, init = {}) => {
         const requestUrl = typeof input === 'string'
           ? input
@@ -101,24 +127,49 @@
         const parsedUrl = new URL(requestUrl, window.location.origin);
         const sameOrigin = parsedUrl.origin === window.location.origin;
         const isApiRequest = sameOrigin && parsedUrl.pathname.startsWith('/api/');
-        const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login' || parsedUrl.pathname === '/api/health';
+        const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login'
+          || parsedUrl.pathname === '/api/auth/refresh'
+          || parsedUrl.pathname === '/api/auth/logout'
+          || parsedUrl.pathname === '/api/health';
 
         if (!isApiRequest || isPublicAuthRoute) {
-          return nativeFetch(input, init);
+          return nativeFetch(input, {
+            ...init,
+            credentials: init.credentials || 'same-origin'
+          });
         }
 
-        const headers = new Headers(
-          init.headers || (input instanceof Request ? input.headers : undefined)
-        );
-        const token = readAuthToken();
-        if (token && !headers.has('Authorization')) {
-          headers.set('Authorization', `Bearer ${token}`);
-        }
+        const performRequest = async () => {
+          const headers = new Headers(
+            init.headers || (input instanceof Request ? input.headers : undefined)
+          );
+          const token = readAuthToken();
+          if (token && !headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`);
+          }
 
-        const response = await nativeFetch(input, { ...init, headers });
+          return nativeFetch(input, {
+            ...init,
+            headers,
+            credentials: init.credentials || 'same-origin'
+          });
+        };
+
+        let response = await performRequest();
         if (response.status === 401) {
-          clearAuthState();
-          window.location.href = 'index.html';
+          try {
+            await refreshAuthToken();
+          } catch (_error) {
+            clearAuthState();
+            window.location.href = 'index.html';
+            return response;
+          }
+
+          response = await performRequest();
+          if (response.status === 401) {
+            clearAuthState();
+            window.location.href = 'index.html';
+          }
         }
         return response;
       };
@@ -134,13 +185,42 @@
       return `@${handleBase}`;
     }
 
+    function getSessionRoleBadgeMeta(session = readSessionUser()) {
+      const roleRaw = String(session?.role || '').trim().toLowerCase();
+      if (roleRaw === 'supervisor' || roleRaw === 'supervisora') {
+        return { key: 'supervisor', label: 'Sup' };
+      }
+      if (roleRaw === 'seller' || roleRaw === 'agente') {
+        return { key: 'seller', label: 'Seller' };
+      }
+      if (roleRaw === 'admin' || roleRaw === 'administrador' || isSessionAdmin(session)) {
+        return { key: 'admin', label: 'Admin' };
+      }
+      return { key: 'seller', label: 'Seller' };
+    }
+
     function syncSessionHandleTag(session = readSessionUser()) {
       if (!sessionHandleTag) return;
       const nextHandle = getSessionHandleLabel(session);
-      sessionHandleTag.textContent = nextHandle;
+      const roleMeta = getSessionRoleBadgeMeta(session);
+      sessionHandleTag.textContent = '';
       sessionHandleTag.classList.toggle('hidden', !nextHandle);
+      sessionHandleTag.classList.remove('role-admin', 'role-supervisor', 'role-seller');
       if (nextHandle) {
-        sessionHandleTag.setAttribute('title', nextHandle);
+        const handleText = document.createElement('span');
+        handleText.className = 'session-handle-text';
+        handleText.textContent = nextHandle;
+        sessionHandleTag.appendChild(handleText);
+
+        if (roleMeta.label) {
+          const roleBadge = document.createElement('span');
+          roleBadge.className = `session-role-badge ${roleMeta.key}`;
+          roleBadge.textContent = roleMeta.label;
+          sessionHandleTag.appendChild(roleBadge);
+          sessionHandleTag.classList.add(`role-${roleMeta.key}`);
+        }
+
+        sessionHandleTag.setAttribute('title', roleMeta.label ? `${nextHandle} - ${roleMeta.label}` : nextHandle);
       } else {
         sessionHandleTag.removeAttribute('title');
       }
@@ -421,9 +501,18 @@
     // Cerrar sesión
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        clearAuthState();
-        window.location.href = 'index.html';
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'same-origin'
+          });
+        } catch (_error) {
+          // Ignorar fallo de logout remoto y continuar logout local
+        } finally {
+          clearAuthState();
+          window.location.href = 'index.html';
+        }
       });
     }
     
@@ -523,9 +612,17 @@
       document.body.appendChild(box);
       globalLeadSuggestionBox = box;
 
+      let _repositionTicking = false;
       const reposition = () => {
-        if (!globalLeadSuggestionBox || !globalLeadSuggestionBox.classList.contains('visible')) return;
-        positionGlobalLeadSuggestionBox();
+        if (!_repositionTicking) {
+          window.requestAnimationFrame(() => {
+            if (globalLeadSuggestionBox && globalLeadSuggestionBox.classList.contains('visible')) {
+              positionGlobalLeadSuggestionBox();
+            }
+            _repositionTicking = false;
+          });
+          _repositionTicking = true;
+        }
       };
       window.addEventListener('resize', reposition);
       window.addEventListener('scroll', reposition, true);
@@ -949,6 +1046,8 @@
     let notesTemplatesModalOpen = false;
     let notesComposerVisible = false;
     let activeLeadNoteMenuId = null;
+    let activeLeadNoteMenuButton = null;
+    let leadNotesFloatingMenu = null;
     let noteTemplates = [];
     let selectedNoteTemplateId = null;
     let noteTemplatesLoaded = false;
@@ -3015,13 +3114,88 @@
       return leadNotes.find((note) => Number(note.id) === noteId) || null;
     }
 
+    function buildLeadNoteMenuMarkup(noteIdValue) {
+      const note = findLeadNoteById(noteIdValue);
+      if (!note) return '';
+      const noteId = Number(note.id);
+      const currentColor = normalizeLeadNoteColorTag(note.color_tag);
+
+      return `
+        <button class="note-card-menu-item" type="button" data-action="edit-note" data-note-id="${escapeHtml(String(noteId))}">Editar</button>
+        <button class="note-card-menu-item danger" type="button" data-action="delete-note" data-note-id="${escapeHtml(String(noteId))}">Eliminar</button>
+        <div class="note-card-menu-divider"></div>
+        ${NOTE_COLOR_OPTIONS.map((option) => `
+          <button
+            class="note-card-menu-item note-card-menu-color-option ${currentColor === option.value ? 'active' : ''}"
+            type="button"
+            data-action="set-note-color"
+            data-note-id="${escapeHtml(String(noteId))}"
+            data-color="${escapeHtml(option.value)}">
+            <span class="note-color-swatch note-color-swatch-${escapeHtml(option.value)}"></span>
+            <span>${escapeHtml(option.label)}</span>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    function ensureLeadNotesFloatingMenu() {
+      if (leadNotesFloatingMenu && document.body.contains(leadNotesFloatingMenu)) {
+        return leadNotesFloatingMenu;
+      }
+
+      const menu = document.createElement('div');
+      menu.className = 'note-card-menu note-card-menu-floating hidden';
+      menu.setAttribute('role', 'menu');
+      menu.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const menuAction = event.target.closest('.note-card-menu-item');
+        if (!menuAction) return;
+
+        event.preventDefault();
+        const noteId = menuAction.dataset.noteId;
+        const action = menuAction.dataset.action;
+
+        if (action === 'edit-note') {
+          closeLeadNoteMenus();
+          void editLeadNoteById(noteId);
+          return;
+        }
+        if (action === 'delete-note') {
+          closeLeadNoteMenus();
+          void deleteLeadNoteById(noteId);
+          return;
+        }
+        if (action === 'set-note-color') {
+          const colorTag = menuAction.dataset.color;
+          closeLeadNoteMenus();
+          void setLeadNoteColorById(noteId, colorTag);
+        }
+      });
+      document.body.appendChild(menu);
+      leadNotesFloatingMenu = menu;
+      return leadNotesFloatingMenu;
+    }
+
     function closeLeadNoteMenus() {
       activeLeadNoteMenuId = null;
+      activeLeadNoteMenuButton = null;
+
+      if (leadNotesFloatingMenu) {
+        leadNotesFloatingMenu.classList.add('hidden');
+        leadNotesFloatingMenu.innerHTML = '';
+        leadNotesFloatingMenu.style.top = '';
+        leadNotesFloatingMenu.style.left = '';
+      }
+
       if (!notesList) return;
 
       notesList.querySelectorAll('.note-card-menu').forEach((menu) => {
         menu.classList.add('hidden');
         menu.classList.remove('note-card-menu-up');
+        menu.style.top = '';
+        menu.style.left = '';
+        menu.style.maxHeight = '';
+        menu.style.zIndex = '';
       });
       notesList.querySelectorAll('.note-card-menu-btn').forEach((button) => {
         button.setAttribute('aria-expanded', 'false');
@@ -3031,39 +3205,69 @@
       });
     }
 
-    function toggleLeadNoteMenu(noteIdValue) {
+    function positionLeadNoteMenu(menuElement, triggerButton) {
+      if (!menuElement || !triggerButton) return;
+      const margin = 8;
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const triggerRect = triggerButton.getBoundingClientRect();
+
+      menuElement.style.zIndex = '2147483600';
+      menuElement.style.maxHeight = `${Math.max(160, Math.floor(viewportHeight - (margin * 2)))}px`;
+
+      const menuWidth = menuElement.offsetWidth || 176;
+      const menuHeight = menuElement.offsetHeight || 220;
+
+      let left = triggerRect.right - menuWidth;
+      if (left < margin) left = margin;
+      if (left + menuWidth > viewportWidth - margin) {
+        left = Math.max(margin, viewportWidth - menuWidth - margin);
+      }
+
+      const spaceBelow = viewportHeight - triggerRect.bottom - margin;
+      const spaceAbove = triggerRect.top - margin;
+      const shouldOpenUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+
+      let top = shouldOpenUp
+        ? triggerRect.top - menuHeight - 6
+        : triggerRect.bottom + 6;
+
+      if (top < margin) top = margin;
+      if (top + menuHeight > viewportHeight - margin) {
+        top = Math.max(margin, viewportHeight - menuHeight - margin);
+      }
+
+      menuElement.style.left = `${Math.round(left)}px`;
+      menuElement.style.top = `${Math.round(top)}px`;
+    }
+
+    function toggleLeadNoteMenu(noteIdValue, triggerButton = null) {
       const noteId = parseLeadNoteId(noteIdValue);
       if (!noteId || !notesList) return;
-
       const noteCard = notesList.querySelector(`.note-card[data-note-id="${noteId}"]`);
       if (!noteCard) return;
-      const menu = noteCard.querySelector('.note-card-menu');
-      const triggerButton = noteCard.querySelector('.note-card-menu-btn');
-      if (!menu || !triggerButton) return;
+      const noteButton = triggerButton || noteCard.querySelector('.note-card-menu-btn');
+      if (!noteButton) return;
 
-      if (activeLeadNoteMenuId === noteId && !menu.classList.contains('hidden')) {
+      if (activeLeadNoteMenuId === noteId && leadNotesFloatingMenu && !leadNotesFloatingMenu.classList.contains('hidden')) {
         closeLeadNoteMenus();
         return;
       }
 
+      const menuMarkup = buildLeadNoteMenuMarkup(noteId);
+      if (!menuMarkup) return;
+      const menu = ensureLeadNotesFloatingMenu();
+
       closeLeadNoteMenus();
       activeLeadNoteMenuId = noteId;
+      activeLeadNoteMenuButton = noteButton;
       noteCard.classList.add('note-card-menu-open');
+      noteButton.setAttribute('aria-expanded', 'true');
+      menu.innerHTML = menuMarkup;
       menu.classList.remove('hidden');
-      triggerButton.setAttribute('aria-expanded', 'true');
-
-      if (notesPanel) {
-        menu.classList.remove('note-card-menu-up');
-        const panelRect = notesPanel.getBoundingClientRect();
-        const triggerRect = triggerButton.getBoundingClientRect();
-        const menuHeight = menu.offsetHeight;
-        const margin = 8;
-        const spaceBelow = panelRect.bottom - triggerRect.bottom - margin;
-        const spaceAbove = triggerRect.top - panelRect.top - margin;
-        if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
-          menu.classList.add('note-card-menu-up');
-        }
-      }
+      window.requestAnimationFrame(() => {
+        positionLeadNoteMenu(menu, noteButton);
+      });
     }
 
     function renderLeadNotesList() {
@@ -3094,22 +3298,6 @@
                     <circle cx="19" cy="12" r="2"></circle>
                   </svg>
                 </button>
-                <div class="note-card-menu hidden" data-note-id="${escapeHtml(String(note.id))}">
-                  <button class="note-card-menu-item" type="button" data-action="edit-note" data-note-id="${escapeHtml(String(note.id))}">Editar</button>
-                  <button class="note-card-menu-item danger" type="button" data-action="delete-note" data-note-id="${escapeHtml(String(note.id))}">Eliminar</button>
-                  <div class="note-card-menu-divider"></div>
-                  ${NOTE_COLOR_OPTIONS.map((option) => `
-                    <button
-                      class="note-card-menu-item note-card-menu-color-option ${normalizeLeadNoteColorTag(note.color_tag) === option.value ? 'active' : ''}"
-                      type="button"
-                      data-action="set-note-color"
-                      data-note-id="${escapeHtml(String(note.id))}"
-                      data-color="${escapeHtml(option.value)}">
-                      <span class="note-color-swatch note-color-swatch-${escapeHtml(option.value)}"></span>
-                      <span>${escapeHtml(option.label)}</span>
-                    </button>
-                  `).join('')}
-                </div>
               ` : ''}
             </div>
           </div>
@@ -3668,40 +3856,35 @@
         if (menuButton) {
           event.preventDefault();
           event.stopPropagation();
-          toggleLeadNoteMenu(menuButton.dataset.noteId);
+          toggleLeadNoteMenu(menuButton.dataset.noteId, menuButton);
           return;
         }
 
-        const menuAction = event.target.closest('.note-card-menu-item');
-        if (!menuAction) {
-          closeLeadNoteMenus();
-          return;
-        }
+        closeLeadNoteMenus();
+      });
 
-        event.preventDefault();
-        event.stopPropagation();
-        const noteId = menuAction.dataset.noteId;
-        const action = menuAction.dataset.action;
+      notesList?.addEventListener('scroll', () => {
+        if (activeLeadNoteMenuId !== null) closeLeadNoteMenus();
+      }, { passive: true });
 
-        if (action === 'edit-note') {
-          closeLeadNoteMenus();
-          void editLeadNoteById(noteId);
-          return;
-        }
-        if (action === 'delete-note') {
-          closeLeadNoteMenus();
-          void deleteLeadNoteById(noteId);
-          return;
-        }
-        if (action === 'set-note-color') {
-          const colorTag = menuAction.dataset.color;
-          void setLeadNoteColorById(noteId, colorTag);
+      let _notesResizeTicking = false;
+      window.addEventListener('resize', () => {
+        if (!_notesResizeTicking) {
+          window.requestAnimationFrame(() => {
+            if (activeLeadNoteMenuId !== null) closeLeadNoteMenus();
+            _notesResizeTicking = false;
+          });
+          _notesResizeTicking = true;
         }
       });
 
+      window.addEventListener('scroll', () => {
+        if (activeLeadNoteMenuId !== null) closeLeadNoteMenus();
+      }, true);
+
       document.addEventListener('click', (event) => {
         if (!notesPanelOpen || !notesPanel) return;
-        if (!notesPanel.contains(event.target)) {
+        if (!notesPanel.contains(event.target) && !leadNotesFloatingMenu?.contains(event.target)) {
           closeLeadNoteMenus();
         }
       });
@@ -6156,8 +6339,15 @@
       _setClientNotifPanelOpen(false);
     });
 
+    let _clientNotifResizeTicking = false;
     window.addEventListener('resize', () => {
-      if (_clientNotifOpen) _positionClientNotifPanel();
+      if (!_clientNotifResizeTicking) {
+        window.requestAnimationFrame(() => {
+          if (_clientNotifOpen) _positionClientNotifPanel();
+          _clientNotifResizeTicking = false;
+        });
+        _clientNotifResizeTicking = true;
+      }
     });
 
     // Badge inicial + polling
@@ -7550,6 +7740,7 @@
     function resolveSessionRoleForEmail(session) {
       const roleRaw = String(session?.role || '').trim().toLowerCase();
       if (roleRaw === 'admin' || roleRaw === 'administrador') return 'admin';
+      if (roleRaw === 'supervisor' || roleRaw === 'supervisora') return 'supervisor';
       if (roleRaw === 'seller' || roleRaw === 'agente') return 'seller';
 
       const username = String(session?.username || session?.name || '').trim().toLowerCase();

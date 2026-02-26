@@ -20,9 +20,13 @@ const toolbarWrap = document.getElementById('toolbarWrap');
 const homeSearchInput = document.getElementById('homeSearch');
 const crmHelpers = window.CrmHelpers || {};
 const usersAdminView = document.getElementById('usersAdminView');
+const usersAdminLayout = document.getElementById('usersAdminLayout');
 const refreshUsersAdminBtn = document.getElementById('refreshUsersAdminBtn');
+const usersAdminToggleCreateBtn = document.getElementById('usersAdminToggleCreateBtn');
+const usersAdminActiveTotal = document.getElementById('usersAdminActiveTotal');
 const usersAdminList = document.getElementById('usersAdminList');
 const usersAdminStatus = document.getElementById('usersAdminStatus');
+const usersAdminFormPanel = document.getElementById('usersAdminFormPanel');
 const usersAdminForm = document.getElementById('usersAdminForm');
 const usersAdminFormTitle = document.getElementById('usersAdminFormTitle');
 const usersAdminId = document.getElementById('usersAdminId');
@@ -40,6 +44,16 @@ let notifBadge = document.getElementById('notifBadge');
 let notifList = document.getElementById('notifList');
 let notifMarkAll = document.getElementById('notifMarkAll');
 let adminUsersCache = [];
+let usersAdminFormOpen = false;
+let usersAdminRoleMenu = null;
+let usersAdminPermissionsMenu = null;
+let usersAdminPermissionCatalog = [];
+let usersAdminPermissionByRoleMatrix = {};
+const usersAdminGroupOpenState = {
+  admin: true,
+  supervisor: true,
+  seller: true
+};
 
 const SESSION_KEY = 'project_gw_session';
 const AUTH_TOKEN_KEY = 'project_gw_auth_token';
@@ -61,6 +75,7 @@ const LOGIN_BACKGROUND_IMAGES = [
   'https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&fit=crop&w=2100&q=80',
   'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=2100&q=80'
 ];
+let authRefreshPromise = null;
 
 function saveAuthToken(tokenValue) {
   const token = String(tokenValue || '').trim();
@@ -81,6 +96,30 @@ function ensureAuthFetchPatched() {
   window.__crmAuthFetchPatched = true;
 
   const nativeFetch = window.fetch.bind(window);
+  const refreshAuthToken = async () => {
+    if (authRefreshPromise) return authRefreshPromise;
+
+    authRefreshPromise = (async () => {
+      const response = await nativeFetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.token || !data?.user) {
+        throw new Error(typeof data?.message === 'string' ? data.message : 'No se pudo renovar la sesion.');
+      }
+      saveAuthToken(data.token);
+      saveSession(data.user);
+      return data;
+    })();
+
+    try {
+      return await authRefreshPromise;
+    } finally {
+      authRefreshPromise = null;
+    }
+  };
+
   window.fetch = async (input, init = {}) => {
     const requestUrl = typeof input === 'string'
       ? input
@@ -88,24 +127,49 @@ function ensureAuthFetchPatched() {
     const parsedUrl = new URL(requestUrl, window.location.origin);
     const sameOrigin = parsedUrl.origin === window.location.origin;
     const isApiRequest = sameOrigin && parsedUrl.pathname.startsWith('/api/');
-    const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login' || parsedUrl.pathname === '/api/health';
+    const isPublicAuthRoute = parsedUrl.pathname === '/api/auth/login'
+      || parsedUrl.pathname === '/api/auth/refresh'
+      || parsedUrl.pathname === '/api/auth/logout'
+      || parsedUrl.pathname === '/api/health';
 
     if (!isApiRequest || isPublicAuthRoute) {
-      return nativeFetch(input, init);
+      return nativeFetch(input, {
+        ...init,
+        credentials: init.credentials || 'same-origin'
+      });
     }
 
-    const headers = new Headers(
-      init.headers || (input instanceof Request ? input.headers : undefined)
-    );
-    const token = getAuthToken();
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+    const performRequest = async () => {
+      const headers = new Headers(
+        init.headers || (input instanceof Request ? input.headers : undefined)
+      );
+      const token = getAuthToken();
+      if (token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
 
-    const response = await nativeFetch(input, { ...init, headers });
+      return nativeFetch(input, {
+        ...init,
+        headers,
+        credentials: init.credentials || 'same-origin'
+      });
+    };
+
+    let response = await performRequest();
     if (response.status === 401) {
-      clearSession();
-      showLogin();
+      try {
+        await refreshAuthToken();
+      } catch (_error) {
+        clearSession();
+        showLogin();
+        return response;
+      }
+
+      response = await performRequest();
+      if (response.status === 401) {
+        clearSession();
+        showLogin();
+      }
     }
     return response;
   };
@@ -784,6 +848,8 @@ function showLogin() {
   updateEmailsCounter(0);
   updateSessionHandleTag(null);
   syncManageUsersButtonVisibility();
+  closeUsersAdminRoleMenu();
+  closeUsersAdminPermissionsMenu();
 }
 
 function saveSession(user) {
@@ -818,13 +884,36 @@ function getSessionHandleLabel(session = getSession()) {
   return `@${handleBase}`;
 }
 
+function getSessionRoleBadgeMeta(session = getSession()) {
+  const role = getSessionIdentity(session).role;
+  if (role === 'admin') return { key: 'admin', label: 'Admin' };
+  if (role === 'supervisor') return { key: 'supervisor', label: 'Sup' };
+  if (role === 'seller') return { key: 'seller', label: 'Seller' };
+  return { key: '', label: '' };
+}
+
 function updateSessionHandleTag(session = getSession()) {
   if (!sessionHandleTag) return;
   const nextHandle = getSessionHandleLabel(session);
-  sessionHandleTag.textContent = nextHandle;
+  const roleMeta = getSessionRoleBadgeMeta(session);
+  sessionHandleTag.textContent = '';
   sessionHandleTag.classList.toggle('hidden', !nextHandle);
+  sessionHandleTag.classList.remove('role-admin', 'role-supervisor', 'role-seller');
   if (nextHandle) {
-    sessionHandleTag.setAttribute('title', nextHandle);
+    const handleText = document.createElement('span');
+    handleText.className = 'session-handle-text';
+    handleText.textContent = nextHandle;
+    sessionHandleTag.appendChild(handleText);
+
+    if (roleMeta.label) {
+      const roleBadge = document.createElement('span');
+      roleBadge.className = `session-role-badge ${roleMeta.key}`;
+      roleBadge.textContent = roleMeta.label;
+      sessionHandleTag.appendChild(roleBadge);
+      sessionHandleTag.classList.add(`role-${roleMeta.key}`);
+    }
+
+    sessionHandleTag.setAttribute('title', roleMeta.label ? `${nextHandle} - ${roleMeta.label}` : nextHandle);
   } else {
     sessionHandleTag.removeAttribute('title');
   }
@@ -833,6 +922,7 @@ function updateSessionHandleTag(session = getSession()) {
 function normalizeSessionRole(roleValue) {
   const normalizedRole = String(roleValue || '').trim().toLowerCase();
   if (normalizedRole === 'admin' || normalizedRole === 'administrador') return 'admin';
+  if (normalizedRole === 'supervisor' || normalizedRole === 'supervisora') return 'supervisor';
   if (normalizedRole === 'seller' || normalizedRole === 'agente') return 'seller';
   return '';
 }
@@ -841,6 +931,11 @@ function getSessionIdentity(session = getSession()) {
   const username = String(session?.username || session?.name || '').trim();
   const displayName = String(session?.displayName || session?.name || '').trim();
   const email = String(session?.email || '').trim();
+  const permissions = Array.isArray(session?.permissions)
+    ? session.permissions
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+    : [];
   let role = normalizeSessionRole(session?.role);
   const usernameLower = username.toLowerCase();
   const displayNameLower = displayName.toLowerCase();
@@ -857,12 +952,36 @@ function getSessionIdentity(session = getSession()) {
     username,
     displayName,
     email,
-    role
+    role,
+    permissions
   };
 }
 
 function isCurrentSessionAdmin() {
   return getSessionIdentity().role === 'admin';
+}
+
+function hasCurrentSessionGlobalAccess() {
+  return hasCurrentSessionPermission('emails.view_all')
+    || hasCurrentSessionPermission('leads.view_all');
+}
+
+function hasCurrentSessionPermission(permissionKey) {
+  const normalizedKey = String(permissionKey || '').trim().toLowerCase();
+  if (!normalizedKey) return false;
+  const identity = getSessionIdentity();
+  if (identity.permissions.includes(normalizedKey)) return true;
+
+  if (normalizedKey === 'emails.view_all' || normalizedKey === 'emails.delete' || normalizedKey === 'leads.view_all' || normalizedKey === 'leads.delete') {
+    return identity.role === 'admin' || identity.role === 'supervisor';
+  }
+  if (normalizedKey === 'emails.send' || normalizedKey === 'leads.create' || normalizedKey === 'leads.edit' || normalizedKey === 'notes.manage') {
+    return identity.role === 'admin' || identity.role === 'supervisor' || identity.role === 'seller';
+  }
+  if (normalizedKey === 'users.manage' || normalizedKey === 'users.permissions.manage') {
+    return identity.role === 'admin';
+  }
+  return false;
 }
 
 function userEscapeHtml(text) {
@@ -875,12 +994,70 @@ function userEscapeHtml(text) {
 
 function syncManageUsersButtonVisibility() {
   if (!manageUsersBtn) return;
-  manageUsersBtn.classList.toggle('hidden', !isCurrentSessionAdmin());
+  manageUsersBtn.classList.toggle('hidden', !hasCurrentSessionPermission('users.manage'));
+}
+
+function normalizeAdminUserRole(roleValue) {
+  const normalizedRole = String(roleValue || '').trim().toLowerCase();
+  if (normalizedRole === 'admin') return 'admin';
+  if (normalizedRole === 'supervisor') return 'supervisor';
+  if (normalizedRole === 'seller' || normalizedRole === 'agent' || normalizedRole === 'vendedor') return 'seller';
+  return 'seller';
+}
+
+function getAdminRoleRank(roleValue) {
+  const role = normalizeAdminUserRole(roleValue);
+  if (role === 'admin') return 3;
+  if (role === 'supervisor') return 2;
+  return 1;
+}
+
+function getAdminRoleLabel(roleValue) {
+  const role = normalizeAdminUserRole(roleValue);
+  if (role === 'admin') return 'Administrador';
+  if (role === 'supervisor') return 'Supervisor';
+  return 'Agent/Vendedor';
+}
+
+function getAdminRoleGroupTitle(roleValue) {
+  const role = normalizeAdminUserRole(roleValue);
+  if (role === 'admin') return 'Administradores';
+  if (role === 'supervisor') return 'Supervisores';
+  return 'Agents/Vendedores';
+}
+
+function getAdminRoleTransitions(currentRoleValue) {
+  const currentRole = normalizeAdminUserRole(currentRoleValue);
+  const allRoles = ['admin', 'supervisor', 'seller'];
+  return allRoles
+    .filter((role) => role !== currentRole)
+    .sort((a, b) => getAdminRoleRank(b) - getAdminRoleRank(a));
+}
+
+function setUsersAdminFormOpen(isOpen, { focusUsername = false } = {}) {
+  usersAdminFormOpen = Boolean(isOpen);
+  if (usersAdminLayout) usersAdminLayout.classList.toggle('form-open', usersAdminFormOpen);
+  if (usersAdminView) usersAdminView.classList.toggle('form-open', usersAdminFormOpen);
+  if (usersAdminToggleCreateBtn) {
+    usersAdminToggleCreateBtn.classList.toggle('is-open', usersAdminFormOpen);
+    usersAdminToggleCreateBtn.setAttribute('aria-expanded', usersAdminFormOpen ? 'true' : 'false');
+  }
+  if (usersAdminFormPanel) {
+    usersAdminFormPanel.setAttribute('aria-hidden', usersAdminFormOpen ? 'false' : 'true');
+  }
+  if (!usersAdminFormOpen) {
+    closeUsersAdminRoleMenu();
+    closeUsersAdminPermissionsMenu();
+  } else if (focusUsername && usersAdminUsername && !usersAdminUsername.disabled) {
+    window.requestAnimationFrame(() => usersAdminUsername.focus());
+  }
 }
 
 function setUsersAdminStatus(message) {
   if (!usersAdminStatus) return;
-  usersAdminStatus.textContent = message || '';
+  const text = String(message || '').trim();
+  usersAdminStatus.textContent = text;
+  usersAdminStatus.classList.toggle('hidden', !text);
 }
 
 function resetUsersAdminForm(user = null) {
@@ -894,56 +1071,481 @@ function resetUsersAdminForm(user = null) {
   }
   if (usersAdminDisplayName) usersAdminDisplayName.value = hasUser ? String(user.display_name || '') : '';
   if (usersAdminEmail) usersAdminEmail.value = hasUser ? String(user.email || '') : '';
-  if (usersAdminRole) usersAdminRole.value = hasUser ? String(user.role || 'seller').toLowerCase() : 'seller';
+  if (usersAdminRole) usersAdminRole.value = hasUser ? normalizeAdminUserRole(user.role || 'seller') : 'seller';
   if (usersAdminPin) usersAdminPin.value = '';
   if (usersAdminIsActive) usersAdminIsActive.checked = hasUser ? Boolean(user.is_active) : true;
   if (usersAdminFormTitle) usersAdminFormTitle.textContent = hasUser ? `Editar usuario @${user.username}` : 'Nuevo usuario';
 }
 
+function closeUsersAdminRoleMenu() {
+  if (!usersAdminRoleMenu) return;
+  usersAdminRoleMenu.classList.add('hidden');
+}
+
+function closeUsersAdminPermissionsMenu() {
+  if (!usersAdminPermissionsMenu) return;
+  usersAdminPermissionsMenu.classList.add('hidden');
+}
+
+function getUsersAdminPermissionModuleLabel(moduleValue) {
+  const moduleKey = String(moduleValue || '').trim().toLowerCase();
+  if (moduleKey === 'usuarios') return 'Usuarios';
+  if (moduleKey === 'leads') return 'Leads';
+  if (moduleKey === 'correos') return 'Correos';
+  if (moduleKey === 'operacion') return 'Operacion';
+  if (moduleKey === 'documentos') return 'Documentos';
+  return moduleKey ? moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1) : 'General';
+}
+
+async function loadUsersAdminPermissionCatalog() {
+  if (usersAdminPermissionCatalog.length) return usersAdminPermissionCatalog;
+  const data = await requestJson('/api/admin/permissions/catalog', { cache: 'no-store' });
+  usersAdminPermissionCatalog = Array.isArray(data?.permissions) ? data.permissions : [];
+  usersAdminPermissionByRoleMatrix = data?.roleMatrix && typeof data.roleMatrix === 'object'
+    ? data.roleMatrix
+    : {};
+  return usersAdminPermissionCatalog;
+}
+
+function ensureUsersAdminPermissionsMenu() {
+  if (usersAdminPermissionsMenu && document.body.contains(usersAdminPermissionsMenu)) {
+    return usersAdminPermissionsMenu;
+  }
+
+  const menu = document.createElement('div');
+  menu.className = 'users-admin-permissions-menu hidden';
+  menu.setAttribute('role', 'dialog');
+  menu.setAttribute('aria-label', 'Permisos del usuario');
+  menu.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const closeBtn = event.target.closest('[data-permissions-close]');
+    if (closeBtn) {
+      closeUsersAdminPermissionsMenu();
+      return;
+    }
+
+    const refreshBtn = event.target.closest('[data-permissions-refresh]');
+    if (refreshBtn) {
+      const userId = Number(menu.dataset.userId || 0);
+      const anchorUser = adminUsersCache.find((entry) => Number(entry.id) === userId);
+      if (!anchorUser) return;
+      void openUsersAdminPermissionsMenu(refreshBtn, anchorUser, { forceReload: true });
+    }
+  });
+
+  menu.addEventListener('change', async (event) => {
+    const checkbox = event.target instanceof HTMLInputElement
+      ? event.target
+      : null;
+    if (!checkbox || !checkbox.matches('.users-admin-permission-checkbox[data-permission-key]')) return;
+
+    const userId = Number(menu.dataset.userId || 0);
+    const permissionKey = String(checkbox.dataset.permissionKey || '').trim().toLowerCase();
+    const roleAllowed = checkbox.dataset.roleAllowed === 'true';
+    if (!Number.isInteger(userId) || userId <= 0 || !permissionKey) return;
+
+    checkbox.disabled = true;
+    try {
+      const allowedPayload = checkbox.checked === roleAllowed ? null : checkbox.checked;
+      const data = await requestJson(`/api/admin/users/${userId}/permissions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          permissionKey,
+          allowed: allowedPayload
+        })
+      });
+
+      const targetUser = data?.user || adminUsersCache.find((entry) => Number(entry.id) === userId);
+      const permissionRows = Array.isArray(data?.permissions) ? data.permissions : [];
+      renderUsersAdminPermissionsMenu(menu, targetUser, permissionRows);
+      showToast(data?.message || 'Permiso actualizado.', 'success');
+    } catch (error) {
+      checkbox.checked = !checkbox.checked;
+      showToast(error.message || 'No se pudo actualizar el permiso.', 'error');
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
+
+  document.body.appendChild(menu);
+  usersAdminPermissionsMenu = menu;
+  return usersAdminPermissionsMenu;
+}
+
+function positionUsersAdminPermissionsMenu(anchorEl, menuEl) {
+  if (!anchorEl || !menuEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const margin = 12;
+
+  const menuWidth = Math.min(420, Math.max(320, Math.floor(vw * 0.42)));
+  menuEl.style.width = `${menuWidth}px`;
+  const measuredHeight = menuEl.offsetHeight || 420;
+
+  let left = rect.right + 8;
+  if (left + menuWidth > vw - margin) {
+    left = rect.left - menuWidth - 8;
+  }
+  if (left < margin) left = margin;
+
+  let top = rect.top;
+  if (top + measuredHeight > vh - margin) {
+    top = vh - measuredHeight - margin;
+  }
+  if (top < margin) top = margin;
+
+  menuEl.style.left = `${Math.round(left)}px`;
+  menuEl.style.top = `${Math.round(top)}px`;
+}
+
+function renderUsersAdminPermissionsMenu(menu, user, permissionRows = []) {
+  const safeUser = user || {};
+  const username = userEscapeHtml(String(safeUser.username || ''));
+  const displayName = userEscapeHtml(String(safeUser.display_name || safeUser.displayName || safeUser.username || ''));
+  const role = normalizeAdminUserRole(safeUser.role || 'seller');
+  const roleLabel = userEscapeHtml(getAdminRoleLabel(role));
+
+  const grouped = new Map();
+  permissionRows.forEach((permission) => {
+    const moduleLabel = getUsersAdminPermissionModuleLabel(permission.module);
+    if (!grouped.has(moduleLabel)) grouped.set(moduleLabel, []);
+    grouped.get(moduleLabel).push(permission);
+  });
+
+  const moduleEntries = Array.from(grouped.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'es', { sensitivity: 'base' }))
+    .map(([moduleLabel, list]) => {
+      const rowsMarkup = list
+        .sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'es', { sensitivity: 'base' }))
+        .map((permission) => {
+          const effectiveAllowed = Boolean(permission.effectiveAllowed);
+          const roleAllowed = Boolean(permission.roleAllowed);
+          const hasOverride = permission.overrideAllowed === true || permission.overrideAllowed === false;
+          const stateClass = effectiveAllowed ? 'is-on' : 'is-off';
+          return `
+            <label class="users-admin-permission-row ${stateClass}">
+              <input
+                class="users-admin-permission-checkbox"
+                type="checkbox"
+                data-permission-key="${userEscapeHtml(permission.key)}"
+                data-role-allowed="${roleAllowed ? 'true' : 'false'}"
+                ${effectiveAllowed ? 'checked' : ''}
+              />
+              <span class="users-admin-permission-copy">
+                <strong>${userEscapeHtml(permission.label || permission.key)}</strong>
+                <small>${userEscapeHtml(permission.description || '')}</small>
+              </span>
+              <span class="users-admin-permission-flags">
+                <span class="users-admin-permission-base">Base: ${roleAllowed ? 'ON' : 'OFF'}</span>
+                ${hasOverride ? '<span class="users-admin-permission-override">Override</span>' : ''}
+              </span>
+            </label>
+          `;
+        }).join('');
+
+      return `
+        <section class="users-admin-permission-group">
+          <h5>${moduleLabel}</h5>
+          <div class="users-admin-permission-group-body">
+            ${rowsMarkup}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+  menu.dataset.userId = String(safeUser.id || '');
+  menu.innerHTML = `
+    <header class="users-admin-permissions-head">
+      <div class="users-admin-permissions-title-wrap">
+        <p class="users-admin-permissions-title">Permisos de ${displayName}</p>
+        <p class="users-admin-permissions-subtitle">@${username} · ${roleLabel}</p>
+      </div>
+      <button class="users-admin-permissions-close" type="button" data-permissions-close aria-label="Cerrar panel de permisos">&times;</button>
+    </header>
+    <div class="users-admin-permissions-body">
+      ${moduleEntries || '<p class="users-admin-permission-empty">No hay permisos disponibles.</p>'}
+    </div>
+    <footer class="users-admin-permissions-footer">
+      <button class="users-admin-permissions-refresh" type="button" data-permissions-refresh>Recargar</button>
+      <span>Tip: si un valor coincide con la base de rol, se elimina el override.</span>
+    </footer>
+  `;
+}
+
+async function openUsersAdminPermissionsMenu(anchorEl, user, { forceReload = false } = {}) {
+  const menu = ensureUsersAdminPermissionsMenu();
+  const userId = Number(user?.id || 0);
+  if (!Number.isInteger(userId) || userId <= 0) return;
+
+  closeUsersAdminRoleMenu();
+  closeUsersAdminPermissionsMenu();
+  menu.dataset.userId = String(userId);
+  menu.innerHTML = '<div class="users-admin-permissions-loading">Cargando permisos...</div>';
+  menu.classList.remove('hidden');
+  positionUsersAdminPermissionsMenu(anchorEl, menu);
+
+  try {
+    if (forceReload) {
+      usersAdminPermissionCatalog = [];
+      usersAdminPermissionByRoleMatrix = {};
+    }
+    await loadUsersAdminPermissionCatalog();
+    const data = await requestJson(`/api/admin/users/${userId}/permissions`, { cache: 'no-store' });
+    const permissionRows = Array.isArray(data?.permissions) ? data.permissions : [];
+    renderUsersAdminPermissionsMenu(menu, data?.user || user, permissionRows);
+    positionUsersAdminPermissionsMenu(anchorEl, menu);
+  } catch (error) {
+    menu.innerHTML = `
+      <div class="users-admin-permissions-error">
+        <strong>No se pudieron cargar permisos.</strong>
+        <p>${userEscapeHtml(error.message || 'Intenta nuevamente.')}</p>
+      </div>
+    `;
+    positionUsersAdminPermissionsMenu(anchorEl, menu);
+  }
+}
+
+function ensureUsersAdminRoleMenu() {
+  if (usersAdminRoleMenu && document.body.contains(usersAdminRoleMenu)) {
+    return usersAdminRoleMenu;
+  }
+
+  const menu = document.createElement('div');
+  menu.className = 'users-admin-role-menu hidden';
+  menu.setAttribute('role', 'menu');
+  menu.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    const optionBtn = event.target.closest('.users-admin-role-menu-btn[data-next-role]');
+    if (!optionBtn) return;
+
+    const userId = Number(menu.dataset.userId || 0);
+    const nextRole = normalizeAdminUserRole(optionBtn.dataset.nextRole || '');
+    if (!Number.isInteger(userId) || userId <= 0) return;
+
+    closeUsersAdminRoleMenu();
+    await updateUserRoleFromBadge(userId, nextRole);
+  });
+  document.body.appendChild(menu);
+  usersAdminRoleMenu = menu;
+  return usersAdminRoleMenu;
+}
+
+function positionUsersAdminRoleMenu(anchorEl, menuEl) {
+  if (!anchorEl || !menuEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const margin = 10;
+
+  const menuWidth = menuEl.offsetWidth || 220;
+  const menuHeight = menuEl.offsetHeight || 120;
+
+  let left = rect.right - menuWidth;
+  if (left < margin) left = margin;
+  if (left + menuWidth > vw - margin) left = vw - margin - menuWidth;
+
+  let top = rect.bottom + 8;
+  if (top + menuHeight > vh - margin) {
+    top = Math.max(margin, rect.top - menuHeight - 8);
+  }
+
+  menuEl.style.left = `${Math.round(left)}px`;
+  menuEl.style.top = `${Math.round(top)}px`;
+}
+
+function openUsersAdminRoleMenu(anchorEl, user) {
+  const menu = ensureUsersAdminRoleMenu();
+  const userId = Number(user?.id || 0);
+  if (!Number.isInteger(userId) || userId <= 0) return;
+
+  const currentRole = normalizeAdminUserRole(user?.role || 'seller');
+  const transitions = getAdminRoleTransitions(currentRole);
+  if (!transitions.length) return;
+
+  const transitionButtons = transitions.map((nextRole) => {
+    const currentRank = getAdminRoleRank(currentRole);
+    const nextRank = getAdminRoleRank(nextRole);
+    const actionLabel = nextRank > currentRank ? 'Upgrade a' : 'Downgrade a';
+    return `
+      <button class="users-admin-role-menu-btn" type="button" data-next-role="${nextRole}">
+        <span>${actionLabel}</span>
+        <strong>${userEscapeHtml(getAdminRoleLabel(nextRole))}</strong>
+      </button>
+    `;
+  }).join('');
+
+  menu.dataset.userId = String(userId);
+  menu.innerHTML = `
+    <p class="users-admin-role-menu-title">Cambiar rol</p>
+    ${transitionButtons}
+  `;
+  menu.classList.remove('hidden');
+  closeUsersAdminPermissionsMenu();
+  positionUsersAdminRoleMenu(anchorEl, menu);
+}
+
+async function updateUserRoleFromBadge(userId, nextRoleValue) {
+  const userIdNum = Number(userId);
+  if (!Number.isInteger(userIdNum) || userIdNum <= 0) return;
+
+  const nextRole = normalizeAdminUserRole(nextRoleValue);
+  const targetUser = adminUsersCache.find((entry) => Number(entry.id) === userIdNum);
+  if (!targetUser) return;
+
+  const targetUsername = String(targetUser.username || '').trim().toLowerCase();
+  const identity = getSessionIdentity();
+  const selfUsername = String(identity.username || '').trim().toLowerCase();
+  if (selfUsername && targetUsername && selfUsername === targetUsername && nextRole !== 'admin') {
+    showToast('No puedes degradar tu propio usuario admin.', 'error');
+    return;
+  }
+
+  try {
+    await requestJson(`/api/admin/users/${userIdNum}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: nextRole })
+    });
+    showToast(`Rol actualizado a ${getAdminRoleLabel(nextRole)}.`, 'success');
+    await loadAdminUsers({ silent: true });
+
+    const editingId = Number(usersAdminId?.value || 0);
+    if (editingId === userIdNum) {
+      const refreshedUser = adminUsersCache.find((entry) => Number(entry.id) === userIdNum);
+      if (refreshedUser) resetUsersAdminForm(refreshedUser);
+    }
+  } catch (error) {
+    showToast(error.message || 'No se pudo actualizar el rol del usuario.', 'error');
+  }
+}
+
 function renderAdminUsersList(users = []) {
   if (!usersAdminList) return;
+  if (usersAdminActiveTotal) {
+    const activeCount = users.filter((user) => Boolean(user?.is_active)).length;
+    usersAdminActiveTotal.textContent = String(activeCount);
+  }
+
   if (!users.length) {
     usersAdminList.innerHTML = '<p class="users-admin-status">No hay usuarios registrados.</p>';
     return;
   }
 
-  usersAdminList.innerHTML = users.map((user) => {
-    const role = String(user.role || 'seller').toLowerCase();
-    const roleClass = role === 'admin' ? 'admin' : 'seller';
-    const inactiveClass = user.is_active ? '' : ' inactive';
-    const displayName = userEscapeHtml(String(user.display_name || user.username || ''));
-    const username = userEscapeHtml(String(user.username || ''));
-    const email = userEscapeHtml(String(user.email || 'Sin email'));
-    const lastLoginRaw = user.last_login_at ? new Date(user.last_login_at) : null;
-    const lastLogin = lastLoginRaw && !Number.isNaN(lastLoginRaw.getTime())
-      ? lastLoginRaw.toLocaleString('es-ES')
-      : 'Nunca';
+  const groupedUsers = {
+    admin: [],
+    supervisor: [],
+    seller: []
+  };
+
+  users.forEach((user) => {
+    const role = normalizeAdminUserRole(user.role);
+    groupedUsers[role].push(user);
+  });
+
+  Object.keys(groupedUsers).forEach((roleKey) => {
+    groupedUsers[roleKey].sort((a, b) => {
+      const nameA = String(a.display_name || a.username || '').toLowerCase();
+      const nameB = String(b.display_name || b.username || '').toLowerCase();
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
+  });
+
+  const orderedGroups = ['admin', 'supervisor', 'seller'];
+  usersAdminList.innerHTML = orderedGroups.map((roleKey) => {
+    const list = groupedUsers[roleKey] || [];
+    const groupTitle = getAdminRoleGroupTitle(roleKey);
+    const isOpen = usersAdminGroupOpenState[roleKey] !== false;
+
+    const itemsMarkup = list.length
+      ? list.map((user) => {
+        const role = normalizeAdminUserRole(user.role);
+        const roleClass = role;
+        const inactiveClass = user.is_active ? '' : ' inactive';
+        const displayNameRaw = String(user.display_name || user.username || '').trim();
+        const displayName = userEscapeHtml(displayNameRaw);
+        const username = userEscapeHtml(String(user.username || ''));
+        const email = userEscapeHtml(String(user.email || 'Sin email'));
+        const lastLoginRaw = user.last_login_at ? new Date(user.last_login_at) : null;
+        const lastLogin = lastLoginRaw && !Number.isNaN(lastLoginRaw.getTime())
+          ? lastLoginRaw.toLocaleString('es-ES')
+          : 'Nunca';
+        const stateMeta = user.is_active ? '' : '<span class="users-admin-item-state">Inactivo</span>';
+
+        const lastSeenRaw = user.last_seen_at ? new Date(user.last_seen_at) : null;
+        const isOnline = lastSeenRaw && !Number.isNaN(lastSeenRaw.getTime())
+          && (Date.now() - lastSeenRaw.getTime()) < 90000;
+        const presenceClass = isOnline ? 'online' : 'offline';
+        const presenceLabel = isOnline ? 'En línea' : 'Desconectado';
+
+        return `
+          <article class="users-admin-item${inactiveClass}">
+            <div class="users-admin-item-head">
+              <span class="users-admin-item-name">
+                <span class="users-admin-presence-dot ${presenceClass}" title="${presenceLabel}" aria-label="${presenceLabel}"></span>
+                <span class="users-admin-item-display">${displayName}</span>
+                <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
+                <span class="users-admin-item-handle">@${username}</span>
+                <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
+                <span class="users-admin-item-email">${email}</span>
+              </span>
+              <div class="users-admin-item-actions">
+                <button
+                  class="users-admin-role ${roleClass}"
+                  type="button"
+                  data-role-user-id="${user.id}"
+                  aria-label="Cambiar rol de ${displayName}"
+                >
+                  ${userEscapeHtml(getAdminRoleLabel(role))}
+                </button>
+                <button class="users-admin-item-btn users-admin-permissions-btn" type="button" data-permissions-user-id="${user.id}" aria-label="Configurar permisos de ${displayName}" title="Permisos">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l7 4v6c0 5-3.5 9.7-7 10-3.5-.3-7-5-7-10V6l7-4z"/><path d="M9.5 12.5l2 2 3-3"/></svg>
+                </button>
+                <button class="users-admin-item-btn users-admin-edit-btn" type="button" data-user-id="${user.id}" aria-label="Editar ${displayName}" title="Editar">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="users-admin-item-meta users-admin-item-meta-row">
+              <span>Ultimo login: ${userEscapeHtml(lastLogin)}</span>
+              ${stateMeta}
+            </div>
+          </article>
+        `;
+      }).join('')
+      : '<p class="users-admin-group-empty">Sin usuarios en esta categoria.</p>';
 
     return `
-      <article class="users-admin-item${inactiveClass}">
-        <div class="users-admin-item-head">
-          <span class="users-admin-item-name">${displayName}</span>
-          <span class="users-admin-role ${roleClass}">${role}</span>
+      <section class="users-admin-group" data-role-group="${roleKey}">
+        <button
+          class="users-admin-group-toggle${isOpen ? '' : ' is-collapsed'}"
+          type="button"
+          data-group-role="${roleKey}"
+          aria-expanded="${isOpen ? 'true' : 'false'}"
+        >
+          <span class="users-admin-group-title">${groupTitle}</span>
+          <span class="users-admin-group-count">${list.length}</span>
+          <svg class="users-admin-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="users-admin-group-body${isOpen ? '' : ' is-collapsed'}">
+          ${itemsMarkup}
         </div>
-        <div class="users-admin-item-meta">@${username}</div>
-        <div class="users-admin-item-meta">${email}</div>
-        <div class="users-admin-item-meta">Ultimo login: ${userEscapeHtml(lastLogin)}</div>
-        <div class="users-admin-item-actions">
-          <button class="users-admin-item-btn" type="button" data-user-id="${user.id}">Editar</button>
-        </div>
-      </article>
+      </section>
     `;
   }).join('');
 }
 
 async function loadAdminUsers({ silent = false } = {}) {
-  if (!isCurrentSessionAdmin()) return [];
+  if (!hasCurrentSessionPermission('users.manage')) return [];
   try {
     if (!silent) setUsersAdminStatus('Cargando usuarios...');
     const data = await requestJson('/api/admin/users', { cache: 'no-store' });
     adminUsersCache = Array.isArray(data.users) ? data.users : [];
     renderAdminUsersList(adminUsersCache);
-    setUsersAdminStatus(`Usuarios cargados: ${adminUsersCache.length}`);
+    setUsersAdminStatus('');
     return adminUsersCache;
   } catch (error) {
     setUsersAdminStatus(error.message || 'No se pudieron cargar usuarios.');
@@ -982,20 +1584,63 @@ if (refreshUsersAdminBtn) {
   });
 }
 
+if (usersAdminToggleCreateBtn) {
+  usersAdminToggleCreateBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const nextOpen = !usersAdminFormOpen;
+    if (nextOpen) {
+      resetUsersAdminForm(null);
+    }
+    setUsersAdminFormOpen(nextOpen, { focusUsername: nextOpen });
+  });
+}
+
 if (usersAdminView) {
   usersAdminView.addEventListener('click', (event) => {
+    const groupBtn = event.target.closest('.users-admin-group-toggle[data-group-role]');
+    if (groupBtn) {
+      const groupRole = String(groupBtn.dataset.groupRole || '');
+      if (groupRole && Object.prototype.hasOwnProperty.call(usersAdminGroupOpenState, groupRole)) {
+        usersAdminGroupOpenState[groupRole] = !usersAdminGroupOpenState[groupRole];
+        renderAdminUsersList(adminUsersCache);
+      }
+      return;
+    }
+
+    const roleBtn = event.target.closest('.users-admin-role[data-role-user-id]');
+    if (roleBtn) {
+      event.stopPropagation();
+      const userId = Number(roleBtn.dataset.roleUserId || 0);
+      const selectedUser = adminUsersCache.find((entry) => Number(entry.id) === userId);
+      if (!selectedUser) return;
+      openUsersAdminRoleMenu(roleBtn, selectedUser);
+      return;
+    }
+
+    const permissionsBtn = event.target.closest('.users-admin-permissions-btn[data-permissions-user-id]');
+    if (permissionsBtn) {
+      event.stopPropagation();
+      const userId = Number(permissionsBtn.dataset.permissionsUserId || 0);
+      const selectedUser = adminUsersCache.find((entry) => Number(entry.id) === userId);
+      if (!selectedUser) return;
+      void openUsersAdminPermissionsMenu(permissionsBtn, selectedUser);
+      return;
+    }
+
     const editBtn = event.target.closest('.users-admin-item-btn[data-user-id]');
     if (!editBtn) return;
     const userId = Number(editBtn.dataset.userId || 0);
     const selectedUser = adminUsersCache.find((entry) => Number(entry.id) === userId);
     if (!selectedUser) return;
     resetUsersAdminForm(selectedUser);
+    setUsersAdminFormOpen(true);
   });
 }
 
 if (usersAdminResetBtn) {
   usersAdminResetBtn.addEventListener('click', () => {
     resetUsersAdminForm(null);
+    setUsersAdminFormOpen(true, { focusUsername: true });
   });
 }
 
@@ -1040,6 +1685,7 @@ if (usersAdminForm) {
         showToast('Usuario creado.', 'success');
       }
       resetUsersAdminForm(null);
+      setUsersAdminFormOpen(true, { focusUsername: true });
       await loadAdminUsers({ silent: true });
     } catch (error) {
       showToast(error.message || 'No se pudo guardar el usuario.', 'error');
@@ -1064,11 +1710,20 @@ document.addEventListener('click', (e) => {
   setNotifPanelOpen(false);
 });
 
+let _appResizeTicking = false;
 window.addEventListener('resize', () => {
-  if (_notifOpen) _positionNotifPanel();
-  if (isCalendarView) {
-    renderScheduleMonth();
-    renderScheduleNotes();
+  if (!_appResizeTicking) {
+    window.requestAnimationFrame(() => {
+      closeUsersAdminRoleMenu();
+      closeUsersAdminPermissionsMenu();
+      if (_notifOpen) _positionNotifPanel();
+      if (isCalendarView) {
+        renderScheduleMonth();
+        renderScheduleNotes();
+      }
+      _appResizeTicking = false;
+    });
+    _appResizeTicking = true;
   }
 });
 
@@ -1099,12 +1754,16 @@ if (accountBtn && accountMenu) {
 }
 
 document.addEventListener('click', () => {
+  closeUsersAdminRoleMenu();
+  closeUsersAdminPermissionsMenu();
   setAccountMenu(false);
   setToolbarExpanded(false);
 });
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
+    closeUsersAdminRoleMenu();
+    closeUsersAdminPermissionsMenu();
     setAccountMenu(false);
     setToolbarExpanded(false);
   }
@@ -1113,10 +1772,19 @@ document.addEventListener('keydown', (event) => {
 // BotÃ³n de cerrar sesiÃ³n
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
-  logoutBtn.addEventListener('click', (event) => {
+  logoutBtn.addEventListener('click', async (event) => {
     event.stopPropagation();
-    clearSession();
-    showLogin();
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+    } catch (_error) {
+      // Ignorar fallo de logout remoto y cerrar sesion local
+    } finally {
+      clearSession();
+      showLogin();
+    }
   });
 }
 
@@ -1613,9 +2281,17 @@ function ensureLeadSearchSuggestionBox() {
   document.body.appendChild(box);
   leadSearchSuggestionBox = box;
 
+  let _searchRepositionTicking = false;
   const reposition = () => {
-    if (!leadSearchSuggestionBox || !leadSearchSuggestionBox.classList.contains('visible')) return;
-    positionLeadSearchSuggestionBox();
+    if (!_searchRepositionTicking) {
+      window.requestAnimationFrame(() => {
+        if (leadSearchSuggestionBox && leadSearchSuggestionBox.classList.contains('visible')) {
+          positionLeadSearchSuggestionBox();
+        }
+        _searchRepositionTicking = false;
+      });
+      _searchRepositionTicking = true;
+    }
   };
   window.addEventListener('resize', reposition);
   window.addEventListener('scroll', reposition, true);
@@ -2340,30 +3016,31 @@ function updateEmailsCounter(count) {
 }
 
 function updateEmailsRoleUi() {
-  const { role } = getSessionIdentity();
-  const isAdmin = role === 'admin';
+  const hasGlobalAccess = hasCurrentSessionPermission('emails.view_all');
+  const canDeleteEmails = hasCurrentSessionPermission('emails.delete');
 
   if (emailsView) {
-    emailsView.classList.toggle('is-admin', isAdmin);
+    emailsView.classList.toggle('is-admin', hasGlobalAccess);
   }
 
   if (emailsRoleHint) {
-    emailsRoleHint.textContent = isAdmin
+    emailsRoleHint.textContent = hasGlobalAccess
       ? 'Vista global de administracion'
       : 'Vista Seller: autoria y leads asignados';
   }
 
   if (emailsDeleteSelectedBtn) {
-    emailsDeleteSelectedBtn.classList.toggle('hidden', !isAdmin);
+    emailsDeleteSelectedBtn.classList.toggle('hidden', !canDeleteEmails);
   }
 
-  if (!isAdmin) {
+  if (!hasGlobalAccess) {
     selectedEmailIds.clear();
   }
 }
 
 function syncEmailSelectionUi() {
-  const isAdmin = isCurrentSessionAdmin();
+  const hasGlobalAccess = hasCurrentSessionPermission('emails.view_all');
+  const canDeleteEmails = hasCurrentSessionPermission('emails.delete');
   const availableIds = new Set(allEmailsCache.map((email) => Number(email.id)));
   selectedEmailIds = new Set(
     Array.from(selectedEmailIds).filter((id) => availableIds.has(id))
@@ -2373,16 +3050,16 @@ function syncEmailSelectionUi() {
   const selected = selectedEmailIds.size;
 
   if (emailsSelectionCount) {
-    emailsSelectionCount.classList.toggle('hidden', !(isAdmin && selected > 0));
+    emailsSelectionCount.classList.toggle('hidden', !(canDeleteEmails && selected > 0));
     emailsSelectionCount.textContent = `${selected} seleccionado${selected === 1 ? '' : 's'}`;
   }
 
   if (emailsDeleteSelectedBtn) {
-    emailsDeleteSelectedBtn.disabled = !(isAdmin && selected > 0);
+    emailsDeleteSelectedBtn.disabled = !(canDeleteEmails && selected > 0);
   }
 
   if (emailsSelectAll) {
-    const canSelect = isAdmin && total > 0;
+    const canSelect = hasGlobalAccess && total > 0;
     emailsSelectAll.disabled = !canSelect;
     emailsSelectAll.checked = canSelect && selected === total;
     emailsSelectAll.indeterminate = canSelect && selected > 0 && selected < total;
@@ -2412,7 +3089,8 @@ function renderEmailsRows(emails) {
   if (!emailsTableBody) return;
 
   const rows = Array.isArray(emails) ? emails : [];
-  const isAdmin = isCurrentSessionAdmin();
+  const hasGlobalAccess = hasCurrentSessionPermission('emails.view_all');
+  const canDeleteEmails = hasCurrentSessionPermission('emails.delete');
   updateEmailsCounter(rows.length);
   updateEmailsRoleUi();
 
@@ -2437,7 +3115,7 @@ function renderEmailsRows(emails) {
       <tr class="email-row" data-email-id="${emailId}">
         <td class="emails-select-col">
           <label class="email-circle-select" title="Seleccionar correo">
-            <input type="checkbox" class="email-select-checkbox email-row-select" data-email-id="${emailId}" ${selected ? 'checked' : ''} ${isAdmin ? '' : 'disabled'} />
+            <input type="checkbox" class="email-select-checkbox email-row-select" data-email-id="${emailId}" ${selected ? 'checked' : ''} ${canDeleteEmails ? '' : 'disabled'} />
             <span class="email-select-circle" aria-hidden="true"></span>
           </label>
         </td>
@@ -2448,7 +3126,7 @@ function renderEmailsRows(emails) {
         <td class="email-date">${formatEmailDateTime(email.sent_at || email.created_at)}</td>
         <td><span class="email-status-badge ${statusMeta.className}">${statusMeta.label}</span></td>
         <td class="emails-actions-col">
-          ${isAdmin
+          ${canDeleteEmails
             ? `<button class="email-row-delete-btn" type="button" data-email-id="${emailId}" title="Eliminar correo" aria-label="Eliminar correo">Eliminar</button>`
             : '<span class="email-no-actions">-</span>'
           }
@@ -2503,8 +3181,8 @@ async function loadEmails(forceReload = false) {
 async function deleteEmailById(emailId) {
   const numericId = Number(emailId);
   if (!Number.isInteger(numericId) || numericId <= 0) return;
-  if (!isCurrentSessionAdmin()) {
-    showToast('Solo admins pueden eliminar correos.', 'error');
+  if (!hasCurrentSessionPermission('emails.delete')) {
+    showToast('No tienes permisos para eliminar correos.', 'error');
     return;
   }
 
@@ -2531,8 +3209,8 @@ async function deleteEmailById(emailId) {
 }
 
 async function deleteSelectedEmails() {
-  if (!isCurrentSessionAdmin()) {
-    showToast('Solo admins pueden eliminar correos.', 'error');
+  if (!hasCurrentSessionPermission('emails.delete')) {
+    showToast('No tienes permisos para eliminar correos.', 'error');
     return;
   }
 
@@ -2579,7 +3257,7 @@ function initializeEmailsInteractions() {
 
       const emailId = Number(target.dataset.emailId);
       if (!Number.isInteger(emailId) || emailId <= 0) return;
-      if (!isCurrentSessionAdmin()) return;
+      if (!hasCurrentSessionPermission('emails.delete')) return;
 
       if (target.checked) {
         selectedEmailIds.add(emailId);
@@ -2606,7 +3284,7 @@ function initializeEmailsInteractions() {
 
   if (emailsSelectAll) {
     emailsSelectAll.addEventListener('change', (event) => {
-      if (!isCurrentSessionAdmin()) return;
+      if (!hasCurrentSessionPermission('emails.delete')) return;
       const checked = Boolean(event.target.checked);
       const ids = allEmailsCache.map((email) => Number(email.id)).filter((id) => Number.isInteger(id) && id > 0);
       selectedEmailIds = checked ? new Set(ids) : new Set();
@@ -2714,7 +3392,7 @@ function showEmailsView() {
 }
 
 function showUsersAdminView() {
-  if (!isCurrentSessionAdmin()) {
+  if (!hasCurrentSessionPermission('users.manage')) {
     showDashboardView();
     return;
   }
@@ -2742,6 +3420,9 @@ function showUsersAdminView() {
   isEmailsView = false;
   setToolbarRouteButtonState('admin-users');
   hideLeadSearchSuggestions();
+  closeUsersAdminRoleMenu();
+  closeUsersAdminPermissionsMenu();
+  setUsersAdminFormOpen(false);
   void loadAdminUsers();
   resetUsersAdminForm(null);
 }
@@ -2968,7 +3649,7 @@ function applyDashboardRouteFromHash() {
   } else if (route === 'emails') {
     showEmailsView();
   } else if (route === 'admin-users') {
-    if (isCurrentSessionAdmin()) {
+    if (hasCurrentSessionPermission('users.manage')) {
       showUsersAdminView();
     } else {
       showDashboardView();
@@ -3906,6 +4587,7 @@ if (loginForm) {
       applyTheme(getInitialTheme(data.user), { owner: data.user });
       applyAccentColor(getInitialAccentColor(data.user), { owner: data.user });
       void refreshNotifications();
+      pingPresence();
       loginStatus.textContent = data.message;
       setTimeout(() => {
         showDashboard();
@@ -3946,6 +4628,48 @@ if (hasStoredAuth) {
 // Carga inicial de notificaciones + polling cada 60 s
 if (hasStoredAuth) void refreshNotifications();
 setInterval(() => { if (getSession() && getAuthToken()) void refreshNotifications(); }, 60000);
+
+function isUsersAdminViewVisible() {
+  return Boolean(usersAdminView && !usersAdminView.classList.contains('hidden'));
+}
+
+function syncCurrentUserPresenceInCache(lastSeenIso) {
+  if (!Array.isArray(adminUsersCache) || !adminUsersCache.length) return;
+  const normalizedLastSeen = String(lastSeenIso || '').trim();
+  if (!normalizedLastSeen) return;
+
+  const selfUsername = String(getSessionIdentity().username || '').trim().toLowerCase();
+  if (!selfUsername) return;
+
+  let didUpdate = false;
+  adminUsersCache = adminUsersCache.map((user) => {
+    const username = String(user?.username || '').trim().toLowerCase();
+    if (username !== selfUsername) return user;
+    didUpdate = true;
+    return { ...user, last_seen_at: normalizedLastSeen };
+  });
+
+  if (didUpdate && isUsersAdminViewVisible()) {
+    renderAdminUsersList(adminUsersCache);
+  }
+}
+
+// Heartbeat de presencia — actualiza last_seen_at cada 30 s
+async function pingPresence() {
+  if (!getSession() || !getAuthToken()) return;
+  try {
+    await requestJson('/api/ping', { method: 'POST' });
+    syncCurrentUserPresenceInCache(new Date().toISOString());
+  } catch (_error) {
+    // Ignorar fallos silenciosos de heartbeat
+  }
+}
+if (hasStoredAuth) void pingPresence();
+setInterval(() => { void pingPresence(); }, 30000);
+setInterval(() => {
+  if (!getSession() || !getAuthToken() || !hasCurrentSessionPermission('users.manage') || !isUsersAdminViewVisible()) return;
+  void loadAdminUsers({ silent: true });
+}, 30000);
 
 // ============================================
 // RANKINGS WHEEL - Efecto ruleta para rankings laterales
@@ -4085,23 +4809,30 @@ function initRankingsWheel() {
       wheel.style.cursor = 'grabbing';
     });
     
+    let _wheelDragTicking = false;
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
-      const delta = e.clientY - startY;
-      currentOffset = startOffset + delta;
-      
-      // Loop en drag
-      while (currentOffset <= -listHeight) {
-        currentOffset += listHeight;
-        startOffset += listHeight;
+      if (!_wheelDragTicking) {
+        window.requestAnimationFrame(() => {
+          const delta = e.clientY - startY;
+          currentOffset = startOffset + delta;
+          
+          // Loop en drag
+          while (currentOffset <= -listHeight) {
+            currentOffset += listHeight;
+            startOffset += listHeight;
+          }
+          while (currentOffset > 0) {
+            currentOffset -= listHeight;
+            startOffset -= listHeight;
+          }
+          
+          track.style.transform = `translateY(${baseOffset + currentOffset}px)`;
+          updateActiveItem();
+          _wheelDragTicking = false;
+        });
+        _wheelDragTicking = true;
       }
-      while (currentOffset > 0) {
-        currentOffset -= listHeight;
-        startOffset -= listHeight;
-      }
-      
-      track.style.transform = `translateY(${baseOffset + currentOffset}px)`;
-      updateActiveItem();
     });
     
     document.addEventListener('mouseup', () => {

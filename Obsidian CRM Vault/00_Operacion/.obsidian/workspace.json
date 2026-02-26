@@ -1,24 +1,24 @@
 {
   "main": {
-    "id": "ff922cd0eda7d2b0",
+    "id": "fecf59cf19c0852d",
     "type": "split",
     "children": [
       {
-        "id": "9dce717d3fc5b5f8",
+        "id": "bbc85ee0ea8946e4",
         "type": "tabs",
         "children": [
           {
-            "id": "7358bbdc437dd010",
+            "id": "27915cd88e7bd576",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "Tablero - Ejecucion CRM.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Plan Maestro - CRM"
+              "title": "Tablero - Ejecucion CRM"
             }
           }
         ]
@@ -27,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "ae76105ea084a35b",
+    "id": "7574f1d09a1c72b9",
     "type": "split",
     "children": [
       {
-        "id": "c619eeb9b30963e7",
+        "id": "48404199a2cbdba0",
         "type": "tabs",
         "children": [
           {
-            "id": "957f25869773b60b",
+            "id": "b8ed5fb9d58572df",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -48,7 +48,7 @@
             }
           },
           {
-            "id": "6559989bcda952c5",
+            "id": "30add70884664314",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -65,7 +65,7 @@
             }
           },
           {
-            "id": "537a9fabe750b7f7",
+            "id": "3b6e30991da72011",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -81,20 +81,20 @@
     "width": 300
   },
   "right": {
-    "id": "f20b7ca245ab6cd1",
+    "id": "ccd63c3bf49ce966",
     "type": "split",
     "children": [
       {
-        "id": "8c1b92f536679a21",
+        "id": "9c722162d6939150",
         "type": "tabs",
         "children": [
           {
-            "id": "de632a4ec5b80247",
+            "id": "afa7c80405dbc3da",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "Tablero - Ejecucion CRM.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,25 +104,25 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Enlaces entrantes de Plan Maestro - CRM"
+              "title": "Enlaces entrantes de Tablero - Ejecucion CRM"
             }
           },
           {
-            "id": "f55688211c084d4d",
+            "id": "67c6e0c485d4f0ad",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "Tablero - Ejecucion CRM.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Enlaces salientes de Plan Maestro - CRM"
+              "title": "Enlaces salientes de Tablero - Ejecucion CRM"
             }
           },
           {
-            "id": "3b5fa5e09d093336",
+            "id": "49e79c7bca6f5cc2",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -137,7 +137,7 @@
             }
           },
           {
-            "id": "ee68d3537af2b490",
+            "id": "5bc7dae39c48cb54",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -151,18 +151,18 @@
             }
           },
           {
-            "id": "47f6c3d745295463",
+            "id": "18889467900886c7",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "Tablero - Ejecucion CRM.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Esquema de Plan Maestro - CRM"
+              "title": "Esquema de Tablero - Ejecucion CRM"
             }
           }
         ]
@@ -183,11 +183,9 @@
       "bases:Crear nueva base": false
     }
   },
-  "active": "7358bbdc437dd010",
+  "active": "27915cd88e7bd576",
   "lastOpenFiles": [
-    "00_Operacion/Tablero - Ejecucion CRM.md",
-    "00_Operacion/README.md",
-    "01_Fases/Plan Maestro - CRM.md",
-    "INICIO.md"
+    "README.md",
+    "Tablero - Ejecucion CRM.md"
   ]
 }

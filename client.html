@@ -1368,7 +1368,7 @@
         0 20px 42px rgba(0, 0, 0, 0.45),
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
       z-index: 5000;
-      overflow: visible;
+      overflow: hidden;
     }
 
     .email-panel {
@@ -1773,9 +1773,11 @@
     .notes-panel-body {
       padding: 12px 14px 14px;
       display: flex;
+      flex: 1;
+      min-height: 0;
       flex-direction: column;
       gap: 10px;
-      overflow: visible;
+      overflow: hidden;
     }
 
     .notes-composer-label {
@@ -1811,6 +1813,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+      flex-shrink: 0;
     }
 
     .notes-save-status {
@@ -1824,12 +1827,36 @@
     .notes-feed {
       display: flex;
       flex-direction: column;
+      flex: 1;
+      min-height: 0;
       gap: 8px;
       max-height: none;
-      overflow: visible;
-      padding-right: 2px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      padding-right: 6px;
       position: relative;
       z-index: 1;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(125, 211, 252, 0.45) rgba(255, 255, 255, 0.08);
+    }
+
+    .notes-feed::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .notes-feed::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+    }
+
+    .notes-feed::-webkit-scrollbar-thumb {
+      background: rgba(125, 211, 252, 0.38);
+      border-radius: 999px;
+    }
+
+    .notes-feed::-webkit-scrollbar-thumb:hover {
+      background: rgba(125, 211, 252, 0.56);
     }
 
     .notes-feed-empty {
@@ -1955,9 +1982,6 @@
     }
 
     .note-card-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
       min-width: 176px;
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1972,9 +1996,34 @@
       z-index: 12001;
     }
 
-    .note-card-menu.note-card-menu-up {
-      top: auto;
-      bottom: calc(100% + 6px);
+    .note-card-menu.note-card-menu-floating {
+      position: fixed;
+      top: 0;
+      left: 0;
+      max-width: min(260px, calc(100vw - 16px));
+      max-height: min(340px, calc(100vh - 16px));
+      overflow-y: auto;
+      z-index: 2147483600;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(125, 211, 252, 0.45) rgba(255, 255, 255, 0.08);
+    }
+
+    .note-card-menu.note-card-menu-floating::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .note-card-menu.note-card-menu-floating::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+    }
+
+    .note-card-menu.note-card-menu-floating::-webkit-scrollbar-thumb {
+      background: rgba(125, 211, 252, 0.38);
+      border-radius: 999px;
+    }
+
+    .note-card-menu.note-card-menu-floating::-webkit-scrollbar-thumb:hover {
+      background: rgba(125, 211, 252, 0.56);
     }
 
     .note-card-menu-item {
@@ -2061,6 +2110,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      flex-shrink: 0;
     }
 
     .notes-templates-header {
@@ -4966,6 +5016,22 @@
       color: rgba(15, 23, 42, 0.62);
     }
 
+    body.home-active.theme-light .notes-feed {
+      scrollbar-color: rgba(37, 99, 235, 0.4) rgba(15, 23, 42, 0.08);
+    }
+
+    body.home-active.theme-light .notes-feed::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.08);
+    }
+
+    body.home-active.theme-light .notes-feed::-webkit-scrollbar-thumb {
+      background: rgba(37, 99, 235, 0.36);
+    }
+
+    body.home-active.theme-light .notes-feed::-webkit-scrollbar-thumb:hover {
+      background: rgba(37, 99, 235, 0.52);
+    }
+
     body.home-active.theme-light .note-card {
       border-color: rgba(15, 23, 42, 0.12);
       background: rgba(255, 255, 255, 0.75);
@@ -6760,7 +6826,6 @@
 <body class="home-active theme-dark">
   <div class="page-bg"></div>
   <div class="page-overlay"></div>
-  <div class="page-watermark" aria-hidden="true"></div>
   
   <main class="lead-view-wrapper">
     <div class="lead-floating">

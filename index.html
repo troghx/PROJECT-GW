@@ -10,12 +10,11 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&family=Playfair+Display:ital,wght@1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260226f" />
+    <link rel="stylesheet" href="styles.css?v=20260226g" />
   </head>
   <body>
     <div class="page-bg"></div>
     <div class="page-overlay"></div>
-    <div class="page-watermark" aria-hidden="true"></div>
 
     <main id="authShell" class="auth-layout">
       <section class="login-panel glass" aria-label="Panel de inicio de sesion">
@@ -792,17 +791,31 @@
         </div>
 
         <div class="users-admin-shell">
-          <div class="users-admin-layout">
+          <div id="usersAdminLayout" class="users-admin-layout">
             <section class="users-admin-block">
               <div class="users-admin-block-head">
-                <h4>Usuarios activos</h4>
-                <button id="refreshUsersAdminBtn" class="users-admin-refresh-btn" type="button">Actualizar</button>
+                <h4>
+                  Usuarios activos
+                  <span id="usersAdminActiveTotal" class="users-admin-total-badge">0</span>
+                </h4>
+                <div class="users-admin-head-actions">
+                  <button id="refreshUsersAdminBtn" class="users-admin-refresh-btn" type="button">Actualizar</button>
+                  <button
+                    id="usersAdminToggleCreateBtn"
+                    class="users-admin-toggle-create-btn"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="usersAdminFormPanel"
+                  >
+                    Nuevo usuario
+                  </button>
+                </div>
               </div>
               <p id="usersAdminStatus" class="users-admin-status">Cargando usuarios...</p>
               <div id="usersAdminList" class="users-admin-list"></div>
             </section>
 
-            <section class="users-admin-block users-admin-form-block">
+            <section id="usersAdminFormPanel" class="users-admin-block users-admin-form-block" aria-hidden="true">
               <h4 id="usersAdminFormTitle">Nuevo usuario</h4>
               <form id="usersAdminForm" class="users-admin-form">
                 <input id="usersAdminId" type="hidden" />
@@ -822,6 +835,7 @@
                   <label for="usersAdminRole">Role</label>
                   <select id="usersAdminRole">
                     <option value="seller">Seller</option>
+                    <option value="supervisor">Supervisor</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -847,7 +861,7 @@
     </section>
 
     <script src="crm-helpers.js?v=20260216b"></script>
-    <script src="app.js?v=20260226a"></script>
+    <script src="app.js?v=20260226b"></script>
     <script src="quick-actions.js?v=20260216c"></script>
     <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
     <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">

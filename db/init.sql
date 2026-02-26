@@ -1365,6 +1365,13 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'app_users' AND column_name = 'last_seen_at'
+  ) THEN
+    ALTER TABLE app_users ADD COLUMN last_seen_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
     WHERE table_name = 'app_users' AND column_name = 'created_at'
   ) THEN
     ALTER TABLE app_users ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
@@ -1380,9 +1387,282 @@ BEGIN
   UPDATE app_users SET username = lower(btrim(username));
   UPDATE app_users SET display_name = 'Usuario' WHERE display_name IS NULL OR btrim(display_name) = '';
   UPDATE app_users SET role = lower(btrim(role));
-  UPDATE app_users SET role = 'seller' WHERE role IS NULL OR role NOT IN ('admin', 'seller');
+  UPDATE app_users SET role = 'seller' WHERE role IS NULL OR role NOT IN ('admin', 'supervisor', 'seller');
 END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_username_lower ON app_users ((lower(username)));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_email_lower ON app_users ((lower(email))) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_app_users_role_active ON app_users (role, is_active);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  refresh_token_hash VARCHAR(128) NOT NULL UNIQUE,
+  refresh_token_expires_at TIMESTAMPTZ NOT NULL,
+  created_ip VARCHAR(80),
+  created_user_agent VARCHAR(300),
+  last_seen_at TIMESTAMPTZ,
+  replaced_by_session_id BIGINT REFERENCES auth_sessions(id) ON DELETE SET NULL,
+  revoked_at TIMESTAMPTZ,
+  revoked_reason VARCHAR(160),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'created_ip'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN created_ip VARCHAR(80);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'created_user_agent'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN created_user_agent VARCHAR(300);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'last_seen_at'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN last_seen_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'replaced_by_session_id'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN replaced_by_session_id BIGINT REFERENCES auth_sessions(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'revoked_at'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN revoked_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'revoked_reason'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN revoked_reason VARCHAR(160);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'auth_sessions' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE auth_sessions ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_active ON auth_sessions (user_id, revoked_at, refresh_token_expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_last_seen ON auth_sessions (last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS permission_catalog (
+  key VARCHAR(120) PRIMARY KEY,
+  module VARCHAR(80) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'permission_catalog' AND column_name = 'module'
+  ) THEN
+    ALTER TABLE permission_catalog ADD COLUMN module VARCHAR(80) NOT NULL DEFAULT 'general';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'permission_catalog' AND column_name = 'label'
+  ) THEN
+    ALTER TABLE permission_catalog ADD COLUMN label VARCHAR(120) NOT NULL DEFAULT 'Permiso';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'permission_catalog' AND column_name = 'description'
+  ) THEN
+    ALTER TABLE permission_catalog ADD COLUMN description TEXT NOT NULL DEFAULT '';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'permission_catalog' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE permission_catalog ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'permission_catalog' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE permission_catalog ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role VARCHAR(20) NOT NULL,
+  permission_key VARCHAR(120) NOT NULL REFERENCES permission_catalog(key) ON DELETE CASCADE,
+  allowed BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (role, permission_key)
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'role_permissions' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE role_permissions ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'role_permissions' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE role_permissions ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS user_permissions (
+  user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  permission_key VARCHAR(120) NOT NULL REFERENCES permission_catalog(key) ON DELETE CASCADE,
+  allowed BOOLEAN NOT NULL,
+  updated_by_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, permission_key)
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_permissions' AND column_name = 'updated_by_user_id'
+  ) THEN
+    ALTER TABLE user_permissions ADD COLUMN updated_by_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_permissions' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE user_permissions ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_permissions' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE user_permissions ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions (role);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_key ON user_permissions (permission_key);
+
+INSERT INTO permission_catalog (key, module, label, description)
+VALUES
+  ('users.manage', 'usuarios', 'Gestionar usuarios', 'Crear, editar, activar o desactivar usuarios.'),
+  ('users.permissions.manage', 'usuarios', 'Gestionar permisos', 'Asignar o revocar permisos granulares por usuario.'),
+  ('leads.view_all', 'leads', 'Ver todos los leads', 'Acceso global al listado de leads.'),
+  ('leads.view_assigned', 'leads', 'Ver leads asignados', 'Ver leads asignados al usuario.'),
+  ('leads.create', 'leads', 'Crear leads', 'Crear nuevos leads.'),
+  ('leads.edit', 'leads', 'Editar leads', 'Modificar datos de leads.'),
+  ('leads.assign', 'leads', 'Asignar leads', 'Reasignar leads a otros usuarios.'),
+  ('leads.delete', 'leads', 'Eliminar leads', 'Eliminar leads del sistema.'),
+  ('notes.manage', 'leads', 'Gestionar notas', 'Crear, editar y eliminar notas de leads.'),
+  ('emails.view_all', 'correos', 'Ver todos los correos', 'Acceso global al historial de correos.'),
+  ('emails.send', 'correos', 'Enviar/registrar correos', 'Registrar y enviar correos desde el CRM.'),
+  ('emails.delete', 'correos', 'Eliminar correos', 'Eliminar correos individuales o en lote.'),
+  ('callbacks.view_all', 'operacion', 'Ver callbacks globales', 'Ver callbacks de todos los asesores.'),
+  ('callbacks.complete_assigned', 'operacion', 'Completar callbacks asignados', 'Completar callbacks de leads asignados.'),
+  ('files.manage', 'documentos', 'Gestionar archivos', 'Subir, consultar y eliminar archivos de leads.'),
+  ('tasks.manage', 'operacion', 'Gestionar tareas', 'Crear y actualizar tareas operativas.')
+ON CONFLICT (key) DO UPDATE
+SET module = EXCLUDED.module,
+    label = EXCLUDED.label,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+WITH matrix(role, permission_key, allowed) AS (
+  VALUES
+    ('admin', 'users.manage', TRUE),
+    ('admin', 'users.permissions.manage', TRUE),
+    ('admin', 'leads.view_all', TRUE),
+    ('admin', 'leads.view_assigned', TRUE),
+    ('admin', 'leads.create', TRUE),
+    ('admin', 'leads.edit', TRUE),
+    ('admin', 'leads.assign', TRUE),
+    ('admin', 'leads.delete', TRUE),
+    ('admin', 'notes.manage', TRUE),
+    ('admin', 'emails.view_all', TRUE),
+    ('admin', 'emails.send', TRUE),
+    ('admin', 'emails.delete', TRUE),
+    ('admin', 'callbacks.view_all', TRUE),
+    ('admin', 'callbacks.complete_assigned', TRUE),
+    ('admin', 'files.manage', TRUE),
+    ('admin', 'tasks.manage', TRUE),
+
+    ('supervisor', 'users.manage', FALSE),
+    ('supervisor', 'users.permissions.manage', FALSE),
+    ('supervisor', 'leads.view_all', TRUE),
+    ('supervisor', 'leads.view_assigned', TRUE),
+    ('supervisor', 'leads.create', TRUE),
+    ('supervisor', 'leads.edit', TRUE),
+    ('supervisor', 'leads.assign', TRUE),
+    ('supervisor', 'leads.delete', TRUE),
+    ('supervisor', 'notes.manage', TRUE),
+    ('supervisor', 'emails.view_all', TRUE),
+    ('supervisor', 'emails.send', TRUE),
+    ('supervisor', 'emails.delete', TRUE),
+    ('supervisor', 'callbacks.view_all', TRUE),
+    ('supervisor', 'callbacks.complete_assigned', TRUE),
+    ('supervisor', 'files.manage', TRUE),
+    ('supervisor', 'tasks.manage', TRUE),
+
+    ('seller', 'users.manage', FALSE),
+    ('seller', 'users.permissions.manage', FALSE),
+    ('seller', 'leads.view_all', FALSE),
+    ('seller', 'leads.view_assigned', TRUE),
+    ('seller', 'leads.create', TRUE),
+    ('seller', 'leads.edit', TRUE),
+    ('seller', 'leads.assign', FALSE),
+    ('seller', 'leads.delete', FALSE),
+    ('seller', 'notes.manage', TRUE),
+    ('seller', 'emails.view_all', FALSE),
+    ('seller', 'emails.send', TRUE),
+    ('seller', 'emails.delete', FALSE),
+    ('seller', 'callbacks.view_all', FALSE),
+    ('seller', 'callbacks.complete_assigned', TRUE),
+    ('seller', 'files.manage', TRUE),
+    ('seller', 'tasks.manage', TRUE)
+)
+INSERT INTO role_permissions (role, permission_key, allowed)
+SELECT lower(m.role), m.permission_key, m.allowed
+FROM matrix m
+JOIN permission_catalog pc ON pc.key = m.permission_key
+ON CONFLICT (role, permission_key) DO UPDATE
+SET allowed = EXCLUDED.allowed,
+    updated_at = CURRENT_TIMESTAMP;
