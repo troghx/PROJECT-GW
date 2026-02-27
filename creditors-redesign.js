@@ -549,6 +549,27 @@
     return truncate(value, 40);
   }
 
+  function cleanAccountTypeValue(raw) {
+    let s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/\bType\b.*/i, '').trim();
+    if (/^(?:individual|joint|authorized|cosigner)$/i.test(s)) return '';
+    const lower = s.toLowerCase().replace(/[^a-z\s\/&]/g, '').trim();
+    if (!lower) return '';
+    if (/mortgage|home\s*loan|conventional/.test(lower)) return 'Mortgage';
+    if (/credit\s*card|bank\s*card|charge\s*card/.test(lower)) return 'Credit Card';
+    if (/auto(?:mobile)?|vehicle|car\s*loan/.test(lower)) return 'Auto Loan';
+    if (/personal\s*loan/.test(lower)) return 'Personal Loan';
+    if (/student\s*loan|education/.test(lower)) return 'Student Loan';
+    if (/unsecured/.test(lower)) return 'Unsecured';
+    if (/secured/.test(lower)) return 'Secured';
+    if (/installment/.test(lower)) return 'Installment';
+    if (/revolving|line\s*of\s*credit/.test(lower)) return 'Revolving';
+    if (/charge\s*account/.test(lower)) return 'Charge Account';
+    if (/collection/.test(lower)) return 'Collection';
+    return s.replace(/\s+/g, ' ').slice(0, 30);
+  }
+
   function extractType(line) {
     const source = String(line || '');
     if (/Term\s+Source\s+Type/i.test(source)) return '';
@@ -561,7 +582,7 @@
     value = value.split(/\b(?:Responsibility|High\s+Balance|High\s+Credit|Monthly\s+Payment|Current\s+Payment|Amount\s+Past\s+Due|Month(?:'s|s)?\s+Reviewed)\b/i)[0].trim();
     if (/^(?:provided|source|terms?|count|overview)$/i.test(value)) return '';
     if (/(?:term source|terms count|payment history|account details)/i.test(value)) return '';
-    return truncate(value, 40);
+    return cleanAccountTypeValue(value);
   }
 
   function extractResponsibility(line) {
@@ -1265,6 +1286,7 @@
     const monthsReviewed = normalizeMonthsReviewed(entry.monthsReviewed || entry.months_reviewed || entry.months);
     const accountStatus = String(entry.accountStatus || entry.account_status || '').trim();
     const currentPaymentStatus = String(entry.currentPaymentStatus || entry.current_payment_status || '').trim();
+    const accountType = cleanAccountTypeValue(String(entry.accountType || entry.account_type || '').trim());
     let responsibility = String(entry.responsibility || entry.responsability || '').trim();
     if (responsibility) {
       const lowered = responsibility.toLowerCase();
@@ -1275,12 +1297,16 @@
       else if (lowered.includes('authorized')) responsibility = 'Authorized';
     }
 
+    // Filtrar cuentas mortgage
+    const typeLower = accountType.toLowerCase();
+    if (/mortgage|home\s*loan|conventional|fha\b|va\s*loan/.test(typeLower)) return null;
+
     return {
       sourceReport: entry.sourceReport || entry.source_report || sourceName,
       creditorName: String(entry.creditorName || entry.creditor_name || entry.creditor || entry.name || '').trim(),
       accountNumber: String(entry.accountNumber || entry.account_number || '').trim(),
       accountStatus: accountStatus || currentPaymentStatus,
-      accountType: String(entry.accountType || entry.account_type || '').trim(),
+      accountType,
       responsibility,
       currentPaymentStatus,
       debtSourceRank: Number(entry.debtSourceRank || entry.debt_source_rank || 0),
@@ -1317,16 +1343,19 @@
     const entries = Array.isArray(data.creditors) ? data.creditors : [];
     return entries
       .map((entry) => normalizeExtractedEntry(entry, sourceName, party))
+      .filter(Boolean)
       .filter((entry) => entry.creditorName && normalizeMoney(entry.debtAmount) > 0);
   }
 
   function getStatusBadge(status) {
     const s = String(status || '').toLowerCase();
     let cls = 'badge-status-open';
+    if (s.includes('good') || s.includes('agreed') || s.includes('current')) cls = 'badge-status-open';
     if (s.includes('closed')) cls = 'badge-status-closed';
     else if (s.includes('charge') || s.includes('off')) cls = 'badge-status-chargeoff';
     else if (s.includes('collection')) cls = 'badge-status-collection';
-    return `<span class="badge ${cls}">${escapeHtml(truncate(status || '-', 12))}</span>`;
+    else if (s.includes('past due') || s.includes('delinquent') || s.includes('late')) cls = 'badge-status-chargeoff';
+    return `<span class="badge ${cls}">${escapeHtml(truncate(status || '-', 18))}</span>`;
   }
 
   function renderRow(entry, index) {
@@ -1359,7 +1388,7 @@
         </td>
         <td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>
         <td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>
-        <td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 12))}</span>` : '-'}</td>
+        <td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>
         <td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>
         <td class="col-past-due">${normalizeMoney(entry.past_due || entry.pastDue) > 0 ? formatCurrency(entry.past_due || entry.pastDue) : '-'}</td>
         <td class="col-actions">${deleteBtn}</td>
@@ -1784,7 +1813,7 @@
       account: `<td class="col-account">${entry.account_number || entry.accountNumber ? `<span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
       resp: `<td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>`,
       status: `<td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>`,
-      type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 12))}</span>` : '-'}</td>`,
+      type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>`,
       months: `<td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>`,
       pastDue: `<td class="col-past-due">${normalizeMoney(entry.past_due || entry.pastDue) > 0 ? formatCurrency(entry.past_due || entry.pastDue) : '-'}</td>`,
       actions: `<td class="col-actions">${deleteBtn}</td>`
@@ -2054,7 +2083,8 @@
     if (!parsed.length) {
       parsed = parseCreditReport(text, sourceName)
         .filter((entry) => normalizeMoney(entry.debtAmount) > 0)
-        .map((entry) => normalizeExtractedEntry(entry, sourceName, party));
+        .map((entry) => normalizeExtractedEntry(entry, sourceName, party))
+        .filter(Boolean);
     }
 
     if (parseRunId !== creditorsParseRunId) return;

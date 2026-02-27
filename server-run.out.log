@@ -2,5 +2,5 @@
 > project-gw@1.0.0 start
 > node server/index.js
 
-[dotenv@17.3.1] injecting env (11) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.3.1] injecting env (11) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
 Servidor activo en http://localhost:3000

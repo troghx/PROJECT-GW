@@ -2554,6 +2554,44 @@ function cleanCreditorNameFromAddress(name) {
   return cleaned || name;
 }
 
+function cleanAccountStatus(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const lower = s.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+  if (/charge\s*off|charged\s*off/.test(lower)) return 'Charge Off';
+  if (/collection/.test(lower)) return 'Collection';
+  if (/good\s*standing|as\s*agreed|current|pays?\s*as\s*agreed/.test(lower)) return 'Good Standing';
+  if (/closed/.test(lower)) return 'Closed';
+  if (/past\s*due|delinquent|late/.test(lower)) return 'Past Due';
+  if (/open/.test(lower)) return 'Open';
+  if (/paid/.test(lower)) return 'Paid';
+  // Devolver limpio sin expandir — solo trim y capitalizar primera palabra
+  return s.replace(/\s+/g, ' ').slice(0, 30);
+}
+
+function cleanAccountType(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return null;
+  // Limpiar patrones donde Gemini concatena campos: "Credit CardType Individual" → "Credit Card"
+  s = s.replace(/\bType\b.*/i, '').trim();
+  // Si el valor es una responsabilidad, no es un tipo
+  if (/^(?:individual|joint|authorized|cosigner)$/i.test(s)) return null;
+  const lower = s.toLowerCase().replace(/[^a-z\s\/&]/g, '').trim();
+  if (!lower) return null;
+  if (/mortgage|home\s*loan|conventional|fha\b|va\s*loan/.test(lower)) return 'Mortgage';
+  if (/credit\s*card|bank\s*card|charge\s*card/.test(lower)) return 'Credit Card';
+  if (/auto(?:mobile)?|vehicle|car\s*loan/.test(lower)) return 'Auto Loan';
+  if (/personal\s*loan/.test(lower)) return 'Personal Loan';
+  if (/student\s*loan|education/.test(lower)) return 'Student Loan';
+  if (/unsecured/.test(lower)) return 'Unsecured';
+  if (/secured/.test(lower)) return 'Secured';
+  if (/installment/.test(lower)) return 'Installment';
+  if (/revolving|line\s*of\s*credit/.test(lower)) return 'Revolving';
+  if (/charge\s*account/.test(lower)) return 'Charge Account';
+  if (/collection/.test(lower)) return 'Collection';
+  return s.replace(/\s+/g, ' ').slice(0, 30);
+}
+
 function normalizeAiCreditorEntry(entry, sourceReport) {
   if (!entry || typeof entry !== 'object') return null;
 
@@ -2568,12 +2606,21 @@ function normalizeAiCreditorEntry(entry, sourceReport) {
     pickFirstDefined(entry, ['debtAmount', 'latestDebt', 'recentDebt', 'balance', 'debt_amount'])
   );
 
+  const accountType = cleanAccountType(
+    pickFirstDefined(entry, ['accountType', 'type', 'account_type'])
+  );
+
+  // Filtrar cuentas mortgage
+  if (accountType === 'Mortgage') return null;
+
   return {
     sourceReport,
     creditorName,
     accountNumber: toNullableText(pickFirstDefined(entry, ['accountNumber', 'account', 'accountNo', 'account_number']), 80),
-    accountStatus: toNullableText(pickFirstDefined(entry, ['accountStatus', 'status', 'account_status']), 80),
-    accountType: toNullableText(pickFirstDefined(entry, ['accountType', 'type', 'account_type']), 80),
+    accountStatus: cleanAccountStatus(
+      pickFirstDefined(entry, ['accountStatus', 'status', 'account_status'])
+    ),
+    accountType,
     responsibility: toNullableText(pickFirstDefined(entry, ['responsibility', 'responsability']), 60),
     monthsReviewed: normalizeAiMonthsReviewed(pickFirstDefined(entry, ['monthsReviewed', 'months_reviewed', 'months'])),
     debtAmount,
@@ -2602,7 +2649,10 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
     '- debtAmount = deuda mas reciente/actual para esa cuenta (current balance, unpaid balance, amount due o equivalente).',
     '- monthsReviewed: si hay multiples valores posibles para la misma cuenta, usar SIEMPRE el menor entero.',
     '- Debe salir una fila por cuenta detectada.',
-    '- Mantener texto original para accountStatus/accountType/responsibility, sin traducir ni expandir.',
+    '- accountType = SOLO el tipo de cuenta limpio: "Credit Card", "Auto Loan", "Mortgage", "Personal Loan", "Student Loan", "Installment", "Revolving", "Unsecured", "Secured", "Collection", "Charge Account". NO incluir la palabra "Type" ni otros campos.',
+    '- accountStatus = SOLO el estado: "Good Standing", "Open", "Closed", "Charge Off", "Collection", "Past Due", "Paid". NO concatenar con otros campos.',
+    '- responsibility = SOLO: "Individual", "Joint", "Authorized". NO mezclar con accountType.',
+    '- Excluir cuentas de tipo Mortgage, Home Loan, Conventional, FHA, VA Loan.',
     '',
     `sourceReport: ${sourceReport || 'Reporte'}`,
     '--- BEGIN CREDIT REPORT TEXT ---',

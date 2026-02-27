@@ -478,6 +478,12 @@
       const uniqueCreditors = creditors
         .filter(c => c.creditorName && c.debtAmount > 0)
         .filter(c => {
+          // Excluir cuentas mortgage
+          const t = String(c.accountType || '').toLowerCase();
+          if (/mortgage|home\s*loan|conventional/.test(t)) return false;
+          return true;
+        })
+        .filter(c => {
           const key = c.creditorName.toLowerCase().trim();
           if (seen.has(key)) return false;
           seen.add(key);
