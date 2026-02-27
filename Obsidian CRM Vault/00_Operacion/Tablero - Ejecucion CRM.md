@@ -1,4 +1,4 @@
-﻿# Tablero - Ejecucion CRM
+# Tablero - Ejecucion CRM
 Fecha: 2026-02-26
 Estado: En curso
 

@@ -689,7 +689,7 @@ function renderNotifications(data) {
         <p class="notif-body">${esc(n.body)}</p>
         <p class="notif-time">${_notifTimeAgo(n.created_at)}</p>
       </div>
-      <button class="notif-item-delete" type="button" data-delete-id="${n.id}" aria-label="Eliminar notificaciÃ³n">
+      <button class="notif-item-delete" type="button" data-delete-id="${n.id}" aria-label="Eliminar notificación">
         <svg viewBox="0 0 14 14" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
       </button>
     </div>`;
@@ -1778,7 +1778,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-// BotÃ³n de cerrar sesiÃ³n
+// Botón de cerrar sesión
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
   logoutBtn.addEventListener('click', async (event) => {
@@ -1797,7 +1797,7 @@ if (logoutBtn) {
   });
 }
 
-// AnimaciÃ³n de contadores en el dashboard
+// Animación de contadores en el dashboard
 function animateCounter(elementId, targetValue, duration = 800) {
   const element = document.getElementById(elementId);
   if (!element) return;
@@ -1825,7 +1825,7 @@ function animateCounter(elementId, targetValue, duration = 800) {
 
 // Animar contadores cuando se muestra el dashboard
 function animateDashboardCounters() {
-  // Valores de ejemplo (estos vendrÃ¡n de la base de datos)
+  // Valores de ejemplo (estos vendrán de la base de datos)
   animateCounter('callsCount', 247, 1500);
   animateCounter('conversionsCount', 18, 1200);
 }
@@ -1856,7 +1856,7 @@ const NOT_ELIGIBLE_STATES_SET = new Set(NOT_ELIGIBLE_STATES);
 
 const STATE_NAMES = crmHelpers.STATE_NAMES || {};
 
-// FunciÃ³n para determinar tipo de estado segÃºn guidelines 2026
+// Función para determinar tipo de estado según guidelines 2026
 function getStateType(stateCode) {
   const code = String(stateCode || '').toUpperCase().trim();
   if (GREEN_STATES_SET.has(code)) return 'Green';
@@ -1864,7 +1864,7 @@ function getStateType(stateCode) {
   return 'Red';
 }
 
-// FunciÃ³n para obtener nombre completo del estado
+// Función para obtener nombre completo del estado
 function getStateName(stateCode) {
   if (crmHelpers.getStateName) {
     return crmHelpers.getStateName(stateCode);
@@ -1872,7 +1872,7 @@ function getStateName(stateCode) {
   return STATE_NAMES[stateCode?.toUpperCase?.().trim?.()] || stateCode;
 }
 
-// Mapeo de cÃ³digos de Ã¡rea (LADA) a estados
+// Mapeo de códigos de área (LADA) a estados
 const AREA_CODE_TO_STATE = {
   '201': 'NJ', '202': 'DC', '203': 'CT', '205': 'AL', '206': 'WA', '207': 'ME', '208': 'ID', '209': 'CA',
   '210': 'TX', '212': 'NY', '213': 'CA', '214': 'TX', '215': 'PA', '216': 'OH', '217': 'IL', '218': 'MN',
@@ -1917,23 +1917,23 @@ const AREA_CODE_TO_STATE = {
   '973': 'NJ', '978': 'MA', '979': 'TX', '980': 'NC', '984': 'NC', '985': 'LA', '986': 'ID', '989': 'MI'
 };
 
-// FunciÃ³n para detectar estado por cÃ³digo de Ã¡rea
+// Función para detectar estado por código de área
 function detectStateByAreaCode(phone) {
-  // Extraer solo los nÃºmeros
+  // Extraer solo los números
   const digits = phone.replace(/\D/g, '');
   
-  // Si empieza con 1 (cÃ³digo de paÃ­s), quitarlo
+  // Si empieza con 1 (código de país), quitarlo
   const nationalNumber = digits.startsWith('1') && digits.length === 11 
     ? digits.slice(1) 
     : digits;
   
-  // Tomar los primeros 3 dÃ­gitos (cÃ³digo de Ã¡rea)
+  // Tomar los primeros 3 dígitos (código de área)
   const areaCode = nationalNumber.slice(0, 3);
   
   return AREA_CODE_TO_STATE[areaCode] || null;
 }
 
-// FunciÃ³n para actualizar el badge de State Type
+// Función para actualizar el badge de State Type
 function updateStateTypeBadge(stateCell, badgeCell) {
   const stateCode = stateCell.textContent.trim();
   const stateType = getStateType(stateCode);
@@ -1948,13 +1948,13 @@ if (monthSelector) {
   monthSelector.addEventListener('change', (e) => {
     const selectedMonth = e.target.options[e.target.selectedIndex].text;
     console.log('Mes seleccionado:', selectedMonth);
-    // AquÃ­ se conectarÃ¡ con la base de datos para cargar los datos del mes seleccionado
-    // Por ahora solo recargamos la animaciÃ³n de contadores como demo
+    // Aquí se conectará con la base de datos para cargar los datos del mes seleccionado
+    // Por ahora solo recargamos la animación de contadores como demo
     animateDashboardCounters();
   });
 }
 
-// NavegaciÃ³n entre Dashboard y Leads
+// Navegación entre Dashboard y Leads
 const leadsBtn = document.getElementById('leadsBtn');
 const calendarBtn = document.getElementById('calendarBtn');
 const emailsBtn = document.getElementById('emailsBtn');
@@ -2410,7 +2410,7 @@ function renderLeadSearchSuggestions(matches) {
         lead.case_id ? `#${escapeHtml(String(lead.case_id))}` : null,
         lead.phone ? escapeHtml(lead.phone) : null,
         lead.state_code ? escapeHtml(lead.state_code) : null
-      ].filter(Boolean).join(' Â· ');
+      ].filter(Boolean).join(' · ');
       return `
         <button
           type="button"
@@ -3621,7 +3621,7 @@ function showLeadsView() {
   void loadLeads();
 }
 
-// FunciÃ³n para inicializar todos los State Types
+// Función para inicializar todos los State Types
 function initializeStateTypes() {
   const rows = document.querySelectorAll('.lead-row');
   rows.forEach(row => {
@@ -3649,7 +3649,7 @@ function showDashboardView() {
     });
   }
   isLeadsView = false;
-  // Restaurar estado del botÃ³n
+  // Restaurar estado del botón
   isCalendarView = false;
   isEmailsView = false;
   setToolbarRouteButtonState('dashboard');
@@ -3856,7 +3856,7 @@ const closeModalBtn = document.getElementById('closeModalBtn');
 const cancelLeadBtn = document.getElementById('cancelLeadBtn');
 const createLeadBtn = document.querySelector('.create-lead-btn');
 
-// Elementos del buscador de estados (declarados aquÃ­ para estar disponibles en todas las funciones)
+// Elementos del buscador de estados (declarados aquí para estar disponibles en todas las funciones)
 const stateSearchInput = document.getElementById('leadStateSearch');
 const stateHiddenInput = document.getElementById('leadState');
 const stateSuggestions = document.getElementById('stateSuggestions');
@@ -3913,8 +3913,8 @@ function renderDuplicateAlert(matches, normalizedPhone) {
     const stateType = lead.state_type || (lead.state_code ? getStateType(lead.state_code) : '-');
     return `
       <button type="button" class="duplicate-item duplicate-open-link" data-id="${lead.id}">
-        <span class="duplicate-item-name">${escapeHtml(lead.full_name || 'Sin nombre')} Â· Case #${lead.case_id || '-'}</span>
-        <span class="duplicate-item-meta">${escapeHtml(lead.phone || '-')} Â· ${escapeHtml(lead.state_code || '-')} Â· ${escapeHtml(stateType)} Â· ${escapeHtml(lead.status || '-')}</span>
+        <span class="duplicate-item-name">${escapeHtml(lead.full_name || 'Sin nombre')} · Case #${lead.case_id || '-'}</span>
+        <span class="duplicate-item-meta">${escapeHtml(lead.phone || '-')} · ${escapeHtml(lead.state_code || '-')} · ${escapeHtml(stateType)} · ${escapeHtml(lead.status || '-')}</span>
       </button>
     `;
   }).join('');
@@ -4091,7 +4091,7 @@ function updateActiveSuggestion(items) {
   });
 }
 
-// DetecciÃ³n automÃ¡tica por cÃ³digo de Ã¡rea
+// Detección automática por código de área
 if (phoneInput) {
   phoneInput.addEventListener('input', (e) => {
     clearDuplicateAlert();
@@ -4105,7 +4105,7 @@ if (phoneInput) {
       // Auto-completar el campo
       stateSearchInput.value = `${stateName} (${detectedState})`;
       stateHiddenInput.value = detectedState;
-      showDetectedState(`Detectado por cÃ³digo de Ã¡rea: ${stateName} (${detectedState}) - ${stateType}`);
+      showDetectedState(`Detectado por código de área: ${stateName} (${detectedState}) - ${stateType}`);
     }
   });
 }
@@ -4154,7 +4154,7 @@ if (newLeadForm) {
     }
 
     if (!normalizedPhone) {
-      alert('Ingresa un telÃ©fono vÃ¡lido de 10 dÃ­gitos (ej: 305-555-0123).');
+      alert('Ingresa un teléfono válido de 10 dígitos (ej: 305-555-0123).');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -4205,7 +4205,7 @@ if (newLeadForm) {
       // Cerrar modal
       closeModal();
       
-      // Redirigir a detalle iniciando siempre en pestaÃ±a de informaciÃ³n
+      // Redirigir a detalle iniciando siempre en pestaña de información
       window.location.href = `/client.html?id=${lead.id}&tab=lead`;
       
     } catch (error) {
@@ -4397,7 +4397,7 @@ function renderLeadsRows(leads) {
       const leadId = btn.dataset.id;
       const leadName = btn.dataset.name;
 
-      if (confirm(`Â¿EstÃ¡s seguro de eliminar el lead "${leadName}"?\n\nEsta acciÃ³n no se puede deshacer.`)) {
+      if (confirm(`¿Estás seguro de eliminar el lead "${leadName}"?\n\nEsta acción no se puede deshacer.`)) {
         try {
           const response = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
           if (response.ok) {
@@ -4693,7 +4693,7 @@ setInterval(() => {
 // RANKINGS WHEEL - Efecto ruleta para rankings laterales
 // ============================================
 
-// Bandera para evitar inicializaciÃ³n mÃºltiple
+// Bandera para evitar inicialización múltiple
 let rankingsWheelInitialized = false;
 
 function initRankingsWheel() {
@@ -4736,31 +4736,31 @@ function initRankingsWheel() {
     items = Array.from(wheel.querySelectorAll('.rankings-wheel-item'));
     const totalOriginalItems = originalItems.length;
     
-    // Posicionar el track para que el primer item estÃ© centrado
+    // Posicionar el track para que el primer item esté centrado
     let baseOffset = centerOffset; // Offset base que reseteamos
-    let currentOffset = 0; // Offset acumulado desde el Ãºltimo reset
+    let currentOffset = 0; // Offset acumulado desde el último reset
     track.style.transform = `translateY(${baseOffset}px)`;
     
     const listHeight = totalOriginalItems * itemHeight;
     
     function updateActiveItem() {
-      // Calcular el Ã­ndice visual basado en cuÃ¡nto nos hemos movido
+      // Calcular el índice visual basado en cuánto nos hemos movido
       const totalPixelsMoved = -currentOffset;
       const visualIndex = Math.round(totalPixelsMoved / itemHeight);
       
-      // Solo aplicar clases a los items que estÃ¡n dentro del rango visual (0 a totalOriginalItems-1)
+      // Solo aplicar clases a los items que están dentro del rango visual (0 a totalOriginalItems-1)
       // Los items duplicados (totalOriginalItems en adelante) son para el loop, no para highlight
       const effectiveIndex = visualIndex % totalOriginalItems;
       
       items.forEach((item, index) => {
         item.classList.remove('active', 'near-top', 'near-bottom');
         
-        // Calcular a quÃ© Ã­ndice original corresponde este item
+        // Calcular a qué índice original corresponde este item
         const itemOriginalIndex = index % totalOriginalItems;
         
-        // Calcular distancia circular al Ã­ndice activo
+        // Calcular distancia circular al índice activo
         let distance = itemOriginalIndex - effectiveIndex;
-        // Normalizar distancia para que siempre sea la mÃ¡s corta
+        // Normalizar distancia para que siempre sea la más corta
         if (distance > totalOriginalItems / 2) distance -= totalOriginalItems;
         if (distance < -totalOriginalItems / 2) distance += totalOriginalItems;
         
@@ -4788,7 +4788,7 @@ function initRankingsWheel() {
         // Mover suavemente
         currentOffset -= autoScrollSpeed;
         
-        // LOOP INFINITO: cuando nos hemos movido exactamente listHeight pÃ­xeles, reseteamos
+        // LOOP INFINITO: cuando nos hemos movido exactamente listHeight píxeles, reseteamos
         if (currentOffset <= -listHeight) {
           currentOffset += listHeight;
         }
@@ -4870,11 +4870,11 @@ const originalShowDashboard = showDashboard;
 showDashboard = function() {
   console.log('[RankingsWheel] Dashboard mostrado, inicializando...');
   originalShowDashboard();
-  // PequeÃ±o delay para asegurar que el DOM estÃ© listo
+  // Pequeño delay para asegurar que el DOM esté listo
   setTimeout(initRankingsWheel, 300);
 };
 
-// Si ya estamos en el dashboard (sesiÃ³n existente), inicializar ahora
+// Si ya estamos en el dashboard (sesión existente), inicializar ahora
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[RankingsWheel] DOMContentLoaded, verificando dashboard...');
   const dashboard = document.getElementById('dashboardView');

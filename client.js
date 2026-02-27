@@ -8840,7 +8840,7 @@
             if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
             
             expandSection('bankAddressFields');
-            showBankingStatus(`âœ“ Bank details found! (${data.source === 'local' ? 'from cache' : 'from API'})`, 'success');
+            showBankingStatus(`✓ Bank details found! (${data.source === 'local' ? 'from cache' : 'from API'})`, 'success');
             return;
           } else if (response.status === 404) {
             showBankingStatus('Routing number not found in database. Please verify or enter details manually.', 'error');
@@ -8867,7 +8867,7 @@
               if (bank.phone) document.getElementById('bankPhone').value = bank.phone;
               
               expandSection('bankAddressFields');
-              showBankingStatus(`âœ“ Found in local database. Routing: ${bank.routing_number}`, 'success');
+              showBankingStatus(`✓ Found in local database. Routing: ${bank.routing_number}`, 'success');
               return;
             } else {
               showBankingStatus('Bank not found in local database. Please enter routing number (9 digits) to lookup.', 'error');

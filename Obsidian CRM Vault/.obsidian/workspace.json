@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02_Estrategia/Faltantes Criticos - CRM.md",
+                "file": "01_Fases/Plan Maestro - CRM.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Faltantes Criticos - CRM"
+              "title": "Plan Maestro - CRM"
             }
           }
         ]
@@ -185,10 +185,10 @@
   },
   "active": "7358bbdc437dd010",
   "lastOpenFiles": [
-    "01_Fases/Plan Maestro - CRM.md",
-    "02_Estrategia/Faltantes Criticos - CRM.md",
-    "INICIO.md",
     "00_Operacion/Tablero - Ejecucion CRM.md",
+    "02_Estrategia/Faltantes Criticos - CRM.md",
+    "01_Fases/Plan Maestro - CRM.md",
+    "INICIO.md",
     "00_Operacion/README.md"
   ]
 }
