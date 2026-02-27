@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "02_Estrategia/Faltantes Criticos - CRM.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Plan Maestro - CRM"
+              "title": "Faltantes Criticos - CRM"
             }
           }
         ]
@@ -44,7 +44,7 @@
                 "autoReveal": false
               },
               "icon": "lucide-folder-closed",
-              "title": "Files"
+              "title": "Explorador de archivos"
             }
           },
           {
@@ -174,20 +174,21 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "switcher:Open quick switcher": false,
-      "graph:Open graph view": false,
-      "canvas:Create new canvas": false,
-      "daily-notes:Open today's daily note": false,
-      "templates:Insert template": false,
-      "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
     }
   },
   "active": "7358bbdc437dd010",
   "lastOpenFiles": [
-    "00_Operacion/Tablero - Ejecucion CRM.md",
-    "00_Operacion/README.md",
     "01_Fases/Plan Maestro - CRM.md",
-    "INICIO.md"
+    "02_Estrategia/Faltantes Criticos - CRM.md",
+    "INICIO.md",
+    "00_Operacion/Tablero - Ejecucion CRM.md",
+    "00_Operacion/README.md"
   ]
 }

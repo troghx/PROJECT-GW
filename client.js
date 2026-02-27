@@ -7990,12 +7990,31 @@
       window.openFile = async function(fileId) {
         const files = readStoredFilesMetadata(currentLeadId);
         const file = files.find((item) => String(item.id) === String(fileId));
+
+        if (!file) {
+          showToast('Archivo no encontrado', 'error');
+          return;
+        }
+
+        const fileType = String(file.type || '').toLowerCase();
+        const isPdf = fileType === 'application/pdf';
+
+        // PDFs: abrir en nueva pestaña con visor dedicado
+        if (isPdf) {
+          const viewerUrl = 'credit-report-viewer.html?fileId=' + encodeURIComponent(file.id)
+            + '&leadId=' + encodeURIComponent(currentLeadId)
+            + '&name=' + encodeURIComponent(file.name);
+          window.open(viewerUrl, '_blank');
+          return;
+        }
+
+        // Otros tipos: mantener modal
         const dataUrl = await getFilePayload(file?.id, file?.data, {
           fetchRemote: true,
           leadId: currentLeadId
         });
 
-        if (!file || !dataUrl) {
+        if (!dataUrl) {
           showToast('Archivo no encontrado', 'error');
           return;
         }
@@ -8010,19 +8029,72 @@
         body.innerHTML = '';
         downloadBtn.onclick = () => downloadFile(fileId);
 
-        const fileType = String(file.type || '').toLowerCase();
         const isImage = fileType.includes('image');
-        const isPdf = fileType === 'application/pdf';
 
         if (isImage) {
           const img = document.createElement('img');
           img.src = dataUrl;
           img.alt = file.name;
           body.appendChild(img);
-        } else if (isPdf) {
-          const iframe = document.createElement('iframe');
-          iframe.src = dataUrl;
-          body.appendChild(iframe);
+
+          // Zoom label
+          const zLabel = document.createElement('div');
+          zLabel.className = 'file-viewer-zoom-label';
+          zLabel.textContent = '100%';
+          body.appendChild(zLabel);
+
+          // Estado de zoom y pan
+          let scale = 1;
+          let panX = 0, panY = 0;
+          let dragging = false;
+          let startX = 0, startY = 0;
+
+          function applyTransform() {
+            img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+            img.style.transformOrigin = 'center center';
+            zLabel.textContent = Math.round(scale * 100) + '%';
+          }
+
+          // Centrar imagen al cargar
+          img.onload = function() {
+            scale = 1; panX = 0; panY = 0;
+            applyTransform();
+          };
+
+          // Shift+Scroll zoom
+          body.addEventListener('wheel', function(e) {
+            if (!e.shiftKey) return;
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            scale = Math.min(Math.max(scale + delta, 0.1), 10);
+            applyTransform();
+          }, { passive: false });
+
+          // Pan con drag
+          body.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            dragging = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+            body.classList.add('dragging');
+          });
+
+          body.addEventListener('mousemove', function(e) {
+            if (!dragging) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            applyTransform();
+          });
+
+          body.addEventListener('mouseup', function() {
+            dragging = false;
+            body.classList.remove('dragging');
+          });
+
+          body.addEventListener('mouseleave', function() {
+            dragging = false;
+            body.classList.remove('dragging');
+          });
         } else {
           body.innerHTML = `
             <div class="file-icon-large">

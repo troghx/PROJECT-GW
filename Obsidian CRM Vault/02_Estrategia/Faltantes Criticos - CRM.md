@@ -1,4 +1,4 @@
-﻿# Faltantes Criticos - CRM
+# Faltantes Criticos - CRM
 Fecha: 2026-02-26
 Estado: Aprobado para ejecucion
 Alcance: Este plan excluye integracion API de correo y API de reportes de credito.

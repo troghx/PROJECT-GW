@@ -2232,6 +2232,12 @@
         
         try {
           await navigator.clipboard.writeText(account);
+          // Broadcast al visor de reporte de crédito (cross-tab)
+          try {
+            const ch = new BroadcastChannel('gw-credit-report');
+            ch.postMessage({ type: 'SEARCH', value: account });
+            ch.close();
+          } catch (_) { /* BroadcastChannel no soportado */ }
           copyBtn.classList.add('copied');
           copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>';
           setStatus('Número de cuenta copiado', 'success');

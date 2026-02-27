@@ -1088,8 +1088,8 @@
 
     .file-viewer-modal-content {
       position: relative;
-      width: min(90vw, 900px);
-      max-height: 90vh;
+      width: 96vw;
+      height: 94vh;
       display: flex;
       flex-direction: column;
       border-radius: 16px;
@@ -1140,19 +1140,42 @@
 
     .file-viewer-modal-body {
       flex: 1;
-      overflow: auto;
-      padding: 20px;
+      overflow: hidden;
+      padding: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 300px;
+      min-height: 0;
+      position: relative;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .file-viewer-modal-body.dragging {
+      cursor: grabbing;
     }
 
     .file-viewer-modal-body img {
-      max-width: 100%;
-      max-height: 70vh;
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      max-width: none;
+      max-height: none;
+      border-radius: 0;
+      box-shadow: none;
+      transform-origin: 0 0;
+      pointer-events: none;
+    }
+
+    .file-viewer-zoom-label {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      padding: 4px 10px;
+      background: rgba(0,0,0,0.55);
+      border-radius: 6px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      pointer-events: none;
+      z-index: 2;
+      transition: opacity 0.3s;
     }
 
     .file-viewer-modal-body iframe {
