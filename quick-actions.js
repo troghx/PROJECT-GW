@@ -5,9 +5,10 @@
   const doc = document;
   const crmHelpers = globalScope.CrmHelpers || {};
   const SESSION_KEY = 'project_gw_session';
+  const CREDITOR_CATALOG_STORAGE_KEY = 'project_gw_creditor_catalog_v1';
   const quickStateNames = crmHelpers.STATE_NAMES || {};
   const ENABLE_CREDITOR_ACTION = true;
-  const CREDITORS_DB = [
+  const FALLBACK_CREDITORS_DB = [
     { id: 1, nombre: 'JPMorgan Chase', estatus: 'aceptable', notas: 'Settlements often 40-50%' },
     { id: 2, nombre: 'Bank of America', estatus: 'aceptable', notas: 'Requires strict validation' },
     { id: 3, nombre: 'Wells Fargo', estatus: 'aceptable', notas: '' },
@@ -37,8 +38,129 @@
     { id: 27, nombre: 'OneMain Financial', estatus: 'no_aceptable', notas: 'Secured loans risk' },
     { id: 28, nombre: 'Ace Cash Express', estatus: 'no_aceptable', notas: 'Payday Lender' },
     { id: 29, nombre: 'Speedy Cash', estatus: 'no_aceptable', notas: 'Payday Lender' },
-    { id: 30, nombre: 'Quick Cash Loans LLC', estatus: 'no_aceptable', notas: 'Example Payday' }
+    { id: 30, nombre: 'Quick Cash Loans LLC', estatus: 'no_aceptable', notas: 'Example Payday' },
+    { id: 31, nombre: '1st Franklin Financial', estatus: 'no_aceptable', notas: 'High-cost installment lender' }
   ];
+
+  function cloneCreditorCatalog(entries) {
+    return (Array.isArray(entries) ? entries : [])
+      .map((entry) => ({
+        id: Number(entry?.id || 0),
+        nombre: String(entry?.nombre || '').trim(),
+        estatus: entry?.estatus === 'no_aceptable' ? 'no_aceptable' : 'aceptable',
+        notas: String(entry?.notas || '').trim()
+      }))
+      .filter((entry) => entry.nombre)
+      .map((entry, index) => ({
+        id: entry.id > 0 ? entry.id : index + 1,
+        nombre: entry.nombre,
+        estatus: entry.estatus,
+        notas: entry.notas
+      }));
+  }
+
+  function getCatalogFromHelpers() {
+    if (typeof crmHelpers.getCreditorStatusCatalog === 'function') {
+      const list = crmHelpers.getCreditorStatusCatalog();
+      if (Array.isArray(list) && list.length) return cloneCreditorCatalog(list);
+    }
+    if (Array.isArray(crmHelpers.CREDITOR_STATUS_CATALOG) && crmHelpers.CREDITOR_STATUS_CATALOG.length) {
+      return cloneCreditorCatalog(crmHelpers.CREDITOR_STATUS_CATALOG);
+    }
+    return cloneCreditorCatalog(FALLBACK_CREDITORS_DB);
+  }
+
+  function readStoredCreditorCatalog() {
+    try {
+      const raw = localStorage.getItem(CREDITOR_CATALOG_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? cloneCreditorCatalog(parsed) : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function persistCreditorCatalog(entries) {
+    try {
+      localStorage.setItem(CREDITOR_CATALOG_STORAGE_KEY, JSON.stringify(entries));
+    } catch (_error) {
+      // noop: localStorage full o restringido
+    }
+  }
+
+  function syncCatalogWithHelpers(entries) {
+    const cloned = cloneCreditorCatalog(entries);
+    if (typeof crmHelpers.setCreditorStatusCatalog === 'function') {
+      const updated = crmHelpers.setCreditorStatusCatalog(cloned);
+      return cloneCreditorCatalog(updated);
+    }
+    return cloned;
+  }
+
+  function mergeCatalogWithStored(baseCatalog, storedCatalog) {
+    const base = cloneCreditorCatalog(baseCatalog);
+    const stored = cloneCreditorCatalog(storedCatalog);
+    if (!stored.length) return base;
+
+    const map = new Map();
+    base.forEach((entry) => {
+      map.set(normalizeText(entry.nombre), { ...entry });
+    });
+
+    stored.forEach((entry) => {
+      const key = normalizeText(entry.nombre);
+      if (!key) return;
+
+      const current = map.get(key);
+      if (!current) {
+        map.set(key, { ...entry });
+        return;
+      }
+
+      current.estatus = entry.estatus;
+      if (entry.notas) current.notas = entry.notas;
+      if (entry.nombre.length > current.nombre.length) current.nombre = entry.nombre;
+    });
+
+    return Array.from(map.values())
+      .sort(sortCreditorsByName)
+      .map((entry, index) => ({
+        ...entry,
+        id: index + 1
+      }));
+  }
+
+  function initializeCreditorCatalog() {
+    const stored = readStoredCreditorCatalog();
+    const source = getCatalogFromHelpers();
+    const merged = mergeCatalogWithStored(source, stored);
+    const synced = syncCatalogWithHelpers(merged);
+    const withIds = synced.map((entry, index) => ({
+      ...entry,
+      id: index + 1
+    }));
+    persistCreditorCatalog(withIds);
+    return withIds;
+  }
+
+  let creditorsDb = initializeCreditorCatalog();
+
+  function getCreditorCatalog() {
+    return creditorsDb;
+  }
+
+  function setCreditorCatalog(entries, options = {}) {
+    const { persist = true } = options;
+    const synced = syncCatalogWithHelpers(entries)
+      .map((entry, index) => ({
+        ...entry,
+        id: index + 1
+      }));
+    creditorsDb = synced;
+    if (persist) persistCreditorCatalog(synced);
+    return creditorsDb;
+  }
 
   const pointer = {
     x: Math.round(globalScope.innerWidth / 2),
@@ -49,6 +171,7 @@
   let hintTimer = null;
   let leadModalContext = null;
   let creditorModalContext = null;
+  let creditorEditorModalContext = null;
 
   function isHomeActive() {
     return doc.body?.classList.contains('home-active');
@@ -110,7 +233,7 @@
     if (!normalizedQuery) return null;
 
     let best = null;
-    for (const creditor of CREDITORS_DB) {
+    for (const creditor of getCreditorCatalog()) {
       const matchMeta = buildScoreMeta(normalizedQuery, creditor.nombre);
       if (matchMeta.score <= 0) continue;
       if (!best || matchMeta.score > best.score) {
@@ -127,7 +250,7 @@
     const normalizedQuery = normalizeText(query);
     if (!normalizedQuery) return [];
 
-    return CREDITORS_DB.map((creditor) => {
+    return getCreditorCatalog().map((creditor) => {
       const matchMeta = buildScoreMeta(normalizedQuery, creditor.nombre);
       return { creditor, score: matchMeta.score };
     })
@@ -152,6 +275,27 @@
     } catch (_error) {
       return 'Usuario';
     }
+  }
+
+  function getSessionUserData() {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function hasLeadAuditAccess() {
+    const session = getSessionUserData();
+    const role = String(session?.role || '').trim().toLowerCase();
+    if (role === 'admin' || role === 'supervisor') return true;
+    const permissions = Array.isArray(session?.permissions)
+      ? session.permissions.map((value) => String(value || '').trim().toLowerCase())
+      : [];
+    return permissions.includes('audit.view');
   }
 
   async function requestJson(url, options = {}) {
@@ -198,6 +342,23 @@
           <path d="M20 8v6M17 11h6"/>
         </svg>
         <span class="quick-node-label">Nuevo Lead</span>
+      </button>
+
+      <button
+        type="button"
+        class="quick-radial-node quick-radial-node-audit is-disabled"
+        data-action="lead-audit"
+        style="--orbit-phase:300deg;--open-dx:0px;--open-dy:116px;"
+        aria-disabled="true"
+      >
+        <span class="quick-node-dot" aria-hidden="true"></span>
+        <svg class="quick-node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 7h11M9 12h11M9 17h11"/>
+          <circle cx="4" cy="7" r="1.5"/>
+          <circle cx="4" cy="12" r="1.5"/>
+          <circle cx="4" cy="17" r="1.5"/>
+        </svg>
+        <span class="quick-node-label">Historial Lead</span>
       </button>
 
       <p id="quickRadialHint" class="quick-radial-hint" aria-live="polite"></p>
@@ -299,12 +460,58 @@
 
             <div class="form-actions">
               <button type="button" class="btn-cancel" id="quickCreditorCancelBtn">Cerrar</button>
-              <button type="submit" class="btn-create">Verificar</button>
+              <button type="button" class="btn-create" id="quickCreditorEditBtn">Editar Acreedores</button>
             </div>
           </form>
         </div>
       </div>
     `;
+  }
+
+  function createCreditorEditorModalTemplate() {
+    return `
+      <div id="quickCreditorEditorModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content quick-creditor-editor-modal-content">
+          <button class="modal-close-mac" id="quickCreditorEditorCloseBtn" type="button" title="Cerrar"></button>
+
+          <div class="modal-header">
+            <h3>Editor de Acreedores</h3>
+          </div>
+
+          <div class="quick-creditor-editor-toolbar">
+            <p class="quick-creditor-editor-tip">Arrastra un acreedor de una lista a otra para cambiar su estado.</p>
+            <input type="text" id="quickCreditorEditorFilter" class="quick-creditor-editor-filter" placeholder="Filtrar acreedor...">
+          </div>
+
+          <div class="quick-creditor-editor-grid">
+            <section class="quick-creditor-editor-column" data-editor-status="aceptable">
+              <div class="quick-creditor-editor-column-head">
+                <h4>Aceptables</h4>
+                <span id="quickCreditorAcceptCount" class="quick-creditor-editor-count">0</span>
+              </div>
+              <div id="quickCreditorAcceptList" class="quick-creditor-editor-list" data-drop-status="aceptable"></div>
+            </section>
+
+            <section class="quick-creditor-editor-column" data-editor-status="no_aceptable">
+              <div class="quick-creditor-editor-column-head">
+                <h4>No aceptables</h4>
+                <span id="quickCreditorNotAcceptCount" class="quick-creditor-editor-count is-not-acceptable">0</span>
+              </div>
+              <div id="quickCreditorNotAcceptList" class="quick-creditor-editor-list" data-drop-status="no_aceptable"></div>
+            </section>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-cancel" id="quickCreditorEditorCloseFooterBtn">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function sortCreditorsByName(a, b) {
+    return String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'en', { sensitivity: 'base' });
   }
 
   function renderCreditorResult(resultRoot, matchEntry, query) {
@@ -348,6 +555,7 @@
       form: modal.querySelector('#quickCreditorForm'),
       closeBtn: modal.querySelector('#quickCreditorCloseBtn'),
       cancelBtn: modal.querySelector('#quickCreditorCancelBtn'),
+      editBtn: modal.querySelector('#quickCreditorEditBtn'),
       backdrop: modal.querySelector('.modal-backdrop'),
       input: modal.querySelector('#quickCreditorInput'),
       suggest: modal.querySelector('#quickCreditorSuggest'),
@@ -400,7 +608,7 @@
         item.addEventListener('mousedown', (event) => {
           event.preventDefault();
           const creditorId = Number(item.dataset.creditorId || 0);
-          const selected = CREDITORS_DB.find((creditor) => Number(creditor.id) === creditorId);
+          const selected = getCreditorCatalog().find((creditor) => Number(creditor.id) === creditorId);
           if (!selected) return;
           refs.input.value = selected.nombre;
           refs.suggest.classList.add('hidden');
@@ -416,6 +624,10 @@
 
     refs.closeBtn?.addEventListener('click', closeModal);
     refs.cancelBtn?.addEventListener('click', closeModal);
+    refs.editBtn?.addEventListener('click', () => {
+      closeModal();
+      openCreditorEditorModal();
+    });
     refs.backdrop?.addEventListener('click', closeModal);
 
     refs.input?.addEventListener('input', () => {
@@ -468,6 +680,435 @@
     modal.classList.remove('hidden');
     globalScope.requestAnimationFrame(() => {
       modal.querySelector('#quickCreditorInput')?.focus();
+    });
+  }
+
+  function bindCreditorEditorModal(modal) {
+    if (!modal || modal.dataset.quickCreditorEditorBound === '1') return;
+    modal.dataset.quickCreditorEditorBound = '1';
+
+    const refs = {
+      modal,
+      closeBtn: modal.querySelector('#quickCreditorEditorCloseBtn'),
+      closeFooterBtn: modal.querySelector('#quickCreditorEditorCloseFooterBtn'),
+      backdrop: modal.querySelector('.modal-backdrop'),
+      filterInput: modal.querySelector('#quickCreditorEditorFilter'),
+      acceptList: modal.querySelector('#quickCreditorAcceptList'),
+      notAcceptList: modal.querySelector('#quickCreditorNotAcceptList'),
+      acceptCount: modal.querySelector('#quickCreditorAcceptCount'),
+      notAcceptCount: modal.querySelector('#quickCreditorNotAcceptCount')
+    };
+
+    const state = {
+      filter: '',
+      drag: {
+        active: false,
+        pointerId: null,
+        creditorId: 0,
+        sourceStatus: '',
+        hoverStatus: '',
+        originEl: null,
+        ghostEl: null,
+        width: 0,
+        height: 0,
+        grabOffsetX: 0,
+        grabOffsetY: 0,
+        transformOriginX: 0,
+        transformOriginY: 0,
+        grabNormX: 0,
+        grabNormY: 0,
+        targetLeft: 0,
+        targetTop: 0,
+        smoothLeft: 0,
+        smoothTop: 0,
+        rafId: 0
+      }
+    };
+
+    const closeModal = () => {
+      resetDragState();
+      refs.modal.classList.add('hidden');
+    };
+
+    const clearDropTargets = () => {
+      refs.acceptList?.classList.remove('is-drop-target');
+      refs.notAcceptList?.classList.remove('is-drop-target');
+    };
+
+    const setDropTarget = (status) => {
+      clearDropTargets();
+      if (status === 'aceptable') refs.acceptList?.classList.add('is-drop-target');
+      if (status === 'no_aceptable') refs.notAcceptList?.classList.add('is-drop-target');
+    };
+
+    const findDropStatusAtPoint = (x, y) => {
+      const node = doc.elementFromPoint(x, y);
+      const zone = node?.closest('.quick-creditor-editor-list[data-drop-status]');
+      const dropStatus = String(zone?.getAttribute('data-drop-status') || '');
+      if (dropStatus === 'aceptable' || dropStatus === 'no_aceptable') return dropStatus;
+      return '';
+    };
+
+    const destroyDragGhost = () => {
+      if (state.drag.ghostEl?.parentElement) {
+        state.drag.ghostEl.remove();
+      }
+      state.drag.ghostEl = null;
+    };
+
+    const stopDragLoop = () => {
+      if (state.drag.rafId) {
+        cancelAnimationFrame(state.drag.rafId);
+        state.drag.rafId = 0;
+      }
+    };
+
+    const resetDragState = () => {
+      stopDragLoop();
+      destroyDragGhost();
+      clearDropTargets();
+      if (state.drag.originEl) {
+        state.drag.originEl.classList.remove('is-grabbed');
+      }
+      doc.body.classList.remove('quick-creditor-drag-active');
+      state.drag.active = false;
+      state.drag.pointerId = null;
+      state.drag.creditorId = 0;
+      state.drag.sourceStatus = '';
+      state.drag.hoverStatus = '';
+      state.drag.originEl = null;
+      state.drag.width = 0;
+      state.drag.height = 0;
+      state.drag.grabOffsetX = 0;
+      state.drag.grabOffsetY = 0;
+      state.drag.transformOriginX = 0;
+      state.drag.transformOriginY = 0;
+      state.drag.grabNormX = 0;
+      state.drag.grabNormY = 0;
+      state.drag.targetLeft = 0;
+      state.drag.targetTop = 0;
+      state.drag.smoothLeft = 0;
+      state.drag.smoothTop = 0;
+    };
+
+    const buildGhostTransform = (left, top, opts = {}) => {
+      const {
+        scale = 1,
+        tiltX = 0,
+        tiltY = 0,
+        tiltZ = 0
+      } = opts;
+      return [
+        'perspective(1120px)',
+        `translate3d(${left.toFixed(2)}px, ${top.toFixed(2)}px, 0)`,
+        `scale(${Number(scale).toFixed(3)})`,
+        `rotateX(${Number(tiltX).toFixed(2)}deg)`,
+        `rotateY(${Number(tiltY).toFixed(2)}deg)`,
+        `rotateZ(${Number(tiltZ).toFixed(2)}deg)`
+      ].join(' ');
+    };
+
+    const tickDragPhysics = () => {
+      if (!state.drag.active || !state.drag.ghostEl) return;
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const easing = 0.24;
+      state.drag.smoothLeft += (state.drag.targetLeft - state.drag.smoothLeft) * easing;
+      state.drag.smoothTop += (state.drag.targetTop - state.drag.smoothTop) * easing;
+      const velocityX = state.drag.targetLeft - state.drag.smoothLeft;
+      const velocityY = state.drag.targetTop - state.drag.smoothTop;
+
+      const baseTiltX = clamp(state.drag.grabNormY * 9.2, -12, 12);
+      const baseTiltY = clamp(state.drag.grabNormX * 11.2, -14, 14);
+      const baseTiltZ = 0;
+
+      const dynTiltX = clamp(velocityY * -0.075, -4.2, 4.2);
+      const dynTiltY = clamp(velocityX * 0.082, -5.4, 5.4);
+      const dynTiltZ = clamp(velocityX * 0.026, -2.6, 2.6);
+
+      const tiltX = clamp(baseTiltX + dynTiltX, -14, 14);
+      const tiltY = clamp(baseTiltY + dynTiltY, -16, 16);
+      const tiltZ = clamp(baseTiltZ + dynTiltZ, -10, 10);
+
+      state.drag.ghostEl.style.transform = buildGhostTransform(
+        state.drag.smoothLeft,
+        state.drag.smoothTop,
+        { scale: 1.024, tiltX, tiltY, tiltZ }
+      );
+
+      state.drag.rafId = requestAnimationFrame(tickDragPhysics);
+    };
+
+    const animateGhostRelease = (toX, toY, onDone) => {
+      if (!state.drag.ghostEl) {
+        if (typeof onDone === 'function') onDone();
+        return;
+      }
+
+      stopDragLoop();
+      const ghost = state.drag.ghostEl;
+      ghost.classList.add('is-releasing');
+      const startLeft = state.drag.smoothLeft;
+      const startTop = state.drag.smoothTop;
+      const targetLeft = toX - (state.drag.width / 2);
+      const targetTop = toY - (state.drag.height / 2);
+      const overshootLeft = targetLeft + ((targetLeft - startLeft) * 0.08);
+      const overshootTop = targetTop + ((targetTop - startTop) * 0.08);
+
+      ghost.style.transition = 'transform 130ms cubic-bezier(0.16, 0.84, 0.3, 1.15), opacity 130ms ease';
+      ghost.style.transform = buildGhostTransform(overshootLeft, overshootTop, {
+        scale: 0.99,
+        tiltX: state.drag.grabNormY * 2,
+        tiltY: state.drag.grabNormX * 2.4,
+        tiltZ: state.drag.grabNormX * 1.8
+      });
+
+      globalScope.setTimeout(() => {
+        ghost.style.transition = 'transform 110ms cubic-bezier(0.2, 0.92, 0.35, 1), opacity 110ms ease';
+        ghost.style.transform = buildGhostTransform(targetLeft, targetTop, { scale: 1, tiltX: 0, tiltY: 0, tiltZ: 0 });
+      }, 130);
+
+      globalScope.setTimeout(() => {
+        if (typeof onDone === 'function') onDone();
+      }, 250);
+    };
+
+    const finishPointerDrag = (pointerX, pointerY) => {
+      if (!state.drag.active) return;
+
+      const targetStatus = state.drag.hoverStatus || findDropStatusAtPoint(pointerX, pointerY);
+      const shouldApply = Boolean(
+        targetStatus &&
+        targetStatus !== state.drag.sourceStatus &&
+        state.drag.creditorId
+      );
+
+      const releaseTarget = (() => {
+        if (shouldApply) {
+          const zone = targetStatus === 'aceptable' ? refs.acceptList : refs.notAcceptList;
+          if (zone) {
+            const rect = zone.getBoundingClientRect();
+            return { x: rect.left + (rect.width / 2), y: rect.top + Math.min(70, rect.height / 2) };
+          }
+        }
+        if (state.drag.originEl) {
+          const rect = state.drag.originEl.getBoundingClientRect();
+          return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+        }
+        return { x: pointerX, y: pointerY };
+      })();
+
+      animateGhostRelease(releaseTarget.x, releaseTarget.y, () => {
+        const creditorId = state.drag.creditorId;
+        resetDragState();
+        if (shouldApply) {
+          applyCreditorStatusChange(creditorId, targetStatus);
+        }
+      });
+    };
+
+    const renderEditorLists = () => {
+      const all = getCreditorCatalog().slice().sort(sortCreditorsByName);
+      const normalizedFilter = normalizeText(state.filter);
+      const visible = normalizedFilter
+        ? all.filter((entry) => normalizeText(entry.nombre).includes(normalizedFilter))
+        : all;
+
+      const acceptableVisible = visible.filter((entry) => entry.estatus === 'aceptable');
+      const notAcceptableVisible = visible.filter((entry) => entry.estatus === 'no_aceptable');
+      const acceptableTotal = all.filter((entry) => entry.estatus === 'aceptable').length;
+      const notAcceptableTotal = all.filter((entry) => entry.estatus === 'no_aceptable').length;
+
+      refs.acceptCount.textContent = normalizedFilter
+        ? `${acceptableVisible.length}/${acceptableTotal}`
+        : String(acceptableTotal);
+      refs.notAcceptCount.textContent = normalizedFilter
+        ? `${notAcceptableVisible.length}/${notAcceptableTotal}`
+        : String(notAcceptableTotal);
+
+      const renderItems = (entries, targetStatus) => {
+        if (!entries.length) {
+          return '<div class="quick-creditor-editor-empty">Sin acreedores en esta lista.</div>';
+        }
+        return entries
+          .map((entry) => {
+            const statusClass = entry.estatus === 'aceptable' ? 'is-acceptable' : 'is-not-acceptable';
+            const statusText = entry.estatus === 'aceptable' ? 'ACEPTABLE' : 'NO ACEPTABLE';
+            const nextStatus = targetStatus === 'aceptable' ? 'no_aceptable' : 'aceptable';
+            const toggleLabel = targetStatus === 'aceptable' ? 'Pasar a No aceptable' : 'Pasar a Aceptable';
+
+            return `
+              <article class="quick-creditor-editor-item" draggable="false" data-creditor-id="${entry.id}" data-creditor-status="${entry.estatus}">
+                <div class="quick-creditor-editor-item-name">${escapeHtml(entry.nombre)}</div>
+                <div class="quick-creditor-editor-item-meta">
+                  <span class="quick-creditor-status ${statusClass}">${statusText}</span>
+                  <button type="button" class="quick-creditor-editor-toggle-btn" data-creditor-id="${entry.id}" data-next-status="${nextStatus}">${toggleLabel}</button>
+                </div>
+              </article>
+            `;
+          })
+          .join('');
+      };
+
+      if (refs.acceptList) refs.acceptList.innerHTML = renderItems(acceptableVisible, 'aceptable');
+      if (refs.notAcceptList) refs.notAcceptList.innerHTML = renderItems(notAcceptableVisible, 'no_aceptable');
+
+      refs.modal.querySelectorAll('.quick-creditor-editor-item').forEach((item) => {
+        item.addEventListener('pointerdown', (event) => {
+          if (event.button !== 0) return;
+          const blocked = event.target instanceof Element
+            ? event.target.closest('.quick-creditor-editor-toggle-btn')
+            : null;
+          if (blocked) return;
+
+          const creditorId = Number(item.getAttribute('data-creditor-id') || 0);
+          const sourceStatus = String(item.getAttribute('data-creditor-status') || '');
+          if (!creditorId || (sourceStatus !== 'aceptable' && sourceStatus !== 'no_aceptable')) return;
+
+          event.preventDefault();
+
+          const rect = item.getBoundingClientRect();
+          const ghost = item.cloneNode(true);
+          ghost.classList.add('quick-creditor-drag-ghost');
+          ghost.classList.remove('is-grabbed');
+          ghost.style.width = `${rect.width}px`;
+          ghost.style.height = `${rect.height}px`;
+          ghost.style.transform = `translate3d(${rect.left.toFixed(2)}px, ${rect.top.toFixed(2)}px, 0)`;
+          doc.body.appendChild(ghost);
+
+          state.drag.active = true;
+          state.drag.pointerId = event.pointerId;
+          state.drag.creditorId = creditorId;
+          state.drag.sourceStatus = sourceStatus;
+          state.drag.originEl = item;
+          state.drag.ghostEl = ghost;
+          state.drag.width = rect.width;
+          state.drag.height = rect.height;
+          state.drag.grabOffsetX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+          state.drag.grabOffsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+          state.drag.transformOriginX = state.drag.grabOffsetX;
+          state.drag.transformOriginY = state.drag.grabOffsetY;
+          state.drag.grabNormX = ((state.drag.grabOffsetX / Math.max(1, rect.width)) - 0.5) * 2;
+          state.drag.grabNormY = ((state.drag.grabOffsetY / Math.max(1, rect.height)) - 0.5) * 2;
+          ghost.style.transformOrigin = `${state.drag.transformOriginX.toFixed(2)}px ${state.drag.transformOriginY.toFixed(2)}px`;
+          state.drag.targetLeft = rect.left;
+          state.drag.targetTop = rect.top;
+          state.drag.smoothLeft = rect.left;
+          state.drag.smoothTop = rect.top;
+          state.drag.hoverStatus = '';
+          item.classList.add('is-grabbed');
+          doc.body.classList.add('quick-creditor-drag-active');
+          setDropTarget(sourceStatus);
+          tickDragPhysics();
+        });
+      });
+
+      refs.modal.querySelectorAll('.quick-creditor-editor-toggle-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          const creditorId = Number(button.getAttribute('data-creditor-id') || 0);
+          const nextStatus = String(button.getAttribute('data-next-status') || '');
+          if (!creditorId || (nextStatus !== 'aceptable' && nextStatus !== 'no_aceptable')) return;
+          applyCreditorStatusChange(creditorId, nextStatus);
+        });
+      });
+    };
+
+    const applyCreditorStatusChange = (creditorId, nextStatus) => {
+      const source = getCreditorCatalog();
+      const selected = source.find((entry) => Number(entry.id) === Number(creditorId));
+      if (!selected) return;
+      if (selected.estatus === nextStatus) return;
+
+      const updated = source.map((entry) => (
+        Number(entry.id) === Number(creditorId)
+          ? { ...entry, estatus: nextStatus }
+          : { ...entry }
+      ));
+
+      setCreditorCatalog(updated, { persist: true });
+      renderEditorLists();
+      requestAnimationFrame(() => {
+        const selector = `.quick-creditor-editor-item[data-creditor-id="${Number(creditorId)}"][data-creditor-status="${nextStatus}"]`;
+        const movedItem = refs.modal.querySelector(selector);
+        if (!movedItem) return;
+        movedItem.classList.remove('is-drop-bounce');
+        void movedItem.offsetWidth;
+        movedItem.classList.add('is-drop-bounce');
+        movedItem.addEventListener('animationend', () => {
+          movedItem.classList.remove('is-drop-bounce');
+        }, { once: true });
+      });
+    };
+
+    doc.addEventListener('pointermove', (event) => {
+      if (!state.drag.active) return;
+      if (state.drag.pointerId !== null && event.pointerId !== state.drag.pointerId) return;
+      state.drag.targetLeft = event.clientX - state.drag.grabOffsetX;
+      state.drag.targetTop = event.clientY - state.drag.grabOffsetY;
+      const hoverStatus = findDropStatusAtPoint(event.clientX, event.clientY);
+      state.drag.hoverStatus = hoverStatus;
+      setDropTarget(state.drag.hoverStatus || '');
+    });
+
+    doc.addEventListener('pointerup', (event) => {
+      if (!state.drag.active) return;
+      if (state.drag.pointerId !== null && event.pointerId !== state.drag.pointerId) return;
+      finishPointerDrag(event.clientX, event.clientY);
+    });
+
+    doc.addEventListener('pointercancel', (event) => {
+      if (!state.drag.active) return;
+      if (state.drag.pointerId !== null && event.pointerId !== state.drag.pointerId) return;
+      finishPointerDrag(event.clientX, event.clientY);
+    });
+
+    const resetForOpen = () => {
+      resetDragState();
+      state.filter = '';
+      if (refs.filterInput) refs.filterInput.value = '';
+      renderEditorLists();
+    };
+
+    modal.__quickCreditorEditorCloseModal = closeModal;
+    modal.__quickCreditorEditorResetForOpen = resetForOpen;
+
+    refs.closeBtn?.addEventListener('click', closeModal);
+    refs.closeFooterBtn?.addEventListener('click', closeModal);
+    refs.backdrop?.addEventListener('click', closeModal);
+    refs.filterInput?.addEventListener('input', () => {
+      state.filter = String(refs.filterInput.value || '');
+      renderEditorLists();
+    });
+  }
+
+  function ensureCreditorEditorModal() {
+    if (creditorEditorModalContext?.modal) return creditorEditorModalContext;
+
+    let modal = doc.getElementById('quickCreditorEditorModal');
+    if (!modal) {
+      const temp = doc.createElement('div');
+      temp.innerHTML = createCreditorEditorModalTemplate().trim();
+      modal = temp.firstElementChild;
+      doc.body.appendChild(modal);
+    } else if (modal.parentElement !== doc.body) {
+      doc.body.appendChild(modal);
+    }
+
+    bindCreditorEditorModal(modal);
+    creditorEditorModalContext = { modal };
+    return creditorEditorModalContext;
+  }
+
+  function openCreditorEditorModal() {
+    const context = ensureCreditorEditorModal();
+    const modal = context?.modal;
+    if (!modal) return;
+    if (typeof modal.__quickCreditorEditorResetForOpen === 'function') {
+      modal.__quickCreditorEditorResetForOpen();
+    }
+    modal.classList.remove('hidden');
+    globalScope.requestAnimationFrame(() => {
+      modal.querySelector('#quickCreditorEditorFilter')?.focus();
     });
   }
 
@@ -832,6 +1473,26 @@
 
   function syncRadialVisibility() {
     radialMenu.classList.toggle('hidden-state', !isHomeActive());
+    syncLeadAuditNodeState();
+  }
+
+  function isLeadAuditAvailable() {
+    const pathname = String(globalScope.location?.pathname || '').toLowerCase();
+    const inLeadPage = pathname.endsWith('/client.html') || pathname.endsWith('client.html');
+    const leadIdFromWindow = Number(globalScope.currentLeadId || 0);
+    const leadIdFromQuery = Number(new URLSearchParams(globalScope.location?.search || '').get('id') || 0);
+    const activeLeadId = Number.isInteger(leadIdFromWindow) && leadIdFromWindow > 0 ? leadIdFromWindow : leadIdFromQuery;
+    return inLeadPage && Number.isInteger(activeLeadId) && activeLeadId > 0
+      && hasLeadAuditAccess()
+      && typeof globalScope.openLeadAuditHistoryModal === 'function';
+  }
+
+  function syncLeadAuditNodeState() {
+    const auditNode = radialMenu.querySelector('.quick-radial-node-audit');
+    if (!auditNode) return;
+    const enabled = isLeadAuditAvailable();
+    auditNode.classList.toggle('is-disabled', !enabled);
+    auditNode.setAttribute('aria-disabled', enabled ? 'false' : 'true');
   }
 
   function openRadialMenu(x, y) {
@@ -859,7 +1520,11 @@
     if (!action) return;
 
     if (actionTarget.classList.contains('is-disabled')) {
-      setRadialHint('Proximamente');
+      if (action === 'lead-audit') {
+        setRadialHint('Solo admin/sup');
+      } else {
+        setRadialHint('Proximamente');
+      }
       return;
     }
 
@@ -872,6 +1537,15 @@
 
     if (action === 'creditor') {
       openCreditorModal();
+      return;
+    }
+
+    if (action === 'lead-audit') {
+      if (!isLeadAuditAvailable()) {
+        setRadialHint('Solo admin/sup');
+        return;
+      }
+      globalScope.openLeadAuditHistoryModal();
     }
   });
 
@@ -912,6 +1586,9 @@
       }
       if (creditorModalContext?.modal && typeof creditorModalContext.modal.__quickCreditorCloseModal === 'function') {
         creditorModalContext.modal.__quickCreditorCloseModal();
+      }
+      if (creditorEditorModalContext?.modal && typeof creditorEditorModalContext.modal.__quickCreditorEditorCloseModal === 'function') {
+        creditorEditorModalContext.modal.__quickCreditorEditorCloseModal();
       }
     }
   });

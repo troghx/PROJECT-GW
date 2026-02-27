@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260226f">
+  <link rel="stylesheet" href="styles.css?v=20260226i">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <link rel="stylesheet" href="budget.css?v=20260219d">
@@ -243,7 +243,7 @@
       color: #4ade80;
     }
     
-    /* Badge de State Type (Green/Red) */
+    /* Badge de State Type (Green/Red/Not Eligible) */
     .lead-state-badge {
       font-size: 0.85rem;
       font-weight: 600;
@@ -266,6 +266,12 @@
       background: rgba(239, 68, 68, 0.2);
       color: #f87171;
       border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .lead-state-badge.not-eligible {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
     }
 
     .lead-status-badge-select {
@@ -3046,6 +3052,10 @@
     .calc-legal-state-word.green {
       color: #22c55e;
     }
+
+    .calc-legal-state-word.not-eligible {
+      color: #f59e0b;
+    }
     
     .calc-payment-day-row {
       position: relative;
@@ -5379,6 +5389,12 @@
       background: rgba(239, 68, 68, 0.15);
       color: #b91c1c;
       border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    body.home-active.theme-light .lead-state-badge.not-eligible {
+      background: rgba(245, 158, 11, 0.16);
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.4);
     }
 
     body.home-active.theme-light .lead-status-badge-select {
@@ -8287,12 +8303,12 @@
 
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/tesseract.min.js"></script>
-  <script src="credit-report-auto-extract.js?v=20260218b"></script>
+  <script src="credit-report-auto-extract.js?v=20260226e"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260225e"></script>
+  <script src="client.js?v=20260226d"></script>
   <script src="budget.js?v=20260222a"></script>
-  <script src="quick-actions.js?v=20260216c"></script>
-  <script src="creditors-redesign.js?v=20260222a"></script>
+  <script src="quick-actions.js?v=20260226b"></script>
+  <script src="creditors-redesign.js?v=20260226e"></script>
   <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
   <div class="notif-panel" id="clientNotifPanel" role="dialog" aria-label="Notificaciones">
     <div class="notif-panel-header">

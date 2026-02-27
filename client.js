@@ -46,6 +46,53 @@
       'Meeting',
       'Transferred to CCCF'
     ];
+    const LEAD_AUDIT_FIELD_LABELS = {
+      full_name: 'Nombre',
+      co_applicant_name: 'Co-Applicant',
+      co_applicant_email: 'Email Co-Applicant',
+      co_applicant_home_phone: 'Home Co-Applicant',
+      co_applicant_cell_phone: 'Cell Co-Applicant',
+      co_applicant_dob: 'DOB Co-Applicant',
+      co_applicant_ssn: 'SSN Co-Applicant',
+      co_applicant_currently_employed: 'Empleo Co-Applicant',
+      co_applicant_employer_name: 'Employer Co-Applicant',
+      co_applicant_occupation: 'Occupation Co-Applicant',
+      co_applicant_self_employed: 'Self Employed Co-Applicant',
+      include_coapp_in_contract: 'Incluir Co-Applicant en contrato',
+      fico_score_applicant: 'FICO Applicant',
+      fico_score_coapp: 'FICO Co-Applicant',
+      calc_total_debt: 'Total Debt',
+      calc_settlement_percent: 'Settlement %',
+      calc_program_fee_percent: 'Program Fee %',
+      calc_bank_fee: 'Bank Fee',
+      calc_months: 'Meses',
+      calc_legal_plan_enabled: 'Legal Plan',
+      email: 'Email',
+      phone: 'Phone',
+      home_phone: 'Home Phone',
+      cell_phone: 'Cell Phone',
+      source: 'Source',
+      state_code: 'Estado',
+      dob: 'DOB',
+      ssn: 'SSN',
+      address_street: 'Address',
+      city: 'City',
+      zip_code: 'ZIP',
+      best_time: 'Best time',
+      currently_employed: 'Currently employed',
+      employer_name: 'Employer',
+      occupation: 'Occupation',
+      self_employed: 'Self Employed',
+      status: 'Status',
+      is_test: 'Test',
+      notes: 'Notes',
+      related_lead_id: 'Lead relacionado',
+      assigned_to: 'Asignado a',
+      first_deposit_date: 'First deposit date',
+      callback_date: 'Callback date',
+      callback_completed_at: 'Callback completed at'
+    };
+    const LEAD_AUDIT_HIDDEN_FIELDS = new Set(['state_type', 'updated_at', 'created_at']);
     const SESSION_KEY = 'project_gw_session';
     const AUTH_TOKEN_KEY = 'project_gw_auth_token';
     const THEME_KEY = 'project_gw_theme';
@@ -1000,6 +1047,12 @@
     let currentLeadId = null;
     window.currentLeadId = currentLeadId;
     let currentLeadData = null;
+    let leadAuditModalEl = null;
+    let leadAuditListEl = null;
+    let leadAuditSummaryEl = null;
+    let leadAuditLoading = false;
+    let leadAuditUndoInFlightId = null;
+    let leadAuditEntries = [];
     let assignableUsers = [];
     let assignableUsersLoadingPromise = null;
     let assigneeSaving = false;
@@ -1962,6 +2015,224 @@
       return data.lead || null;
     }
 
+    function getActiveLeadIdNumber() {
+      const leadId = Number(currentLeadId || currentLeadData?.id || window.currentLeadId || 0);
+      return Number.isInteger(leadId) && leadId > 0 ? leadId : 0;
+    }
+
+    function hasLeadAuditAccess() {
+      const session = readSessionUser();
+      const role = String(session?.role || '').trim().toLowerCase();
+      if (role === 'admin' || role === 'supervisor') return true;
+      const permissions = Array.isArray(session?.permissions)
+        ? session.permissions.map((value) => String(value || '').trim().toLowerCase())
+        : [];
+      return permissions.includes('audit.view');
+    }
+
+    function getLeadAuditFieldLabel(field) {
+      const key = String(field || '').trim().toLowerCase();
+      if (!key) return 'Campo';
+      return LEAD_AUDIT_FIELD_LABELS[key] || key.replace(/_/g, ' ');
+    }
+
+    function getLeadAuditEventTitle(entry, primaryChange) {
+      const action = String(entry?.action || '').trim().toLowerCase();
+      const fieldLabel = primaryChange ? getLeadAuditFieldLabel(primaryChange.field) : '';
+
+      if (action === 'lead.update' && fieldLabel) return `Cambio de ${fieldLabel}`;
+      if (action === 'lead.undo' && fieldLabel) return `Deshacer cambio de ${fieldLabel}`;
+      if (action === 'callback.complete') return 'Callback completado';
+      if (action === 'lead.create') return 'Creacion de lead';
+      if (action === 'lead.delete') return 'Eliminacion de lead';
+      if (action === 'lead.undo') return 'Deshacer cambio';
+      if (action === 'lead.update') return 'Cambio en lead';
+      return 'Cambio';
+    }
+
+    function formatLeadAuditValue(value) {
+      if (value === null || value === undefined || value === '') return '<em>vacio</em>';
+      if (typeof value === 'boolean') return value ? 'Si' : 'No';
+      if (typeof value === 'number') return String(value);
+      const text = String(value);
+      if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return escapeHtml(formatDateTimeEs(text));
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return escapeHtml(formatDateEs(text));
+      return escapeHtml(text.length > 180 ? `${text.slice(0, 180)}...` : text);
+    }
+
+    function ensureLeadAuditModal() {
+      if (leadAuditModalEl) return leadAuditModalEl;
+
+      const modal = document.createElement('div');
+      modal.id = 'leadAuditModal';
+      modal.className = 'lead-audit-modal hidden';
+      modal.innerHTML = `
+        <div class="lead-audit-backdrop" data-lead-audit-close="1"></div>
+        <div class="lead-audit-dialog" role="dialog" aria-modal="true" aria-label="Historial de cambios del lead">
+          <div class="lead-audit-header">
+            <div class="lead-audit-title-wrap">
+              <h3>Historial de Cambios del Lead</h3>
+              <p id="leadAuditSummary">Cargando...</p>
+            </div>
+            <button type="button" class="modal-close-mac lead-audit-close-btn" data-lead-audit-close="1" aria-label="Cerrar historial" title="Cerrar historial"></button>
+          </div>
+          <div class="lead-audit-body" id="leadAuditList"></div>
+        </div>
+      `;
+
+      modal.addEventListener('click', async (event) => {
+        const closeBtn = event.target instanceof Element ? event.target.closest('[data-lead-audit-close="1"]') : null;
+        if (closeBtn) {
+          modal.classList.add('hidden');
+          return;
+        }
+
+        const undoBtn = event.target instanceof Element ? event.target.closest('[data-lead-audit-undo-id]') : null;
+        if (!undoBtn) return;
+        const auditId = Number(undoBtn.getAttribute('data-lead-audit-undo-id') || 0);
+        if (!Number.isInteger(auditId) || auditId <= 0) return;
+        if (leadAuditUndoInFlightId) return;
+
+        const shouldUndo = window.confirm('Se restauraran los valores anteriores de este cambio. Deseas continuar?');
+        if (!shouldUndo) return;
+
+        const leadId = getActiveLeadIdNumber();
+        if (!leadId) {
+          showToast('No hay lead activo para deshacer.', 'error');
+          return;
+        }
+
+        try {
+          leadAuditUndoInFlightId = auditId;
+          renderLeadAuditEntries();
+          const response = await fetch(`/api/leads/${leadId}/audit-history/${auditId}/undo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.message || 'No se pudo deshacer el cambio.');
+          }
+
+          showToast('Cambio deshecho correctamente.', 'success');
+          await loadLead();
+          await loadLeadAuditHistory();
+        } catch (error) {
+          showToast(error.message || 'No se pudo deshacer el cambio.', 'error');
+        } finally {
+          leadAuditUndoInFlightId = null;
+          renderLeadAuditEntries();
+        }
+      });
+
+      document.body.appendChild(modal);
+      leadAuditModalEl = modal;
+      leadAuditListEl = modal.querySelector('#leadAuditList');
+      leadAuditSummaryEl = modal.querySelector('#leadAuditSummary');
+      return leadAuditModalEl;
+    }
+
+    function renderLeadAuditEntries() {
+      if (!leadAuditListEl) return;
+
+      if (leadAuditLoading) {
+        leadAuditListEl.innerHTML = '<div class="lead-audit-loading">Cargando historial...</div>';
+        return;
+      }
+
+      if (!Array.isArray(leadAuditEntries) || leadAuditEntries.length === 0) {
+        leadAuditListEl.innerHTML = '<div class="lead-audit-empty">Aun no hay cambios registrados para este lead.</div>';
+        return;
+      }
+
+      leadAuditListEl.innerHTML = leadAuditEntries.map((entry) => {
+        const createdAt = entry?.createdAt ? formatDateTimeEs(entry.createdAt) : 'Fecha desconocida';
+        const actor = entry?.actorUsername ? `por ${escapeHtml(entry.actorUsername)}` : 'por sistema';
+        const changedRows = Array.isArray(entry?.changedFields)
+          ? entry.changedFields
+            .filter((change) => !LEAD_AUDIT_HIDDEN_FIELDS.has(String(change?.field || '').trim().toLowerCase()))
+            .slice(0, 40)
+          : [];
+        const primaryChange = changedRows.length ? changedRows[0] : null;
+        const extraCount = Math.max(0, changedRows.length - 1);
+        const rowsHtml = primaryChange
+          ? `
+            <div class="lead-audit-field-row">
+              <div class="lead-audit-field-before">${formatLeadAuditValue(primaryChange.before)}</div>
+              <div class="lead-audit-field-arrow">-></div>
+              <div class="lead-audit-field-after">${formatLeadAuditValue(primaryChange.after)}</div>
+            </div>
+          `
+          : '<div class="lead-audit-empty">Sin detalle de campos para esta accion.</div>';
+        const extraLabel = extraCount > 0 ? ` +${extraCount} cambio(s) mas` : '';
+
+        const canUndo = Boolean(entry?.canUndo);
+        const isUndoBusy = Number(entry?.id) === Number(leadAuditUndoInFlightId);
+        const undoButton = canUndo
+          ? `<button type="button" class="lead-audit-undo-btn" data-lead-audit-undo-id="${Number(entry.id)}" ${isUndoBusy ? 'disabled' : ''}>${isUndoBusy ? 'Deshaciendo...' : 'Deshacer'}</button>`
+          : '';
+
+        return `
+          <article class="lead-audit-entry">
+            <div class="lead-audit-entry-head">
+              <div class="lead-audit-entry-main">
+                <div class="lead-audit-entry-meta">
+                  <div class="lead-audit-entry-action">${escapeHtml(getLeadAuditEventTitle(entry, primaryChange))}</div>
+                  <div class="lead-audit-entry-sub">${actor} - ${escapeHtml(createdAt)}${escapeHtml(extraLabel)}</div>
+                </div>
+                <div class="lead-audit-fields">${rowsHtml}</div>
+              </div>
+              ${undoButton}
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    async function loadLeadAuditHistory() {
+      const leadId = getActiveLeadIdNumber();
+      if (!leadId) {
+        leadAuditEntries = [];
+        renderLeadAuditEntries();
+        if (leadAuditSummaryEl) leadAuditSummaryEl.textContent = 'Lead no seleccionado.';
+        return;
+      }
+
+      leadAuditLoading = true;
+      renderLeadAuditEntries();
+      try {
+        const response = await fetch(`/api/leads/${leadId}/audit-history?limit=120`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudo cargar historial de cambios.');
+        }
+        leadAuditEntries = Array.isArray(data.history) ? data.history : [];
+        if (leadAuditSummaryEl) {
+          leadAuditSummaryEl.textContent = `${leadAuditEntries.length} evento(s) registrados.`;
+        }
+      } catch (error) {
+        leadAuditEntries = [];
+        if (leadAuditSummaryEl) leadAuditSummaryEl.textContent = error.message || 'No se pudo cargar historial.';
+        showToast(error.message || 'No se pudo cargar historial de cambios.', 'error');
+      } finally {
+        leadAuditLoading = false;
+        renderLeadAuditEntries();
+      }
+    }
+
+    async function openLeadAuditHistoryModal() {
+      if (!hasLeadAuditAccess()) {
+        showToast('Solo admin/sup puede ver auditoria.', 'error');
+        return;
+      }
+      const modal = ensureLeadAuditModal();
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      await loadLeadAuditHistory();
+    }
+
+    window.openLeadAuditHistoryModal = openLeadAuditHistoryModal;
+
     // ============================================
     // CREDITORS
     // ============================================
@@ -1994,6 +2265,7 @@
 
     function normalizeCreditorName(name) {
       return String(name || '')
+        .replace(/\bFINANCI\b/gi, 'FINANCIAL')
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -2182,6 +2454,57 @@
       return value;
     }
 
+    function mergeCreditorHeaderFromNeighbors(lines, lineIndex, baseName) {
+      const base = normalizeCreditorName(baseName);
+      if (!base) return '';
+
+      let prev = '';
+      let next = '';
+      for (let offset = 1; offset <= 4; offset += 1) {
+        const candidate = normalizeCreditorName(lines[lineIndex - offset] || '');
+        if (!candidate || /\$/.test(candidate)) continue;
+        if (!/^\d{1,2}(?:st|nd|rd|th)\b/i.test(candidate) && !isLikelyCreditorHeader(candidate)) continue;
+        prev = candidate;
+        break;
+      }
+      for (let offset = 1; offset <= 4; offset += 1) {
+        const candidate = normalizeCreditorName(lines[lineIndex + offset] || '');
+        if (!candidate || /\$/.test(candidate)) continue;
+        if (!isLikelyCreditorHeader(candidate)) continue;
+        next = candidate;
+        break;
+      }
+      const mergedOptions = [base];
+
+      const canUsePrev =
+        prev &&
+        !/\$/.test(prev) &&
+        !/^(?:Account|Balance|Overview|Payment|Creditors|Report|Total|Public records|Inquiries)/i.test(prev) &&
+        (/^\d{1,2}(?:st|nd|rd|th)\b/i.test(prev) || isLikelyCreditorHeader(prev));
+
+      if (canUsePrev) {
+        const merged = normalizeCreditorName(`${prev} ${base}`);
+        if (isLikelyCreditorHeader(merged) && merged.length <= 90) mergedOptions.push(merged);
+      }
+
+      const shortOrTruncatedBase =
+        base.split(/\s+/).length <= 3 || /\bFINANCI(?:AL)?$/i.test(base);
+      const canUseNext =
+        shortOrTruncatedBase &&
+        next &&
+        !/\$/.test(next) &&
+        !/^(?:Account|Balance|Overview|Payment|Creditors|Report|Total|Public records|Inquiries)/i.test(next) &&
+        isLikelyCreditorHeader(next);
+
+      if (canUseNext) {
+        const merged = normalizeCreditorName(`${base} ${next}`);
+        if (isLikelyCreditorHeader(merged) && merged.length <= 90) mergedOptions.push(merged);
+      }
+
+      mergedOptions.sort((a, b) => b.length - a.length);
+      return mergedOptions[0] || base;
+    }
+
     function parseCreditReportText(rawText, sourceReport = 'Reporte') {
       const text = String(rawText || '')
         .replace(/\u00a0/g, ' ')
@@ -2253,6 +2576,7 @@
 
         const headerCandidate = extractCreditorHeaderCandidate(line);
         if (headerCandidate) {
+          headerCandidate.creditorName = mergeCreditorHeaderFromNeighbors(lines, lineIndex, headerCandidate.creditorName);
           recentHeader = headerCandidate;
           recentHeaderLine = lineIndex;
         }
@@ -2546,21 +2870,31 @@
         return;
       }
 
-      body.innerHTML = currentCreditors.map((entry, index) => `
-        <tr>
-          <td class="mono">${index + 1}</td>
-          <td><input type="checkbox" class="saved-include-toggle" data-creditor-id="${entry.id}" ${entry.isIncluded ? 'checked' : ''}></td>
-          <td>${escapeHtml(entry.creditorName || '-')}</td>
-          <td class="mono">${escapeHtml(entry.accountNumber || '-')}</td>
-          <td>${escapeHtml(entry.accountStatus || '-')}</td>
-          <td>${escapeHtml(entry.accountType || '-')}</td>
-          <td><input type="text" class="creditors-inline-input saved-debt-input mono" data-creditor-id="${entry.id}" value="${Number(entry.debtAmount || 0).toFixed(2)}"></td>
-          <td class="mono">${formatCurrency(entry.balance || 0)}</td>
-          <td class="mono">${formatCurrency(entry.pastDue || 0)}</td>
-          <td class="mono">${formatCurrency(entry.monthlyPayment || 0)}</td>
-          <td class="actions-cell"><button class="creditors-btn secondary saved-delete-btn" type="button" data-creditor-id="${entry.id}">Delete</button></td>
-        </tr>
-      `).join('');
+      body.innerHTML = currentCreditors.map((entry, index) => {
+        const rawCreditorName = entry.creditorName || '';
+        const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
+          ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
+          : false;
+        const unacceptableFlagHtml = isUnacceptableCreditor
+          ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
+          : '';
+
+        return `
+          <tr>
+            <td class="mono">${index + 1}</td>
+            <td><input type="checkbox" class="saved-include-toggle" data-creditor-id="${entry.id}" ${entry.isIncluded ? 'checked' : ''}></td>
+            <td title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${escapeHtml(rawCreditorName || '-')}</span>${unacceptableFlagHtml}</span></td>
+            <td class="mono">${escapeHtml(entry.accountNumber || '-')}</td>
+            <td>${escapeHtml(entry.accountStatus || '-')}</td>
+            <td>${escapeHtml(entry.accountType || '-')}</td>
+            <td><input type="text" class="creditors-inline-input saved-debt-input mono" data-creditor-id="${entry.id}" value="${Number(entry.debtAmount || 0).toFixed(2)}"></td>
+            <td class="mono">${formatCurrency(entry.balance || 0)}</td>
+            <td class="mono">${formatCurrency(entry.pastDue || 0)}</td>
+            <td class="mono">${formatCurrency(entry.monthlyPayment || 0)}</td>
+            <td class="actions-cell"><button class="creditors-btn secondary saved-delete-btn" type="button" data-creditor-id="${entry.id}">Delete</button></td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderCreditorsSummary(summary = null) {
@@ -4176,9 +4510,11 @@
 
       const stateCode = lead.state_code || '-';
       const stateType = lead.state_type || 'Red';
-      const isGreen = stateType === 'Green';
+      const stateClass = stateType === 'Green'
+        ? 'green'
+        : (stateType === 'Not Eligible' ? 'not-eligible' : 'red');
 
-      stateBadge.className = `lead-state-badge ${isGreen ? 'green' : 'red'}`;
+      stateBadge.className = `lead-state-badge ${stateClass}`;
       stateBadge.textContent = stateType;
       stateBadge.title = `${getStateName(stateCode)} (${stateCode}) - ${stateType} State`;
       updateLegalPlanStateHint();
@@ -5137,6 +5473,8 @@
         html = 'Activando Legal Plan en <span class="calc-legal-state-word red">RedState</span>.';
       } else if (stateType === 'Green' && !isActive) {
         html = 'Desactivando Legal Plan en <span class="calc-legal-state-word green">GreenState</span>.';
+      } else if (stateType === 'Not Eligible') {
+        html = 'Estado <span class="calc-legal-state-word not-eligible">Not Eligible</span>: fuera de cobertura del programa.';
       }
 
       if (html) {

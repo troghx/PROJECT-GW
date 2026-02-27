@@ -20,10 +20,11 @@ El CRM ya tiene base funcional fuerte, pero faltan bloques criticos para cerrar 
 - [x] Conectar permisos granulares en UI admin.
 
 3. Auditoria completa
-- [ ] Crear `audit_log`.
-- [ ] Registrar acciones criticas con before/after.
-- [ ] Guardar actor, request_id, ip y timestamp.
-- [ ] Agregar vista de consulta por filtros.
+- [x] Crear `audit_log`.
+- [x] Registrar acciones criticas con before/after.
+- [x] Guardar actor, request_id, ip y timestamp.
+- [x] Agregar vista de consulta/export por filtros (API admin).
+- [x] Exponer historial de cambios por lead en UI y permitir undo de cambios auditados.
 
 4. Pipeline comercial y KPI
 - [ ] Estandarizar etapas del pipeline.

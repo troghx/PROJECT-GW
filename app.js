@@ -24,6 +24,7 @@ const usersAdminLayout = document.getElementById('usersAdminLayout');
 const refreshUsersAdminBtn = document.getElementById('refreshUsersAdminBtn');
 const usersAdminToggleCreateBtn = document.getElementById('usersAdminToggleCreateBtn');
 const usersAdminActiveTotal = document.getElementById('usersAdminActiveTotal');
+const usersAdminCategoryRail = document.getElementById('usersAdminCategoryRail');
 const usersAdminList = document.getElementById('usersAdminList');
 const usersAdminStatus = document.getElementById('usersAdminStatus');
 const usersAdminFormPanel = document.getElementById('usersAdminFormPanel');
@@ -49,11 +50,7 @@ let usersAdminRoleMenu = null;
 let usersAdminPermissionsMenu = null;
 let usersAdminPermissionCatalog = [];
 let usersAdminPermissionByRoleMatrix = {};
-const usersAdminGroupOpenState = {
-  admin: true,
-  supervisor: true,
-  seller: true
-};
+let usersAdminActiveCategory = 'all';
 
 const SESSION_KEY = 'project_gw_session';
 const AUTH_TOKEN_KEY = 'project_gw_auth_token';
@@ -1019,11 +1016,39 @@ function getAdminRoleLabel(roleValue) {
   return 'Agent/Vendedor';
 }
 
-function getAdminRoleGroupTitle(roleValue) {
-  const role = normalizeAdminUserRole(roleValue);
-  if (role === 'admin') return 'Administradores';
-  if (role === 'supervisor') return 'Supervisores';
-  return 'Agents/Vendedores';
+function normalizeUsersAdminCategory(categoryValue) {
+  const normalized = String(categoryValue || '').trim().toLowerCase();
+  if (normalized === 'admin' || normalized === 'supervisor' || normalized === 'seller') return normalized;
+  return 'all';
+}
+
+function renderUsersAdminCategoryRail(groupedUsers = {}) {
+  if (!usersAdminCategoryRail) return;
+  const countAdmin = Array.isArray(groupedUsers.admin) ? groupedUsers.admin.length : 0;
+  const countSupervisor = Array.isArray(groupedUsers.supervisor) ? groupedUsers.supervisor.length : 0;
+  const countSeller = Array.isArray(groupedUsers.seller) ? groupedUsers.seller.length : 0;
+  const countAll = countAdmin + countSupervisor + countSeller;
+  const categories = [
+    { key: 'all', label: 'Todos', count: countAll },
+    { key: 'admin', label: 'Administradores', count: countAdmin },
+    { key: 'supervisor', label: 'Supervisores', count: countSupervisor },
+    { key: 'seller', label: 'Agents/Vendedores', count: countSeller }
+  ];
+
+  usersAdminCategoryRail.innerHTML = categories.map((category) => {
+    const isActive = usersAdminActiveCategory === category.key;
+    return `
+      <button
+        class="users-admin-category-btn${isActive ? ' is-active' : ''}"
+        type="button"
+        data-users-admin-category="${category.key}"
+        aria-pressed="${isActive ? 'true' : 'false'}"
+      >
+        <span>${category.label}</span>
+        <small>${category.count}</small>
+      </button>
+    `;
+  }).join('');
 }
 
 function getAdminRoleTransitions(currentRoleValue) {
@@ -1262,7 +1287,7 @@ function renderUsersAdminPermissionsMenu(menu, user, permissionRows = []) {
         <p class="users-admin-permissions-title">Permisos de ${displayName}</p>
         <p class="users-admin-permissions-subtitle">@${username} · ${roleLabel}</p>
       </div>
-      <button class="users-admin-permissions-close" type="button" data-permissions-close aria-label="Cerrar panel de permisos">&times;</button>
+      <button class="users-admin-permissions-close modal-close-mac" type="button" data-permissions-close aria-label="Cerrar panel de permisos" title="Cerrar panel de permisos"></button>
     </header>
     <div class="users-admin-permissions-body">
       ${moduleEntries || '<p class="users-admin-permission-empty">No hay permisos disponibles.</p>'}
@@ -1428,11 +1453,6 @@ function renderAdminUsersList(users = []) {
     usersAdminActiveTotal.textContent = String(activeCount);
   }
 
-  if (!users.length) {
-    usersAdminList.innerHTML = '<p class="users-admin-status">No hay usuarios registrados.</p>';
-    return;
-  }
-
   const groupedUsers = {
     admin: [],
     supervisor: [],
@@ -1452,88 +1472,77 @@ function renderAdminUsersList(users = []) {
     });
   });
 
+  usersAdminActiveCategory = normalizeUsersAdminCategory(usersAdminActiveCategory);
+  renderUsersAdminCategoryRail(groupedUsers);
+
+  if (!users.length) {
+    usersAdminList.innerHTML = '<p class="users-admin-status">No hay usuarios registrados.</p>';
+    return;
+  }
+
   const orderedGroups = ['admin', 'supervisor', 'seller'];
-  usersAdminList.innerHTML = orderedGroups.map((roleKey) => {
-    const list = groupedUsers[roleKey] || [];
-    const groupTitle = getAdminRoleGroupTitle(roleKey);
-    const isOpen = usersAdminGroupOpenState[roleKey] !== false;
+  const selectedUsers = usersAdminActiveCategory === 'all'
+    ? orderedGroups.flatMap((roleKey) => groupedUsers[roleKey] || [])
+    : (groupedUsers[usersAdminActiveCategory] || []);
 
-    const itemsMarkup = list.length
-      ? list.map((user) => {
-        const role = normalizeAdminUserRole(user.role);
-        const roleClass = role;
-        const inactiveClass = user.is_active ? '' : ' inactive';
-        const displayNameRaw = String(user.display_name || user.username || '').trim();
-        const displayName = userEscapeHtml(displayNameRaw);
-        const username = userEscapeHtml(String(user.username || ''));
-        const email = userEscapeHtml(String(user.email || 'Sin email'));
-        const lastLoginRaw = user.last_login_at ? new Date(user.last_login_at) : null;
-        const lastLogin = lastLoginRaw && !Number.isNaN(lastLoginRaw.getTime())
-          ? lastLoginRaw.toLocaleString('es-ES')
-          : 'Nunca';
-        const stateMeta = user.is_active ? '' : '<span class="users-admin-item-state">Inactivo</span>';
+  if (!selectedUsers.length) {
+    usersAdminList.innerHTML = '<p class="users-admin-group-empty">Sin usuarios en esta categoria.</p>';
+    return;
+  }
 
-        const lastSeenRaw = user.last_seen_at ? new Date(user.last_seen_at) : null;
-        const isOnline = lastSeenRaw && !Number.isNaN(lastSeenRaw.getTime())
-          && (Date.now() - lastSeenRaw.getTime()) < 90000;
-        const presenceClass = isOnline ? 'online' : 'offline';
-        const presenceLabel = isOnline ? 'En línea' : 'Desconectado';
+  usersAdminList.innerHTML = selectedUsers.map((user) => {
+    const role = normalizeAdminUserRole(user.role);
+    const roleClass = role;
+    const inactiveClass = user.is_active ? '' : ' inactive';
+    const displayNameRaw = String(user.display_name || user.username || '').trim();
+    const displayName = userEscapeHtml(displayNameRaw);
+    const username = userEscapeHtml(String(user.username || ''));
+    const email = userEscapeHtml(String(user.email || 'Sin email'));
+    const lastLoginRaw = user.last_login_at ? new Date(user.last_login_at) : null;
+    const lastLogin = lastLoginRaw && !Number.isNaN(lastLoginRaw.getTime())
+      ? lastLoginRaw.toLocaleString('es-ES')
+      : 'Nunca';
+    const stateMeta = user.is_active ? '' : '<span class="users-admin-item-state">Inactivo</span>';
 
-        return `
-          <article class="users-admin-item${inactiveClass}">
-            <div class="users-admin-item-head">
-              <span class="users-admin-item-name">
-                <span class="users-admin-presence-dot ${presenceClass}" title="${presenceLabel}" aria-label="${presenceLabel}"></span>
-                <span class="users-admin-item-display">${displayName}</span>
-                <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
-                <span class="users-admin-item-handle">@${username}</span>
-                <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
-                <span class="users-admin-item-email">${email}</span>
-              </span>
-              <div class="users-admin-item-actions">
-                <button
-                  class="users-admin-role ${roleClass}"
-                  type="button"
-                  data-role-user-id="${user.id}"
-                  aria-label="Cambiar rol de ${displayName}"
-                >
-                  ${userEscapeHtml(getAdminRoleLabel(role))}
-                </button>
-                <button class="users-admin-item-btn users-admin-permissions-btn" type="button" data-permissions-user-id="${user.id}" aria-label="Configurar permisos de ${displayName}" title="Permisos">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l7 4v6c0 5-3.5 9.7-7 10-3.5-.3-7-5-7-10V6l7-4z"/><path d="M9.5 12.5l2 2 3-3"/></svg>
-                </button>
-                <button class="users-admin-item-btn users-admin-edit-btn" type="button" data-user-id="${user.id}" aria-label="Editar ${displayName}" title="Editar">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="users-admin-item-meta users-admin-item-meta-row">
-              <span>Ultimo login: ${userEscapeHtml(lastLogin)}</span>
-              ${stateMeta}
-            </div>
-          </article>
-        `;
-      }).join('')
-      : '<p class="users-admin-group-empty">Sin usuarios en esta categoria.</p>';
+    const lastSeenRaw = user.last_seen_at ? new Date(user.last_seen_at) : null;
+    const isOnline = lastSeenRaw && !Number.isNaN(lastSeenRaw.getTime())
+      && (Date.now() - lastSeenRaw.getTime()) < 90000;
+    const presenceClass = isOnline ? 'online' : 'offline';
+    const presenceLabel = isOnline ? 'En línea' : 'Desconectado';
 
     return `
-      <section class="users-admin-group" data-role-group="${roleKey}">
-        <button
-          class="users-admin-group-toggle${isOpen ? '' : ' is-collapsed'}"
-          type="button"
-          data-group-role="${roleKey}"
-          aria-expanded="${isOpen ? 'true' : 'false'}"
-        >
-          <span class="users-admin-group-title">${groupTitle}</span>
-          <span class="users-admin-group-count">${list.length}</span>
-          <svg class="users-admin-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-        <div class="users-admin-group-body${isOpen ? '' : ' is-collapsed'}">
-          ${itemsMarkup}
+      <article class="users-admin-item${inactiveClass}">
+        <div class="users-admin-item-head">
+          <span class="users-admin-item-name">
+            <span class="users-admin-presence-dot ${presenceClass}" title="${presenceLabel}" aria-label="${presenceLabel}"></span>
+            <span class="users-admin-item-display">${displayName}</span>
+            <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
+            <span class="users-admin-item-handle">@${username}</span>
+            <span class="users-admin-item-sep" aria-hidden="true">&middot;</span>
+            <span class="users-admin-item-email">${email}</span>
+          </span>
+          <div class="users-admin-item-actions">
+            <button
+              class="users-admin-role ${roleClass}"
+              type="button"
+              data-role-user-id="${user.id}"
+              aria-label="Cambiar rol de ${displayName}"
+            >
+              ${userEscapeHtml(getAdminRoleLabel(role))}
+            </button>
+            <button class="users-admin-item-btn users-admin-permissions-btn" type="button" data-permissions-user-id="${user.id}" aria-label="Configurar permisos de ${displayName}" title="Permisos">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l7 4v6c0 5-3.5 9.7-7 10-3.5-.3-7-5-7-10V6l7-4z"/><path d="M9.5 12.5l2 2 3-3"/></svg>
+            </button>
+            <button class="users-admin-item-btn users-admin-edit-btn" type="button" data-user-id="${user.id}" aria-label="Editar ${displayName}" title="Editar">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
         </div>
-      </section>
+        <div class="users-admin-item-meta users-admin-item-meta-row">
+          <span>Ultimo login: ${userEscapeHtml(lastLogin)}</span>
+          ${stateMeta}
+        </div>
+      </article>
     `;
   }).join('');
 }
@@ -1597,11 +1606,11 @@ if (usersAdminToggleCreateBtn) {
 
 if (usersAdminView) {
   usersAdminView.addEventListener('click', (event) => {
-    const groupBtn = event.target.closest('.users-admin-group-toggle[data-group-role]');
-    if (groupBtn) {
-      const groupRole = String(groupBtn.dataset.groupRole || '');
-      if (groupRole && Object.prototype.hasOwnProperty.call(usersAdminGroupOpenState, groupRole)) {
-        usersAdminGroupOpenState[groupRole] = !usersAdminGroupOpenState[groupRole];
+    const categoryBtn = event.target.closest('.users-admin-category-btn[data-users-admin-category]');
+    if (categoryBtn) {
+      const nextCategory = normalizeUsersAdminCategory(categoryBtn.dataset.usersAdminCategory);
+      if (nextCategory !== usersAdminActiveCategory) {
+        usersAdminActiveCategory = nextCategory;
         renderAdminUsersList(adminUsersCache);
       }
       return;
@@ -1834,19 +1843,25 @@ if (dashboardView) {
   dashboardObserver.observe(dashboardView, { attributes: true, attributeFilter: ['class'] });
 }
 
-// Estados Green State (los que no estÃ¡n aquÃ­ son Red)
+// 2026 Program Guidelines: Greenwise, Red (Excel Law) y Not Eligible.
 const GREEN_STATES = [
-  'MO', 'VA', 'CA', 'AR', 'TX', 'NY', 'FL', 'MS', 'LA', 'NC', 
-  'NM', 'AL', 'TN', 'AZ', 'OK', 'MI', 'NE', 'MN', 'NV', 'ND', 
-  'IA', 'AK', 'SD'
+  'AK', 'AL', 'AR', 'AZ', 'CA', 'FL', 'IN', 'LA', 'MA', 'MD',
+  'MI', 'MO', 'MS', 'NC', 'NE', 'NM', 'NY', 'OK', 'SD', 'TX'
 ];
+const NOT_ELIGIBLE_STATES = [
+  'CO', 'CT', 'DC', 'OR', 'PR', 'RI', 'WI', 'WV'
+];
+const GREEN_STATES_SET = new Set(GREEN_STATES);
+const NOT_ELIGIBLE_STATES_SET = new Set(NOT_ELIGIBLE_STATES);
 
 const STATE_NAMES = crmHelpers.STATE_NAMES || {};
 
-// FunciÃ³n para determinar si un estado es Green o Red
+// FunciÃ³n para determinar tipo de estado segÃºn guidelines 2026
 function getStateType(stateCode) {
-  const code = stateCode.toUpperCase().trim();
-  return GREEN_STATES.includes(code) ? 'Green' : 'Red';
+  const code = String(stateCode || '').toUpperCase().trim();
+  if (GREEN_STATES_SET.has(code)) return 'Green';
+  if (NOT_ELIGIBLE_STATES_SET.has(code)) return 'Not Eligible';
+  return 'Red';
 }
 
 // FunciÃ³n para obtener nombre completo del estado
@@ -1889,7 +1904,7 @@ const AREA_CODE_TO_STATE = {
   '725': 'NV', '726': 'TX', '727': 'FL', '730': 'IL', '731': 'TN', '732': 'NJ', '734': 'MI', '737': 'TX',
   '740': 'OH', '747': 'CA', '754': 'FL', '757': 'VA', '760': 'CA', '762': 'GA', '763': 'MN', '764': 'CA',
   '765': 'IN', '769': 'MS', '770': 'GA', '772': 'FL', '773': 'IL', '774': 'MA', '775': 'NV', '779': 'IL',
-  '781': 'MA', '785': 'KS', '786': 'FL', '801': 'UT', '802': 'VT', '803': 'SC', '804': 'VA', '805': 'CA',
+  '781': 'MA', '785': 'KS', '786': 'FL', '787': 'PR', '801': 'UT', '802': 'VT', '803': 'SC', '804': 'VA', '805': 'CA',
   '806': 'TX', '808': 'HI', '810': 'MI', '812': 'IN', '813': 'FL', '814': 'PA', '815': 'IL', '816': 'MO',
   '817': 'TX', '818': 'CA', '828': 'NC', '830': 'TX', '831': 'CA', '832': 'TX', '835': 'PA', '838': 'WA',
   '840': 'CA', '843': 'SC', '845': 'NY', '847': 'IL', '848': 'NJ', '850': 'FL', '856': 'NJ', '857': 'MA',
@@ -1897,7 +1912,7 @@ const AREA_CODE_TO_STATE = {
   '872': 'IL', '878': 'PA', '901': 'TN', '903': 'TX', '904': 'FL', '906': 'MI', '907': 'AK', '908': 'NJ',
   '909': 'CA', '910': 'NC', '912': 'GA', '913': 'KS', '914': 'NY', '915': 'TX', '916': 'CA', '917': 'NY',
   '918': 'OK', '919': 'NC', '920': 'WI', '925': 'CA', '928': 'AZ', '930': 'IN', '931': 'TN', '934': 'NY',
-  '936': 'TX', '937': 'OH', '938': 'AL', '940': 'TX', '941': 'FL', '945': 'TX', '947': 'MI', '949': 'CA',
+  '936': 'TX', '937': 'OH', '938': 'AL', '939': 'PR', '940': 'TX', '941': 'FL', '945': 'TX', '947': 'MI', '949': 'CA',
   '951': 'CA', '952': 'MN', '954': 'FL', '956': 'TX', '959': 'CT', '970': 'CO', '971': 'OR', '972': 'TX',
   '973': 'NJ', '978': 'MA', '979': 'TX', '980': 'NC', '984': 'NC', '985': 'LA', '986': 'ID', '989': 'MI'
 };
@@ -4019,8 +4034,8 @@ function selectState(code, name) {
   stateHiddenInput.value = code;
   stateSuggestions.classList.add('hidden');
   
-  // Mostrar badge de green/red
-  const stateType = GREEN_STATES.includes(code) ? 'Green' : 'Red';
+  // Mostrar badge de tipo de estado segun guidelines
+  const stateType = getStateType(code);
   showDetectedState(`Estado: ${name} (${code}) - ${stateType}`);
 }
 
@@ -4085,7 +4100,7 @@ if (phoneInput) {
     
     if (detectedState && !stateHiddenInput.value) {
       const stateName = STATE_NAMES[detectedState];
-      const stateType = GREEN_STATES.includes(detectedState) ? 'Green' : 'Red';
+      const stateType = getStateType(detectedState);
       
       // Auto-completar el campo
       stateSearchInput.value = `${stateName} (${detectedState})`;
@@ -4512,9 +4527,12 @@ function getStateTypeBadge(stateCode, stateType) {
     return crmHelpers.getStateTypeBadgeHtml(stateCode, stateType);
   }
   if (!stateCode) return '-';
-  const typeClass = stateType === 'Green' ? 'green' : 'red';
+  const normalizedType = String(stateType || '').trim();
+  const typeClass = normalizedType === 'Green'
+    ? 'green'
+    : (normalizedType === 'Not Eligible' ? 'not-eligible' : 'red');
   const stateName = getStateName(stateCode);
-  return `<span class="type-badge ${typeClass}" title="${stateName} (${stateCode}) - ${stateType} State">${stateType}</span>`;
+  return `<span class="type-badge ${typeClass}" title="${stateName} (${stateCode}) - ${normalizedType || 'Red'} State">${normalizedType || 'Red'}</span>`;
 }
 
 function getRelatedLeadBadge(lead, leadMapById) {

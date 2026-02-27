@@ -4,7 +4,7 @@ Alcance: Completar CRM sin incluir integracion API de correo ni API de reportes 
 Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM]]
 
 ## Estado global
-- Fase activa: Fase 2 en progreso.
+- Fase activa: Fase 2 en ejecucion (backend).
 - Prioridad de ejecucion: Seguridad -> Permisos -> Auditoria -> Operacion/KPI.
 
 ## Fase 0 - Hardening Base
@@ -20,10 +20,11 @@ Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM
 - [x] UI de gestion de permisos.
 
 ## Fase 2 - Auditoria End-to-End
-- [ ] Crear tabla `audit_log`.
-- [ ] Registrar before/after en operaciones criticas.
-- [ ] Guardar actor, request_id, ip, timestamp.
-- [ ] Vista de consulta/export de auditoria.
+- [x] Crear tabla `audit_log`.
+- [x] Registrar before/after en operaciones criticas.
+- [x] Guardar actor, request_id, ip, timestamp.
+- [x] Vista de consulta/export de auditoria (API admin).
+- [x] Historial por lead en UI + accion de deshacer cambios desde auditoria.
 
 ## Fase 3 - Pipeline y KPI
 - [ ] Catalogo formal de etapas y transiciones validas.
@@ -38,7 +39,7 @@ Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM
 - [ ] Bandeja de tareas por usuario/equipo.
 
 ## Fase 5 - Compliance y Proteccion de PII
-- [ ] Cifrado/mascarado para SSN y cuenta bancaria.
+- [ ] Cifrado/mascarado para SSN y cuenta bancaria. ()
 - [ ] Politica de acceso y export de PII.
 - [ ] Redaccion de logs sensibles.
 - [ ] Checklist de cumplimiento operativo.

@@ -51,6 +51,16 @@ function buildCorsOptions() {
 app.use(cors(buildCorsOptions()));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(ROOT_DIR));
+app.use((req, res, next) => {
+  const incomingRequestId = cleanText(req.headers?.['x-request-id'], 120);
+  const generatedId = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `req-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+  const requestId = incomingRequestId || generatedId;
+  req.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
+  next();
+});
 
 function getJwtSecret() {
   const configuredSecret = cleanText(process.env.JWT_SECRET, 500);
@@ -172,12 +182,16 @@ app.use('/api', (req, res, next) => {
   return void requireAuth(req, res, next);
 });
 
-// Lista de estados Green (los demas son Red)
+// 2026 Program Guidelines: Greenwise, Red (Excel Law) y Not Eligible.
 const GREEN_STATES = [
-  'MO', 'VA', 'CA', 'AR', 'TX', 'NY', 'FL', 'MS', 'LA', 'NC',
-  'NM', 'AL', 'TN', 'AZ', 'OK', 'MI', 'NE', 'MN', 'NV', 'ND',
-  'IA', 'AK', 'SD'
+  'AK', 'AL', 'AR', 'AZ', 'CA', 'FL', 'IN', 'LA', 'MA', 'MD',
+  'MI', 'MO', 'MS', 'NC', 'NE', 'NM', 'NY', 'OK', 'SD', 'TX'
 ];
+const NOT_ELIGIBLE_STATES = [
+  'CO', 'CT', 'DC', 'OR', 'PR', 'RI', 'WI', 'WV'
+];
+const GREEN_STATES_SET = new Set(GREEN_STATES);
+const NOT_ELIGIBLE_STATES_SET = new Set(NOT_ELIGIBLE_STATES);
 const NOTE_COLOR_TAGS = new Set(['yellow', 'red', 'green', 'blue', 'gray']);
 const FILE_DOCUMENT_CATEGORIES = new Set([
   'official_document',
@@ -214,7 +228,8 @@ const PERMISSION_CATALOG = [
   { key: 'callbacks.view_all', module: 'operacion', label: 'Ver callbacks globales', description: 'Ver callbacks de todos los asesores.' },
   { key: 'callbacks.complete_assigned', module: 'operacion', label: 'Completar callbacks asignados', description: 'Completar callbacks de leads asignados.' },
   { key: 'files.manage', module: 'documentos', label: 'Gestionar archivos', description: 'Subir, consultar y eliminar archivos de leads.' },
-  { key: 'tasks.manage', module: 'operacion', label: 'Gestionar tareas', description: 'Crear y actualizar tareas operativas.' }
+  { key: 'tasks.manage', module: 'operacion', label: 'Gestionar tareas', description: 'Crear y actualizar tareas operativas.' },
+  { key: 'audit.view', module: 'auditoria', label: 'Ver auditoria', description: 'Consultar y exportar bitacora de auditoria.' }
 ];
 const PERMISSION_KEYS = new Set(PERMISSION_CATALOG.map((entry) => entry.key));
 const ROLE_PERMISSION_MATRIX = {
@@ -234,7 +249,8 @@ const ROLE_PERMISSION_MATRIX = {
     'callbacks.view_all': true,
     'callbacks.complete_assigned': true,
     'files.manage': true,
-    'tasks.manage': true
+    'tasks.manage': true,
+    'audit.view': true
   },
   supervisor: {
     'users.manage': false,
@@ -252,7 +268,8 @@ const ROLE_PERMISSION_MATRIX = {
     'callbacks.view_all': true,
     'callbacks.complete_assigned': true,
     'files.manage': true,
-    'tasks.manage': true
+    'tasks.manage': true,
+    'audit.view': true
   },
   seller: {
     'users.manage': false,
@@ -270,16 +287,32 @@ const ROLE_PERMISSION_MATRIX = {
     'callbacks.view_all': false,
     'callbacks.complete_assigned': true,
     'files.manage': true,
-    'tasks.manage': true
+    'tasks.manage': true,
+    'audit.view': false
   }
 };
+
+const AUDIT_REDACTED_KEYS = new Set([
+  'pin',
+  'pin_hash',
+  'pin_salt',
+  'password',
+  'token',
+  'access_token',
+  'refresh_token',
+  'refresh_token_hash',
+  'authorization',
+  'cookie',
+  'ssn',
+  'co_applicant_ssn'
+]);
 
 const VALID_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
   'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
   'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
   'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC', 'PR'
 ]);
 const ZIP_LOOKUP_TIMEOUT_MS = 5000;
 const ZIP_LOOKUP_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -298,9 +331,72 @@ const LEAD_SELECT_COLUMNS = `
   currently_employed, employer_name, occupation, self_employed,
   status, is_test, notes, related_lead_id, assigned_to, first_deposit_date, callback_date, callback_completed_at, created_at, updated_at
 `;
+const LEAD_AUDIT_UNDOABLE_COLUMNS = new Set([
+  'full_name',
+  'co_applicant_name',
+  'co_applicant_email',
+  'co_applicant_home_phone',
+  'co_applicant_cell_phone',
+  'co_applicant_dob',
+  'co_applicant_ssn',
+  'co_applicant_currently_employed',
+  'co_applicant_employer_name',
+  'co_applicant_occupation',
+  'co_applicant_self_employed',
+  'include_coapp_in_contract',
+  'fico_score_applicant',
+  'fico_score_coapp',
+  'calc_total_debt',
+  'calc_settlement_percent',
+  'calc_program_fee_percent',
+  'calc_bank_fee',
+  'calc_months',
+  'calc_legal_plan_enabled',
+  'email',
+  'phone',
+  'home_phone',
+  'cell_phone',
+  'source',
+  'state_code',
+  'dob',
+  'ssn',
+  'address_street',
+  'city',
+  'zip_code',
+  'best_time',
+  'currently_employed',
+  'employer_name',
+  'occupation',
+  'self_employed',
+  'status',
+  'is_test',
+  'notes',
+  'related_lead_id',
+  'assigned_to',
+  'first_deposit_date',
+  'callback_date',
+  'callback_completed_at'
+]);
+const LEAD_AUDIT_IGNORED_DIFF_FIELDS = new Set([
+  'calc_total_debt',
+  'state_type',
+  'updated_at',
+  'created_at'
+]);
+const LEAD_AUDIT_PAYMENT_FIELDS = new Set([
+  'first_deposit_date',
+  'calc_settlement_percent',
+  'calc_program_fee_percent',
+  'calc_bank_fee',
+  'calc_months',
+  'calc_legal_plan_enabled'
+]);
 
 function getStateTypeFromCode(stateCode) {
-  return GREEN_STATES.includes(String(stateCode || '').toUpperCase()) ? 'Green' : 'Red';
+  const normalized = String(stateCode || '').toUpperCase().trim();
+  if (GREEN_STATES_SET.has(normalized)) return 'Green';
+  if (NOT_ELIGIBLE_STATES_SET.has(normalized)) return 'Not Eligible';
+  return 'Red';
 }
 
 function getProgramFeePercentForState(stateCode) {
@@ -482,6 +578,109 @@ function getRequestIp(req) {
   }
   const remoteAddress = cleanText(req.socket?.remoteAddress, 80);
   return remoteAddress || null;
+}
+
+function normalizeAuditEntityId(value) {
+  if (value === undefined || value === null) return null;
+  const text = cleanText(value, 120);
+  return text || null;
+}
+
+function toAuditSafeValue(value, depth = 0) {
+  if (value === undefined || value === null) return null;
+  if (depth > 5) return '[MAX_DEPTH]';
+
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isNaN(timestamp) ? null : value.toISOString();
+  }
+
+  if (Buffer.isBuffer(value)) {
+    return `[BUFFER:${value.length}]`;
+  }
+
+  const primitiveType = typeof value;
+  if (primitiveType === 'string') return value.slice(0, 4000);
+  if (primitiveType === 'number') return Number.isFinite(value) ? value : null;
+  if (primitiveType === 'boolean') return value;
+  if (primitiveType === 'bigint') return String(value);
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 200).map((entry) => toAuditSafeValue(entry, depth + 1));
+  }
+
+  if (primitiveType === 'object') {
+    const out = {};
+    const entries = Object.entries(value).slice(0, 250);
+    entries.forEach(([rawKey, rawValue]) => {
+      const key = cleanText(rawKey, 120);
+      if (!key) return;
+      const normalizedKey = key.toLowerCase();
+      if (AUDIT_REDACTED_KEYS.has(normalizedKey)) {
+        out[key] = '[REDACTED]';
+        return;
+      }
+      out[key] = toAuditSafeValue(rawValue, depth + 1);
+    });
+    return out;
+  }
+
+  return null;
+}
+
+async function writeAuditLog({
+  req,
+  action,
+  entityType,
+  entityId = null,
+  before = null,
+  after = null,
+  metadata = null,
+  client = pool
+}) {
+  const normalizedAction = cleanText(action, 120).toLowerCase();
+  const normalizedEntityType = cleanText(entityType, 80).toLowerCase();
+  if (!normalizedAction || !normalizedEntityType) return;
+
+  const actorId = Number(req?.auth?.id);
+  const actorUserId = Number.isInteger(actorId) && actorId > 0 ? actorId : null;
+  const actorUsername = cleanText(req?.auth?.username, 120).toLowerCase() || null;
+  const requestId = cleanText(req?.requestId || req?.headers?.['x-request-id'], 120) || null;
+  const routePath = cleanText(
+    `${req?.baseUrl || ''}${req?.route?.path || req?.path || req?.originalUrl || ''}`,
+    200
+  ) || null;
+  const beforeSafe = toAuditSafeValue(before);
+  const afterSafe = toAuditSafeValue(after);
+  const metadataSafe = toAuditSafeValue(metadata);
+
+  const values = [
+    actorUserId,
+    actorUsername,
+    normalizedAction,
+    normalizedEntityType,
+    normalizeAuditEntityId(entityId),
+    requestId,
+    getRequestIp(req),
+    cleanText(req?.method, 10) || null,
+    routePath,
+    beforeSafe === null ? null : JSON.stringify(beforeSafe),
+    afterSafe === null ? null : JSON.stringify(afterSafe),
+    metadataSafe === null ? null : JSON.stringify(metadataSafe)
+  ];
+
+  try {
+    await client.query(
+      `INSERT INTO audit_log (
+         actor_user_id, actor_username, action, entity_type, entity_id, request_id,
+         ip_address, http_method, route_path, before_data, after_data, metadata
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb)`,
+      values
+    );
+  } catch (error) {
+    console.error('Error al registrar audit_log:', error);
+  }
 }
 
 function mapAuthUserForClient(user) {
@@ -966,6 +1165,364 @@ function parsePositiveInt(value, fallback, min = 1, max = 500) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function parseNonNegativeInt(value, fallback = 0, max = 50000) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.min(max, parsed);
+}
+
+function normalizeAuditDateFilter(value, fieldName) {
+  const raw = cleanText(value, 60);
+  if (!raw) return { ok: true, value: null, isDateOnly: false };
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { ok: true, value: raw, isDateOnly: true };
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return { ok: false, message: `${fieldName} es invalido. Usa YYYY-MM-DD o ISO datetime.` };
+  }
+
+  return { ok: true, value: parsed.toISOString(), isDateOnly: false };
+}
+
+function buildAuditFiltersFromQuery(query = {}) {
+  const fromFilter = normalizeAuditDateFilter(query.from, 'from');
+  if (!fromFilter.ok) return fromFilter;
+  const toFilter = normalizeAuditDateFilter(query.to, 'to');
+  if (!toFilter.ok) return toFilter;
+
+  const actorUsername = cleanText(query.actor || query.actor_username, 120).toLowerCase() || null;
+  const action = cleanText(query.action, 120).toLowerCase() || null;
+  const entityType = cleanText(query.entityType || query.entity_type, 80).toLowerCase() || null;
+  const entityId = cleanText(query.entityId || query.entity_id, 120) || null;
+  const requestId = cleanText(query.requestId || query.request_id, 120) || null;
+
+  return {
+    ok: true,
+    value: {
+      from: fromFilter,
+      to: toFilter,
+      actorUsername,
+      action,
+      entityType,
+      entityId,
+      requestId
+    }
+  };
+}
+
+function buildAuditWhereClause(filters) {
+  const conditions = [];
+  const params = [];
+  const pushParam = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  if (filters?.from?.value) {
+    if (filters.from.isDateOnly) {
+      const token = pushParam(filters.from.value);
+      conditions.push(`created_at >= ${token}::date`);
+    } else {
+      const token = pushParam(filters.from.value);
+      conditions.push(`created_at >= ${token}::timestamptz`);
+    }
+  }
+
+  if (filters?.to?.value) {
+    if (filters.to.isDateOnly) {
+      const token = pushParam(filters.to.value);
+      conditions.push(`created_at < (${token}::date + INTERVAL '1 day')`);
+    } else {
+      const token = pushParam(filters.to.value);
+      conditions.push(`created_at <= ${token}::timestamptz`);
+    }
+  }
+
+  if (filters?.actorUsername) {
+    const token = pushParam(filters.actorUsername);
+    conditions.push(`lower(coalesce(actor_username, '')) = ${token}`);
+  }
+
+  if (filters?.action) {
+    const token = pushParam(filters.action);
+    conditions.push(`action = ${token}`);
+  }
+
+  if (filters?.entityType) {
+    const token = pushParam(filters.entityType);
+    conditions.push(`entity_type = ${token}`);
+  }
+
+  if (filters?.entityId) {
+    const token = pushParam(filters.entityId);
+    conditions.push(`entity_id = ${token}`);
+  }
+
+  if (filters?.requestId) {
+    const token = pushParam(filters.requestId);
+    conditions.push(`request_id = ${token}`);
+  }
+
+  return {
+    whereSql: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+    params
+  };
+}
+
+function toCsvCell(value) {
+  if (value === undefined || value === null) return '';
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  const flat = String(text).replace(/\r?\n/g, ' ');
+  if (/[",\n]/.test(flat)) {
+    return `"${flat.replace(/"/g, '""')}"`;
+  }
+  return flat;
+}
+
+function buildAuditCsv(rows) {
+  const headers = [
+    'id',
+    'created_at',
+    'actor_user_id',
+    'actor_username',
+    'action',
+    'entity_type',
+    'entity_id',
+    'request_id',
+    'ip_address',
+    'http_method',
+    'route_path',
+    'before_data',
+    'after_data',
+    'metadata'
+  ];
+
+  const lines = [headers.join(',')];
+  rows.forEach((row) => {
+    const line = headers.map((header) => toCsvCell(row?.[header])).join(',');
+    lines.push(line);
+  });
+  return lines.join('\n');
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeAuditComparableValue(value) {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? Number(value) : null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'bigint') return String(value);
+  return JSON.stringify(value);
+}
+
+function auditValuesDiffer(beforeValue, afterValue) {
+  return normalizeAuditComparableValue(beforeValue) !== normalizeAuditComparableValue(afterValue);
+}
+
+function buildLeadAuditDiffEntries(beforeData, afterData) {
+  if (!isPlainObject(beforeData) || !isPlainObject(afterData)) return [];
+  const keys = new Set([
+    ...Object.keys(beforeData || {}),
+    ...Object.keys(afterData || {})
+  ]);
+
+  const changes = [];
+  keys.forEach((rawKey) => {
+    const field = cleanText(rawKey, 120).toLowerCase();
+    if (!field) return;
+    if (LEAD_AUDIT_IGNORED_DIFF_FIELDS.has(field)) return;
+    const beforeValue = Object.prototype.hasOwnProperty.call(beforeData, rawKey)
+      ? beforeData[rawKey]
+      : beforeData[field];
+    const afterValue = Object.prototype.hasOwnProperty.call(afterData, rawKey)
+      ? afterData[rawKey]
+      : afterData[field];
+    if (!auditValuesDiffer(beforeValue, afterValue)) return;
+    changes.push({
+      field,
+      before: beforeValue ?? null,
+      after: afterValue ?? null,
+      undoable: LEAD_AUDIT_UNDOABLE_COLUMNS.has(field) && beforeValue !== '[REDACTED]'
+    });
+  });
+
+  changes.sort((a, b) => a.field.localeCompare(b.field, 'es', { sensitivity: 'base' }));
+  return changes;
+}
+
+function getUndoableLeadFieldsFromAudit(beforeData, afterData) {
+  return buildLeadAuditDiffEntries(beforeData, afterData)
+    .filter((entry) => entry.undoable)
+    .map((entry) => entry.field);
+}
+
+function buildLeadUndoChangesFromAudit(beforeData, afterData) {
+  const changes = {};
+  buildLeadAuditDiffEntries(beforeData, afterData)
+    .filter((entry) => entry.undoable)
+    .forEach((entry) => {
+      changes[entry.field] = entry.before ?? null;
+    });
+  return changes;
+}
+
+function mapLeadAuditLogRow(row) {
+  const beforeData = isPlainObject(row?.before_data) ? row.before_data : null;
+  const afterData = isPlainObject(row?.after_data) ? row.after_data : null;
+  const changedFields = buildLeadAuditDiffEntries(beforeData, afterData);
+  const undoableFields = changedFields.filter((entry) => entry.undoable).map((entry) => entry.field);
+  const canUndo = row?.action === 'lead.update' && undoableFields.length > 0;
+
+  return {
+    id: Number(row?.id || 0),
+    action: cleanText(row?.action, 120).toLowerCase(),
+    entityType: cleanText(row?.entity_type, 80).toLowerCase(),
+    entityId: cleanText(row?.entity_id, 120) || null,
+    actorUserId: Number(row?.actor_user_id || 0) || null,
+    actorUsername: cleanText(row?.actor_username, 120) || null,
+    requestId: cleanText(row?.request_id, 120) || null,
+    ipAddress: cleanText(row?.ip_address, 80) || null,
+    httpMethod: cleanText(row?.http_method, 10) || null,
+    routePath: cleanText(row?.route_path, 200) || null,
+    before: beforeData,
+    after: afterData,
+    metadata: isPlainObject(row?.metadata) ? row.metadata : null,
+    createdAt: row?.created_at || null,
+    changedFields,
+    undoableFields,
+    canUndo
+  };
+}
+
+function normalizeLeadAuditFieldList(fields = []) {
+  if (!Array.isArray(fields)) return [];
+  return fields
+    .map((field) => cleanText(field, 120).toLowerCase())
+    .filter(Boolean);
+}
+
+function isPaymentAuditFieldGroup(fields = []) {
+  const normalized = normalizeLeadAuditFieldList(fields);
+  if (!normalized.length) return false;
+  return normalized.every((field) => LEAD_AUDIT_PAYMENT_FIELDS.has(field));
+}
+
+async function writeOrMergeLeadPaymentAuditLog({
+  req,
+  entityId,
+  before,
+  after,
+  changedFields,
+  client = pool
+}) {
+  const normalizedChangedFields = normalizeLeadAuditFieldList(changedFields);
+  if (!isPaymentAuditFieldGroup(normalizedChangedFields)) {
+    return false;
+  }
+
+  const normalizedEntityId = normalizeAuditEntityId(entityId);
+  if (!normalizedEntityId) return false;
+
+  const actorId = Number(req?.auth?.id);
+  const actorUserId = Number.isInteger(actorId) && actorId > 0 ? actorId : null;
+  const actorUsername = cleanText(req?.auth?.username, 120).toLowerCase() || null;
+
+  try {
+    const { rows } = await client.query(
+      `SELECT id, before_data, after_data
+       FROM audit_log
+       WHERE action = 'lead.update'
+         AND entity_type = 'lead'
+         AND entity_id = $1
+         AND (
+           ($2::bigint IS NOT NULL AND actor_user_id = $2)
+           OR ($2::bigint IS NULL AND $3::text IS NOT NULL AND lower(actor_username) = lower($3))
+         )
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [normalizedEntityId, actorUserId, actorUsername]
+    );
+
+    const lastEntry = rows[0] || null;
+    const lastBefore = isPlainObject(lastEntry?.before_data) ? lastEntry.before_data : null;
+    const lastAfter = isPlainObject(lastEntry?.after_data) ? lastEntry.after_data : null;
+    const lastFields = buildLeadAuditDiffEntries(lastBefore, lastAfter).map((entry) => entry.field);
+    const canMergeWithLast = Boolean(lastEntry?.id) && isPaymentAuditFieldGroup(lastFields);
+
+    if (canMergeWithLast) {
+      const mergedBefore = lastBefore || before;
+      const mergedAfter = after;
+      const mergedFields = buildLeadAuditDiffEntries(mergedBefore, mergedAfter)
+        .map((entry) => entry.field)
+        .filter((field) => LEAD_AUDIT_PAYMENT_FIELDS.has(field));
+
+      if (!mergedFields.length) {
+        await client.query('DELETE FROM audit_log WHERE id = $1', [Number(lastEntry.id)]);
+        return true;
+      }
+
+      const routePath = cleanText(
+        `${req?.baseUrl || ''}${req?.route?.path || req?.path || req?.originalUrl || ''}`,
+        200
+      ) || null;
+      const metadataSafe = toAuditSafeValue({
+        changedFields: mergedFields,
+        mergeMode: 'same_user_payment_overwrite'
+      });
+
+      await client.query(
+        `UPDATE audit_log
+         SET request_id = $1,
+             ip_address = $2,
+             http_method = $3,
+             route_path = $4,
+             before_data = $5::jsonb,
+             after_data = $6::jsonb,
+             metadata = $7::jsonb,
+             created_at = CURRENT_TIMESTAMP
+         WHERE id = $8`,
+        [
+          cleanText(req?.requestId || req?.headers?.['x-request-id'], 120) || null,
+          getRequestIp(req),
+          cleanText(req?.method, 10) || null,
+          routePath,
+          JSON.stringify(toAuditSafeValue(mergedBefore)),
+          JSON.stringify(toAuditSafeValue(mergedAfter)),
+          metadataSafe === null ? null : JSON.stringify(metadataSafe),
+          Number(lastEntry.id)
+        ]
+      );
+
+      return true;
+    }
+  } catch (error) {
+    console.error('Error al consolidar auditoria de pagos:', error);
+  }
+
+  await writeAuditLog({
+    req,
+    action: 'lead.update',
+    entityType: 'lead',
+    entityId,
+    before,
+    after,
+    metadata: {
+      changedFields: normalizedChangedFields
+    },
+    client
+  });
+
+  return true;
+}
+
 function getEmailAccessContext(req) {
   if (req.auth?.username) {
     const username = cleanText(req.auth.username, 120).toLowerCase();
@@ -1143,7 +1700,7 @@ function normalizeStateCode(value) {
     return { ok: true, value: match[1] };
   }
 
-  return { ok: false, message: 'state/stateCode debe ser un estado valido de USA (ej: CA).' };
+  return { ok: false, message: 'state/stateCode debe ser un estado valido (ej: CA).' };
 }
 
 function normalizeZipCode(value, fieldName = 'zipCode') {
@@ -1983,14 +2540,29 @@ function normalizeAiMonthsReviewed(value) {
   return Math.min(...candidates);
 }
 
+function cleanCreditorNameFromAddress(name) {
+  if (!name) return name;
+  let cleaned = name;
+  // Remover "CIUDAD,ESTADO ZIP" al inicio
+  cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
+  // Remover PO BOX
+  cleaned = cleaned.replace(/^P\.?O\.?\s*BOX\s+\d+\s*/i, '');
+  // Remover dirección con calle al inicio
+  cleaned = cleaned.replace(/^\d+\s+[A-Z\s]+(ST|AVE|BLVD|DR|RD|LN|CT|WAY)\s*/i, '');
+  // Remover ZIP codes sueltos
+  cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();
+  return cleaned || name;
+}
+
 function normalizeAiCreditorEntry(entry, sourceReport) {
   if (!entry || typeof entry !== 'object') return null;
 
-  const creditorName = toNullableText(
+  let creditorName = toNullableText(
     pickFirstDefined(entry, ['creditorName', 'creditor', 'name', 'creditor_name']),
     180
   );
   if (!creditorName) return null;
+  creditorName = cleanCreditorNameFromAddress(creditorName);
 
   const debtAmount = normalizeAiMoneyValue(
     pickFirstDefined(entry, ['debtAmount', 'latestDebt', 'recentDebt', 'balance', 'debt_amount'])
@@ -2026,6 +2598,7 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
     '',
     'Reglas:',
     '- No inventes datos. Si falta algo usa null o "".',
+    '- creditorName = SOLO el nombre del acreedor/banco/empresa (ej: "TBOM/MILESTONE", "CAPITAL ONE", "JPMCB CARD"). NUNCA incluir direcciones, ciudades, estados, ZIP codes ni PO BOX en el nombre.',
     '- debtAmount = deuda mas reciente/actual para esa cuenta (current balance, unpaid balance, amount due o equivalente).',
     '- monthsReviewed: si hay multiples valores posibles para la misma cuenta, usar SIEMPRE el menor entero.',
     '- Debe salir una fila por cuenta detectada.',
@@ -2440,7 +3013,7 @@ app.get('/api/zipcode/:zip', async (req, res) => {
     zipCode,
     city,
     stateCode,
-    stateType: GREEN_STATES.includes(stateCode) ? 'Green' : 'Red'
+    stateType: getStateTypeFromCode(stateCode)
   });
 });
 
@@ -3296,6 +3869,18 @@ app.post('/api/admin/users', requirePermission('users.manage', 'No tienes permis
       ]
     );
 
+    await writeAuditLog({
+      req,
+      action: 'admin.user.create',
+      entityType: 'app_user',
+      entityId: rows[0]?.id,
+      before: null,
+      after: rows[0],
+      metadata: {
+        createdByRole: req.auth?.role || null
+      }
+    });
+
     return res.status(201).json({
       ok: true,
       user: rows[0],
@@ -3318,7 +3903,7 @@ app.patch('/api/admin/users/:id', requirePermission('users.manage', 'No tienes p
 
   try {
     const { rows: targetRows } = await pool.query(
-      `SELECT id, username, role, is_active
+      `SELECT id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at
        FROM app_users
        WHERE id = $1
        LIMIT 1`,
@@ -3330,6 +3915,7 @@ app.patch('/api/admin/users/:id', requirePermission('users.manage', 'No tienes p
     }
 
     const targetUser = targetRows[0];
+    const beforeUser = targetRows[0];
     const updates = [];
     const values = [];
 
@@ -3390,6 +3976,10 @@ app.patch('/api/admin/users/:id', requirePermission('users.manage', 'No tienes p
       return res.status(400).json({ message: 'No hay campos validos para actualizar.' });
     }
 
+    const changedFields = updates
+      .map((entry) => cleanText(String(entry).split('=')[0], 80).toLowerCase())
+      .filter(Boolean);
+
     values.push(userId);
     const { rows } = await pool.query(
       `UPDATE app_users
@@ -3398,6 +3988,16 @@ app.patch('/api/admin/users/:id', requirePermission('users.manage', 'No tienes p
        RETURNING id, username, display_name, role, email, is_active, created_at, updated_at, last_login_at`,
       values
     );
+
+    await writeAuditLog({
+      req,
+      action: 'admin.user.update',
+      entityType: 'app_user',
+      entityId: rows[0]?.id || userId,
+      before: beforeUser,
+      after: rows[0],
+      metadata: { changedFields }
+    });
 
     return res.json({
       ok: true,
@@ -3488,6 +4088,9 @@ app.patch('/api/admin/users/:id/permissions', requirePermission('users.permissio
       return res.status(404).json({ message: 'Usuario no encontrado.' });
     }
 
+    const targetUser = targetRows[0];
+    const beforePermissionRows = await buildPermissionRowsForUser(targetUser.id, targetUser.role, client);
+
     if (shouldReset) {
       await client.query(
         `DELETE FROM user_permissions
@@ -3513,8 +4116,21 @@ app.patch('/api/admin/users/:id/permissions', requirePermission('users.permissio
       );
     }
 
-    const targetUser = targetRows[0];
     const permissionRows = await buildPermissionRowsForUser(targetUser.id, targetUser.role, client);
+    await writeAuditLog({
+      req,
+      action: 'admin.user.permissions.update',
+      entityType: 'app_user',
+      entityId: targetUser.id,
+      before: beforePermissionRows,
+      after: permissionRows,
+      metadata: {
+        permissionKey,
+        resetToRoleDefault: shouldReset,
+        actorUserId
+      },
+      client
+    });
 
     await client.query('COMMIT');
     return res.json({
@@ -3529,6 +4145,112 @@ app.patch('/api/admin/users/:id/permissions', requirePermission('users.permissio
     return res.status(500).json({ message: 'No se pudo actualizar el permiso.' });
   } finally {
     client.release();
+  }
+});
+
+app.get('/api/admin/audit-logs', requirePermission('audit.view', 'No tienes permiso para consultar auditoria.'), async (req, res) => {
+  const filtersResult = buildAuditFiltersFromQuery(req.query || {});
+  if (!filtersResult.ok) {
+    return res.status(400).json({ message: filtersResult.message });
+  }
+
+  const limit = parsePositiveInt(req.query.limit, 100, 1, 500);
+  const offset = parseNonNegativeInt(req.query.offset, 0, 50000);
+  const { whereSql, params } = buildAuditWhereClause(filtersResult.value);
+
+  try {
+    const queryParams = [...params, limit, offset];
+    const limitToken = `$${params.length + 1}`;
+    const offsetToken = `$${params.length + 2}`;
+
+    const { rows } = await pool.query(
+      `SELECT
+         id,
+         actor_user_id,
+         actor_username,
+         action,
+         entity_type,
+         entity_id,
+         request_id,
+         ip_address,
+         http_method,
+         route_path,
+         before_data,
+         after_data,
+         metadata,
+         created_at
+       FROM audit_log
+       ${whereSql}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ${limitToken}
+       OFFSET ${offsetToken}`,
+      queryParams
+    );
+
+    const { rows: totalRows } = await pool.query(
+      `SELECT COUNT(*)::bigint AS total
+       FROM audit_log
+       ${whereSql}`,
+      params
+    );
+
+    const total = Number(totalRows[0]?.total || 0);
+    return res.json({
+      logs: rows,
+      pagination: { limit, offset, total }
+    });
+  } catch (error) {
+    console.error('Error al consultar audit_log:', error);
+    return res.status(500).json({ message: 'No se pudo consultar la auditoria.' });
+  }
+});
+
+app.get('/api/admin/audit-logs/export', requirePermission('audit.view', 'No tienes permiso para exportar auditoria.'), async (req, res) => {
+  const filtersResult = buildAuditFiltersFromQuery(req.query || {});
+  if (!filtersResult.ok) {
+    return res.status(400).json({ message: filtersResult.message });
+  }
+
+  const exportLimit = parsePositiveInt(req.query.limit, 1000, 1, 5000);
+  const format = cleanText(req.query.format, 12).toLowerCase() || 'csv';
+  const { whereSql, params } = buildAuditWhereClause(filtersResult.value);
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         id,
+         created_at,
+         actor_user_id,
+         actor_username,
+         action,
+         entity_type,
+         entity_id,
+         request_id,
+         ip_address,
+         http_method,
+         route_path,
+         before_data,
+         after_data,
+         metadata
+       FROM audit_log
+       ${whereSql}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $${params.length + 1}`,
+      [...params, exportLimit]
+    );
+
+    if (format === 'json') {
+      return res.json({ logs: rows, count: rows.length });
+    }
+
+    const csv = buildAuditCsv(rows);
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=\"audit-log-${dateLabel}.csv\"`);
+    return res.send(csv);
+  } catch (error) {
+    console.error('Error al exportar audit_log:', error);
+    return res.status(500).json({ message: 'No se pudo exportar la auditoria.' });
   }
 });
 
@@ -3747,6 +4469,19 @@ app.post('/api/emails/send', async (req, res) => {
       ]
     );
 
+    await writeAuditLog({
+      req,
+      action: 'email.send',
+      entityType: 'sent_email',
+      entityId: rows[0]?.id,
+      before: null,
+      after: rows[0],
+      metadata: {
+        leadId,
+        status
+      }
+    });
+
     return res.status(201).json({
       ok: true,
       email: rows[0],
@@ -3777,13 +4512,37 @@ app.delete('/api/emails/:id', async (req, res) => {
     const { rows } = await pool.query(
       `DELETE FROM sent_emails
        WHERE id = $1
-       RETURNING id`,
+       RETURNING
+         id,
+         lead_id,
+         author_username,
+         from_email,
+         to_email,
+         cc_emails,
+         subject,
+         body_preview,
+         provider,
+         provider_message_id,
+         status,
+         error_message,
+         created_at,
+         sent_at`,
       [emailId]
     );
 
     if (!rows.length) {
       return res.status(404).json({ message: 'Correo no encontrado.' });
     }
+
+    await writeAuditLog({
+      req,
+      action: 'email.delete',
+      entityType: 'sent_email',
+      entityId: rows[0]?.id,
+      before: rows[0],
+      after: null,
+      metadata: { deletedCount: 1 }
+    });
 
     return res.json({ ok: true, deletedIds: [Number(rows[0].id)] });
   } catch (error) {
@@ -3810,6 +4569,27 @@ app.post('/api/emails/bulk-delete', async (req, res) => {
 
   try {
     await ensureSentEmailsSchema();
+    const { rows: beforeRows } = await pool.query(
+      `SELECT
+         id,
+         lead_id,
+         author_username,
+         from_email,
+         to_email,
+         cc_emails,
+         subject,
+         body_preview,
+         provider,
+         provider_message_id,
+         status,
+         error_message,
+         created_at,
+         sent_at
+       FROM sent_emails
+       WHERE id = ANY($1::bigint[])`,
+      [ids]
+    );
+
     const { rows } = await pool.query(
       `DELETE FROM sent_emails
        WHERE id = ANY($1::bigint[])
@@ -3818,6 +4598,19 @@ app.post('/api/emails/bulk-delete', async (req, res) => {
     );
 
     const deletedIds = rows.map((row) => Number(row.id)).filter((value) => Number.isInteger(value));
+    await writeAuditLog({
+      req,
+      action: 'email.bulk_delete',
+      entityType: 'sent_email',
+      entityId: null,
+      before: beforeRows,
+      after: { deletedIds },
+      metadata: {
+        requestedIds: ids,
+        deletedCount: deletedIds.length
+      }
+    });
+
     return res.json({
       ok: true,
       deletedCount: deletedIds.length,
@@ -3859,7 +4652,7 @@ app.get('/api/leads', async (req, res) => {
 
     const leadsWithStateType = rows.map((lead) => ({
       ...lead,
-      state_type: GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red'
+      state_type: getStateTypeFromCode(lead.state_code)
     }));
 
     res.json({ leads: leadsWithStateType });
@@ -3924,7 +4717,7 @@ app.get('/api/leads/duplicates', async (req, res) => {
 
     const matches = rows.map((lead) => ({
       ...lead,
-      state_type: GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red'
+      state_type: getStateTypeFromCode(lead.state_code)
     }));
 
     res.json({
@@ -3960,8 +4753,7 @@ app.post('/api/leads', async (req, res) => {
     return res.status(400).json({ message: normalizedRelatedLeadId.message });
   }
   const relatedLeadId = normalizedRelatedLeadId.value;
-  const isGreenState = GREEN_STATES.includes(stateCode?.toUpperCase?.());
-  const calcLegalPlanEnabled = isGreenState;
+  const calcLegalPlanEnabled = getStateTypeFromCode(stateCode) === 'Green';
   const calcProgramFeePercent = getProgramFeePercentForState(stateCode);
 
   if (!fullName || !phone) {
@@ -4019,12 +4811,260 @@ app.post('/api/leads', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = getStateTypeFromCode(lead.state_code);
 
+    await writeAuditLog({
+      req,
+      action: 'lead.create',
+      entityType: 'lead',
+      entityId: lead.id,
+      before: null,
+      after: lead,
+      metadata: {
+        caseId: lead.case_id,
+        assignedTo: lead.assigned_to || null,
+        isTest: lead.is_test === true
+      }
+    });
+
+    lead.state_type = getStateTypeFromCode(lead.state_code);
     res.status(201).json({ lead });
   } catch (error) {
     console.error('Error al crear lead:', error.message);
     res.status(500).json({ message: 'No se pudo crear el lead.', detail: error.message });
+  }
+});
+
+app.get('/api/leads/:id/audit-history', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'audit.view')) {
+    return res.status(403).json({ message: 'No tienes permisos para consultar historial del lead.' });
+  }
+
+  const limit = parsePositiveInt(req.query.limit, 80, 1, 300);
+  try {
+    const { rows: leadRows } = await pool.query(
+      `SELECT id, assigned_to
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!leadRows.length) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const lead = leadRows[0];
+    if (!canAccessAssignedLead(req.auth, lead.assigned_to)) {
+      return res.status(403).json({ message: 'No tienes permisos para ver historial de este lead.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         id,
+         actor_user_id,
+         actor_username,
+         action,
+         entity_type,
+         entity_id,
+         request_id,
+         ip_address,
+         http_method,
+         route_path,
+         before_data,
+         after_data,
+         metadata,
+         created_at
+       FROM audit_log
+       WHERE entity_type = 'lead'
+         AND entity_id = $1
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [String(leadId), limit]
+    );
+
+    const history = rows.map(mapLeadAuditLogRow);
+    return res.json({
+      leadId,
+      count: history.length,
+      history
+    });
+  } catch (error) {
+    console.error('Error al consultar historial de auditoria del lead:', error);
+    return res.status(500).json({ message: 'No se pudo consultar historial de auditoria.' });
+  }
+});
+
+app.post('/api/leads/:id/audit-history/:auditId/undo', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  const auditId = parsePositiveInteger(req.params.auditId);
+  if (!leadId || !auditId) {
+    return res.status(400).json({ message: 'ID de lead o auditId invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'audit.view')) {
+    return res.status(403).json({ message: 'No tienes permisos para deshacer cambios de leads.' });
+  }
+  if (!hasAuthPermission(req.auth, 'leads.edit')) {
+    return res.status(403).json({ message: 'No tienes permisos para deshacer cambios de leads.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: leadRows } = await client.query(
+      `SELECT ${LEAD_SELECT_COLUMNS}
+       FROM leads
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [leadId]
+    );
+    if (!leadRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const currentLead = leadRows[0];
+    if (!canAccessAssignedLead(req.auth, currentLead.assigned_to)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'No tienes permisos para deshacer cambios en este lead.' });
+    }
+
+    const { rows: auditRows } = await client.query(
+      `SELECT
+         id,
+         actor_user_id,
+         actor_username,
+         action,
+         entity_type,
+         entity_id,
+         request_id,
+         ip_address,
+         http_method,
+         route_path,
+         before_data,
+         after_data,
+         metadata,
+         created_at
+       FROM audit_log
+       WHERE id = $1
+         AND entity_type = 'lead'
+         AND entity_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [auditId, String(leadId)]
+    );
+    if (!auditRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Registro de auditoria no encontrado para este lead.' });
+    }
+
+    const auditEntry = mapLeadAuditLogRow(auditRows[0]);
+    if (!auditEntry.canUndo) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Este registro de auditoria no se puede deshacer.' });
+    }
+
+    const undoChanges = buildLeadUndoChangesFromAudit(auditEntry.before, auditEntry.after);
+    if (Object.prototype.hasOwnProperty.call(undoChanges, 'assigned_to')
+      && !canSetLeadAssignee(req.auth, undoChanges.assigned_to)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'No puedes reasignar este lead al estado anterior.' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(undoChanges, 'related_lead_id')) {
+      const relatedLeadId = undoChanges.related_lead_id;
+      if (relatedLeadId !== null && Number(relatedLeadId) === Number(leadId)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'No se puede restaurar una relacion invalida del lead consigo mismo.' });
+      }
+      if (relatedLeadId !== null) {
+        const { rows: relatedRows } = await client.query(
+          'SELECT id FROM leads WHERE id = $1 LIMIT 1',
+          [relatedLeadId]
+        );
+        if (!relatedRows.length) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'No se puede restaurar la relacion porque el lead relacionado ya no existe.' });
+        }
+      }
+    }
+
+    const effectiveStateCode = Object.prototype.hasOwnProperty.call(undoChanges, 'state_code')
+      ? undoChanges.state_code
+      : currentLead.state_code;
+    undoChanges.calc_program_fee_percent = getProgramFeePercentForState(effectiveStateCode);
+
+    const entries = Object.entries(undoChanges).filter(([column]) => LEAD_AUDIT_UNDOABLE_COLUMNS.has(column));
+    if (!entries.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No hay campos deshacibles en este registro.' });
+    }
+
+    const updateFields = [];
+    const values = [];
+    entries.forEach(([column, value], index) => {
+      updateFields.push(`${column} = $${index + 1}`);
+      values.push(value);
+    });
+    values.push(leadId);
+
+    const { rows: updatedRows } = await client.query(
+      `UPDATE leads
+       SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}
+       RETURNING ${LEAD_SELECT_COLUMNS}`,
+      values
+    );
+
+    if (!updatedRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'No se pudo deshacer el cambio del lead.' });
+    }
+
+    const updatedLead = updatedRows[0];
+
+    await writeAuditLog({
+      req,
+      action: 'lead.undo',
+      entityType: 'lead',
+      entityId: leadId,
+      before: currentLead,
+      after: updatedLead,
+      metadata: {
+        sourceAuditLogId: auditId,
+        sourceAction: auditEntry.action,
+        undoneFields: entries.map(([column]) => column)
+      },
+      client
+    });
+
+    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
+    await client.query('COMMIT');
+    return res.json({
+      ok: true,
+      lead: updatedLead,
+      sourceAuditLogId: auditId,
+      undoneFields: entries.map(([column]) => column),
+      message: 'Cambio deshecho correctamente.'
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_rollbackError) {
+      // ignore rollback secondary errors
+    }
+    console.error('Error al deshacer cambio de lead desde auditoria:', error);
+    return res.status(500).json({ message: 'No se pudo deshacer el cambio del lead.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -4044,7 +5084,7 @@ app.get('/api/leads/:id', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = GREEN_STATES.includes(lead.state_code?.toUpperCase()) ? 'Green' : 'Red';
+    lead.state_type = getStateTypeFromCode(lead.state_code);
 
     res.json({ lead });
   } catch (error) {
@@ -4081,18 +5121,21 @@ app.patch('/api/leads/:id', async (req, res) => {
   }
 
   try {
+    const { rows: existingLeadRows } = await pool.query(
+      `SELECT ${LEAD_SELECT_COLUMNS}
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (existingLeadRows.length === 0) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const beforeLead = existingLeadRows[0];
     let effectiveStateCode = changes.state_code;
     if (effectiveStateCode === undefined) {
-      const { rows: existingLeadRows } = await pool.query(
-        'SELECT state_code FROM leads WHERE id = $1 LIMIT 1',
-        [leadId]
-      );
-
-      if (existingLeadRows.length === 0) {
-        return res.status(404).json({ message: 'Lead no encontrado.' });
-      }
-
-      effectiveStateCode = existingLeadRows[0].state_code;
+      effectiveStateCode = beforeLead.state_code;
     }
 
     // Regla fija de calculator: Green=25%, Red=29.5%
@@ -4101,7 +5144,7 @@ app.patch('/api/leads/:id', async (req, res) => {
 
     if (Object.prototype.hasOwnProperty.call(changes, 'related_lead_id')) {
       const nextRelatedLeadId = changes.related_lead_id;
-      const normalizedLeadId = Number(leadId);
+      const normalizedLeadId = Number(beforeLead.id);
 
       if (nextRelatedLeadId !== null && nextRelatedLeadId === normalizedLeadId) {
         return res.status(400).json({ message: 'Un lead no puede relacionarse consigo mismo.' });
@@ -4141,12 +5184,38 @@ app.patch('/api/leads/:id', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = getStateTypeFromCode(lead.state_code);
 
     if (changes.assigned_to && lead.assigned_to) {
       await createLeadAssignmentNotification(lead.assigned_to, lead).catch(() => {});
     }
 
+    const auditDiffEntries = buildLeadAuditDiffEntries(beforeLead, lead);
+    const trackedFields = auditDiffEntries.map((entry) => entry.field);
+    if (trackedFields.length > 0) {
+      const handledByPaymentMerge = await writeOrMergeLeadPaymentAuditLog({
+        req,
+        entityId: lead.id,
+        before: beforeLead,
+        after: lead,
+        changedFields: trackedFields
+      });
+
+      if (!handledByPaymentMerge) {
+        await writeAuditLog({
+          req,
+          action: 'lead.update',
+          entityType: 'lead',
+          entityId: lead.id,
+          before: beforeLead,
+          after: lead,
+          metadata: {
+            changedFields: trackedFields
+          }
+        });
+      }
+    }
+
+    lead.state_type = getStateTypeFromCode(lead.state_code);
     res.json({ lead, message: 'Lead actualizado correctamente.' });
   } catch (error) {
     console.error('Error al actualizar lead:', error);
@@ -4397,6 +5466,20 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
     const updatedLead = updatedRows[0];
     updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
 
+    await writeAuditLog({
+      req,
+      action: 'callback.complete',
+      entityType: 'lead',
+      entityId: updatedLead.id,
+      before: lead,
+      after: updatedLead,
+      metadata: {
+        callbackDate,
+        completedAt: updatedLead.callback_completed_at || null
+      }
+    });
+
+    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
     return res.json({
       ok: true,
       lead: updatedLead,
@@ -4409,27 +5492,42 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
 });
 
 app.delete('/api/leads/:id', async (req, res) => {
-  const leadId = req.params.id;
+  const leadId = Number(req.params.id);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
 
   await hydrateAuthPermissions(req);
   if (!hasAuthPermission(req.auth, 'leads.delete')) {
     return res.status(403).json({ message: 'No tienes permisos para eliminar leads.' });
   }
 
+  const client = await pool.connect();
   try {
-    await pool.query('BEGIN');
+    await client.query('BEGIN');
 
-    const { rowCount } = await pool.query(
-      `DELETE FROM leads WHERE id = $1`,
+    const { rows: beforeRows } = await client.query(
+      `SELECT ${LEAD_SELECT_COLUMNS}
+       FROM leads
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
       [leadId]
     );
 
-    if (rowCount === 0) {
-      await pool.query('ROLLBACK');
+    if (beforeRows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Lead no encontrado.' });
     }
 
-    await pool.query(
+    const beforeLead = beforeRows[0];
+    await client.query(
+      `DELETE FROM leads
+       WHERE id = $1`,
+      [leadId]
+    );
+
+    const { rowCount: clearedRelatedLeadCount } = await client.query(
       `UPDATE leads
        SET related_lead_id = NULL,
            updated_at = CURRENT_TIMESTAMP
@@ -4437,16 +5535,29 @@ app.delete('/api/leads/:id', async (req, res) => {
       [leadId]
     );
 
-    await pool.query('COMMIT');
+    await writeAuditLog({
+      req,
+      action: 'lead.delete',
+      entityType: 'lead',
+      entityId: leadId,
+      before: beforeLead,
+      after: null,
+      metadata: { clearedRelatedLeadCount },
+      client
+    });
+
+    await client.query('COMMIT');
     res.json({ message: 'Lead eliminado correctamente.' });
   } catch (error) {
     try {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
     } catch (_rollbackError) {
       // ignore rollback secondary errors
     }
     console.error('Error al eliminar lead:', error);
     res.status(500).json({ message: 'Error al eliminar lead.' });
+  } finally {
+    client.release();
   }
 });
 

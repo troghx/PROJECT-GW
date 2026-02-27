@@ -795,9 +795,10 @@
             <section class="users-admin-block">
               <div class="users-admin-block-head">
                 <h4>
-                  Usuarios activos
+                  <span class="users-admin-active-label">Usuarios activos</span>
                   <span id="usersAdminActiveTotal" class="users-admin-total-badge">0</span>
                 </h4>
+                <div id="usersAdminCategoryRail" class="users-admin-category-rail" aria-label="Categorias de usuarios"></div>
                 <div class="users-admin-head-actions">
                   <button id="refreshUsersAdminBtn" class="users-admin-refresh-btn" type="button">Actualizar</button>
                   <button
@@ -862,7 +863,7 @@
 
     <script src="crm-helpers.js?v=20260216b"></script>
     <script src="app.js?v=20260226b"></script>
-    <script src="quick-actions.js?v=20260216c"></script>
+    <script src="quick-actions.js?v=20260226b"></script>
     <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
     <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
       <div class="notif-panel-header">

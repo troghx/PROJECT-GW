@@ -339,7 +339,8 @@
     }
 
     if (!/[a-zA-Z]/.test(name)) return false;
-    if (/^[\d\$\%\&\*]/.test(name)) return false;
+    if (/^[\$\%\&\*]/.test(name)) return false;
+    if (/^\d[\d\s,./-]*$/.test(name)) return false;
     if (/^\d+$/.test(name.replace(/\s/g, ''))) return false;
 
     return true;
@@ -397,6 +398,8 @@
     if (/^CAPITAL ONE AUTO(?:\s+FIN(?:AN)?)?$/i.test(normalized)) {
       return 'CAPITAL ONE AUTO FINAN';
     }
+
+    normalized = normalized.replace(/\bFINANCI$/i, 'FINANCIAL');
 
     return normalized;
   }
@@ -696,8 +699,22 @@
     return best;
   }
 
+  function cleanCreditorAddress(name) {
+    if (!name) return name;
+    let cleaned = name;
+    // Remover "CIUDAD,ESTADO ZIP" al inicio (ej: "COLUMBUS,OH43218 TBOM/MILESTONE")
+    cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
+    // Remover PO BOX
+    cleaned = cleaned.replace(/^P\.?O\.?\s*BOX\s+\d+\s*/i, '');
+    // Remover dirección con calle al inicio
+    cleaned = cleaned.replace(/^\d+\s+[A-Z\s]+(ST|AVE|BLVD|DR|RD|LN|CT|WAY)\s*/i, '');
+    // Remover ZIP codes sueltos
+    cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();
+    return cleaned.trim() || name;
+  }
+
   function finalizeCreditor(creditor) {
-    creditor.creditorName = creditor.creditorName.replace(/\s+/g, ' ').trim();
+    creditor.creditorName = cleanCreditorAddress(creditor.creditorName.replace(/\s+/g, ' ').trim());
 
     if (creditor.debtAmount === 0 && creditor.pastDue > 0) {
       creditor.debtAmount = creditor.pastDue;
@@ -720,7 +737,7 @@
       /^(?:cc|br|rf|vs|n\/a)(?:\s+(?:cc|br|rf|vs|n\/a))*$/i.test(value) ||
       /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b.*\d{4}/i.test(value) ||
       /(?:in good standing|voluntary surrender|bankruptcy|repossession|collection or charge off|you['’]re currently using|you['’]ve made|you have|hide details|days past due|no data available|credit score significantly|credit score|\blimit\b|account|balance|credit limit|highest balance|high balance|high credit|monthly payment|payment history|terms count|open date|last activity|report date|account summary|account details|current payment|month(?:'s|s)? reviewed|remarks|collection agency|creditor information|public records|inquiries|personal info|download pdf|bureau|overview)/i.test(value) ||
-      /(?:po box|\(\d{3}\)\s*\d{3}-\d{4}|,\s*[A-Z]{2}\b|\b(?:st|ave|rd|blvd|apt|suite|fl)\b\s*\d*)/i.test(value) ||
+      /(?:po box|p\.o\.\s*box|\(\d{3}\)\s*\d{3}-\d{4}|,\s*[A-Z]{2}\b|[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}|\b\d{5}(?:-\d{4})?\b|\b(?:st|ave|rd|blvd|apt|suite|fl|dr|ln|ct|way|pl|cir|hwy|pkwy|ste|unit)\b\s*\d*)/i.test(value) ||
       /^\$?[0-9,.\s-]+$/.test(value) ||
       value.includes('%')
     ) {
@@ -757,20 +774,54 @@
     const candidate = normalizeCreditorNameLine(candidateName);
     if (!candidate) return '';
 
+    const mergedCandidates = [candidate];
+    let previous = '';
+    let next = '';
+
+    for (let offset = 1; offset <= 4; offset += 1) {
+      const raw = String(lines[lineIndex - offset] || '').trim();
+      if (!raw || /\$/.test(raw)) continue;
+      const normalized = normalizeCreditorNameLine(raw);
+      if (!normalized) continue;
+      if (!isLikelyCreditorLine(normalized)) continue;
+      previous = normalized;
+      break;
+    }
+
+    for (let offset = 1; offset <= 4; offset += 1) {
+      const raw = String(lines[lineIndex + offset] || '').trim();
+      if (!raw || /\$/.test(raw)) continue;
+      const normalized = normalizeCreditorNameLine(raw);
+      if (!normalized) continue;
+      if (!isLikelyCreditorLine(normalized)) continue;
+      next = normalized;
+      break;
+    }
+
+    if (previous) {
+      const mergedPrev = normalizeCreditorNameLine(`${previous} ${candidate}`);
+      if (isValidCreditorName(mergedPrev) && mergedPrev.length <= 80) {
+        mergedCandidates.push(mergedPrev);
+      }
+    }
+
     const candidateWords = candidate.split(/\s+/).filter(Boolean).length;
-    const shouldTryMerge = candidateWords <= 2 || candidate.length <= 16;
-    if (!shouldTryMerge) return candidate;
+    const shouldTryNextMerge = candidateWords <= 3 || candidate.length <= 24 || /\bFINANCI(?:AL)?$/i.test(candidate);
+    if (shouldTryNextMerge && next) {
+      const mergedNext = normalizeCreditorNameLine(`${candidate} ${next}`);
+      if (isValidCreditorName(mergedNext) && mergedNext.length <= 80) {
+        mergedCandidates.push(mergedNext);
+      }
+    }
 
-    const previousRaw = String(lines[lineIndex - 1] || '').trim();
-    const previous = normalizeCreditorNameLine(previousRaw);
-    if (!previous) return candidate;
-    if (!isLikelyCreditorLine(previous)) return candidate;
-    if (/\$/.test(previousRaw)) return candidate;
+    mergedCandidates.sort((a, b) => {
+      const scoreA = scoreCreditorCandidate(a, a) + a.split(/\s+/).filter(Boolean).length * 0.2;
+      const scoreB = scoreCreditorCandidate(b, b) + b.split(/\s+/).filter(Boolean).length * 0.2;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return b.length - a.length;
+    });
 
-    const merged = normalizeCreditorNameLine(`${previous} ${candidate}`);
-    if (!isValidCreditorName(merged)) return candidate;
-    if (merged.length > 70) return candidate;
-    return merged;
+    return mergedCandidates[0] || candidate;
   }
 
   function findCreditorNameAround(lines, accountIndex) {
@@ -803,7 +854,7 @@
     for (let i = accountIndex + 1; i <= forwardEnd; i += 1) {
       const candidate = normalizeCreditorNameLine(lines[i]);
       if (!isLikelyCreditorLine(candidate)) continue;
-      return candidate;
+      return mergeCreditorNameFragments(lines, i, candidate);
     }
 
     return '';
@@ -1715,11 +1766,19 @@
       : '';
     const checkbox = `<button type="button" class="row-checkbox ${isIncluded ? 'is-checked' : ''}" data-id="${entry.id}" aria-label="${isActive ? 'Incluir deuda' : 'Cuenta coapp desactivada'}" aria-pressed="${isIncluded ? 'true' : 'false'}" ${isActive ? '' : 'disabled'}></button>`;
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}" ${isActive ? '' : 'disabled title="Cuenta coapp desactivada por toggle"'}>×</button>`;
+    const rawCreditorName = entry.creditor_name || entry.creditorName || '';
+    const truncatedCreditorName = escapeHtml(truncate(rawCreditorName || '-', 28));
+    const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
+      ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
+      : false;
+    const unacceptableFlagHtml = isUnacceptableCreditor
+      ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
+      : '';
     
     const cells = {
       checkbox: `<td class="col-checkbox">${checkbox}</td>`,
       num: `<td class="col-num">${index + 1}</td>`,
-      name: `<td class="col-name" title="${escapeHtml(entry.creditor_name || entry.creditorName || '')}"><span class="creditor-name">${escapeHtml(truncate(entry.creditor_name || entry.creditorName || '-', 28))}</span></td>`,
+      name: `<td class="col-name" title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${truncatedCreditorName}</span>${unacceptableFlagHtml}</span></td>`,
       debt: `<td class="col-debt"><span class="debt-cell-inline"><span class="debt-value">${formatCurrency(debtAmount)}</span>${debtShareHtml}</span></td>`,
       party: `<td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>`,
       account: `<td class="col-account">${entry.account_number || entry.accountNumber ? `<span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,

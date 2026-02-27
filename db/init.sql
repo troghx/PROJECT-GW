@@ -1471,6 +1471,123 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_active ON auth_sessions (user_id, revoked_at, refresh_token_expires_at DESC);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_last_seen ON auth_sessions (last_seen_at DESC);
 
+CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  actor_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL,
+  actor_username VARCHAR(120),
+  action VARCHAR(120) NOT NULL,
+  entity_type VARCHAR(80) NOT NULL,
+  entity_id VARCHAR(120),
+  request_id VARCHAR(120),
+  ip_address VARCHAR(80),
+  http_method VARCHAR(10),
+  route_path VARCHAR(200),
+  before_data JSONB,
+  after_data JSONB,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'actor_user_id'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN actor_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'actor_username'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN actor_username VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'action'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN action VARCHAR(120) NOT NULL DEFAULT 'unknown';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'entity_type'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN entity_type VARCHAR(80) NOT NULL DEFAULT 'unknown';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'entity_id'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN entity_id VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'request_id'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN request_id VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'ip_address'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN ip_address VARCHAR(80);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'http_method'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN http_method VARCHAR(10);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'route_path'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN route_path VARCHAR(200);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'before_data'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN before_data JSONB;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'after_data'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN after_data JSONB;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'metadata'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN metadata JSONB;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'audit_log' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE audit_log ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_user_id ON audit_log (actor_user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_request_id ON audit_log (request_id);
+
 CREATE TABLE IF NOT EXISTS permission_catalog (
   key VARCHAR(120) PRIMARY KEY,
   module VARCHAR(80) NOT NULL,
@@ -1599,7 +1716,8 @@ VALUES
   ('callbacks.view_all', 'operacion', 'Ver callbacks globales', 'Ver callbacks de todos los asesores.'),
   ('callbacks.complete_assigned', 'operacion', 'Completar callbacks asignados', 'Completar callbacks de leads asignados.'),
   ('files.manage', 'documentos', 'Gestionar archivos', 'Subir, consultar y eliminar archivos de leads.'),
-  ('tasks.manage', 'operacion', 'Gestionar tareas', 'Crear y actualizar tareas operativas.')
+  ('tasks.manage', 'operacion', 'Gestionar tareas', 'Crear y actualizar tareas operativas.'),
+  ('audit.view', 'auditoria', 'Ver auditoria', 'Consultar y exportar bitacora de auditoria.')
 ON CONFLICT (key) DO UPDATE
 SET module = EXCLUDED.module,
     label = EXCLUDED.label,
@@ -1624,6 +1742,7 @@ WITH matrix(role, permission_key, allowed) AS (
     ('admin', 'callbacks.complete_assigned', TRUE),
     ('admin', 'files.manage', TRUE),
     ('admin', 'tasks.manage', TRUE),
+    ('admin', 'audit.view', TRUE),
 
     ('supervisor', 'users.manage', FALSE),
     ('supervisor', 'users.permissions.manage', FALSE),
@@ -1641,6 +1760,7 @@ WITH matrix(role, permission_key, allowed) AS (
     ('supervisor', 'callbacks.complete_assigned', TRUE),
     ('supervisor', 'files.manage', TRUE),
     ('supervisor', 'tasks.manage', TRUE),
+    ('supervisor', 'audit.view', TRUE),
 
     ('seller', 'users.manage', FALSE),
     ('seller', 'users.permissions.manage', FALSE),
@@ -1657,7 +1777,8 @@ WITH matrix(role, permission_key, allowed) AS (
     ('seller', 'callbacks.view_all', FALSE),
     ('seller', 'callbacks.complete_assigned', TRUE),
     ('seller', 'files.manage', TRUE),
-    ('seller', 'tasks.manage', TRUE)
+    ('seller', 'tasks.manage', TRUE),
+    ('seller', 'audit.view', FALSE)
 )
 INSERT INTO role_permissions (role, permission_key, allowed)
 SELECT lower(m.role), m.permission_key, m.allowed

@@ -36,6 +36,29 @@
       if (type === 'error') console.error(prefix, msg);
       else if (type === 'warn') console.warn(prefix, msg);
       else console.log(prefix, msg);
+    },
+
+    cleanCreditorName: (name) => {
+      if (!name) return name;
+      let cleaned = name;
+      // Remover "CIUDAD,ESTADO ZIP" al inicio (ej: "COLUMBUS,OH43218 TBOM/MILESTONE")
+      cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
+      // Remover PO BOX
+      cleaned = cleaned.replace(/^P\.?O\.?\s*BOX\s+\d+\s*/i, '');
+      // Remover dirección con calle al inicio
+      cleaned = cleaned.replace(/^\d+\s+[A-Z\s]+(ST|AVE|BLVD|DR|RD|LN|CT|WAY)\s*/i, '');
+      // Remover ZIP codes sueltos
+      cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();
+      return cleaned.trim() || name;
+    },
+
+    isAddressLine: (line) => {
+      if (/\b\d{5}(-\d{4})?\b/.test(line)) return true;
+      if (/\bP\.?O\.?\s*BOX\b/i.test(line)) return true;
+      if (/[A-Z]+[,\s]+[A-Z]{2}\s*\d{4,5}/i.test(line)) return true;
+      if (/^[A-Z]{2}$/.test(line.trim())) return true;
+      if (/^\d+\s+[A-Z]/i.test(line) && /\b(ST|AVE|BLVD|DR|RD|LN|CT|WAY|PL|CIR|HWY|PKWY|STE|SUITE|APT|UNIT|FLOOR|FL)\b/i.test(line)) return true;
+      return false;
     }
   };
 
@@ -109,28 +132,42 @@
       const rows = [];
       let usedOCR = false;
       const minTextLength = 80;
+      // Tolerancia Y: items con diferencia <= este valor se agrupan en la misma línea
+      const Y_TOLERANCE = 2;
 
       for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
         onStatus?.(`Procesando página ${pageNo}/${pdf.numPages}...`);
-        
+
         const page = await pdf.getPage(pageNo);
         const textContent = await page.getTextContent();
-        
-        // Extraer texto normal
-        const byY = new Map();
+
+        // Recolectar items con coordenadas exactas
+        const items = [];
         textContent.items.forEach((item) => {
           const str = String(item?.str || '').trim();
           if (!str) return;
-          const y = Math.round(item?.transform?.[5] || 0);
+          const y = Number(item?.transform?.[5] || 0);
           const x = Number(item?.transform?.[4] || 0);
-          if (!byY.has(y)) byY.set(y, []);
-          byY.get(y).push({ x, str });
+          items.push({ x, y, str });
         });
 
-        const orderedY = Array.from(byY.keys()).sort((a, b) => b - a);
+        // Ordenar por Y descendente para agrupar por tolerancia
+        items.sort((a, b) => b.y - a.y);
+
+        // Agrupar items en líneas usando tolerancia Y
+        const lineGroups = [];
+        let currentGroup = null;
+        items.forEach((item) => {
+          if (!currentGroup || Math.abs(currentGroup.refY - item.y) > Y_TOLERANCE) {
+            currentGroup = { refY: item.y, items: [] };
+            lineGroups.push(currentGroup);
+          }
+          currentGroup.items.push(item);
+        });
+
         const pageRows = [];
-        orderedY.forEach((y) => {
-          const line = byY.get(y)
+        lineGroups.forEach((group) => {
+          const line = group.items
             .sort((a, b) => a.x - b.x)
             .map((item) => item.str)
             .join(' ')
@@ -206,7 +243,14 @@
 
         if (response.ok) {
           const data = await response.json();
-          return data.creditors || [];
+          const rawCreditors = data.creditors || [];
+          // Limpiar nombres que puedan venir con direcciones pegadas
+          rawCreditors.forEach(c => {
+            if (c.creditorName) {
+              c.creditorName = utils.cleanCreditorName(c.creditorName);
+            }
+          });
+          return rawCreditors;
         }
         
         // Si el backend no tiene Gemini configurado, hacer análisis local
@@ -232,28 +276,28 @@
       const debtPattern = /\$([\d,]+\.\d{2})/;
       const seenAccounts = new Set();
       
-      // Palabras/ciudades prohibidas (lugares, no acreedores)
-      const invalidPlaces = /PHILADELPHIA|ENGLEWOOD|COLUMBUS|NEBRASKA|FURNITURE|MAR|CTO|OH|PA|NJ|NY|CA|TX|FL|IL|GA|NC|MI|AZ|MA|WA|CO|MD|WI|IN|MO|NV|OR|UT|MN|SC|AL|LA|KY|OK|CT|IA|KS|AR|NV|MS|NH|SD|ND|ID|NE|NM|WV|HI|ME|VT|RI|DE|WY|AK/i;
-      
+      // Palabras que NO son nombres de acreedores
+      const invalidCreditorLine = /Remarks|Due|Date|Bankruptcy|Repossession|Past|Status|Type|Responsibility|Account|Balance|Current|Payment|Address|Phone|Fax|Report|Overview|Summary|Credit\s+Score|FICO|Inquir/i;
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        
+
         // Buscar línea con monto de deuda
         const debtMatch = line.match(debtPattern);
         if (debtMatch) {
           const debtAmount = parseFloat(debtMatch[1].replace(/,/g, ''));
-          
+
           // Buscar nombre de acreedor en líneas anteriores (hasta 5 líneas atrás)
           let creditorName = null;
           for (let j = Math.max(0, i - 5); j < i; j++) {
             const prevLine = lines[j].trim();
-            // Nombre en mayúsculas, no muy largo, sin palabras prohibidas
-            // NO debe terminar en coma (indica que es una ubicación)
-            // NO debe contener ciudades/estados
-            if (/^[A-Z][A-Z0-9\s&'-]{2,35}$/.test(prevLine) && 
-                !prevLine.includes(',') &&
-                !/Remarks|Due|Date|Bankruptcy|Repossession|Past|Status|Type|Responsibility|Account|Balance|Current|Payment/i.test(prevLine) &&
-                !invalidPlaces.test(prevLine)) {
+            // Nombre en mayúsculas, no muy largo
+            // Excluir direcciones, ubicaciones y palabras inválidas
+            if (/^[A-Z][A-Z0-9\s&/'-]{2,40}$/.test(prevLine) &&
+                !utils.isAddressLine(prevLine) &&
+                !invalidCreditorLine.test(prevLine) &&
+                // No debe ser solo un número o solo espacios/puntuación
+                /[A-Z]{2,}/.test(prevLine)) {
               creditorName = prevLine;
               break;
             }
@@ -444,6 +488,10 @@
     },
 
     finalizeCreditor(c) {
+      // Limpiar nombre de acreedor: remover direcciones/ZIP pegados
+      if (c.creditorName) {
+        c.creditorName = utils.cleanCreditorName(c.creditorName);
+      }
       // Asegurar que debtAmount sea el más relevante
       if (!c.debtAmount && c.creditLimit) {
         c.debtAmount = c.creditLimit;

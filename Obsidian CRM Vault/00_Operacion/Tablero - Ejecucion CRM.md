@@ -13,6 +13,8 @@ Estado: En curso
 - [x] Redisenar gestion de usuarios (panel deslizante + categorias plegables + cambio de rol por badge).
 - [x] Cerrar Fase 0 de sesion/token: refresh rotativo, revocacion en BD, logout real e interceptor frontend con retry.
 - [x] Ejecutar Fase 1 RBAC granular: modelo de permisos, matriz por rol, middleware por permiso y UI admin de permisos por usuario.
+- [x] Ejecutar Fase 2 backend: `audit_log`, request-id, trazabilidad before/after, actor/ip y endpoints admin de consulta/export.
+- [x] Extender Fase 2 UX: historial de cambios por lead + deshacer (`undo`) desde modal, accesible por menu radial dentro del lead.
 
 ## Siguiente bloque sugerido
 1. Ejecutar Fase 2 (auditoria completa).
