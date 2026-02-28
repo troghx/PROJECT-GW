@@ -1,18 +1,18 @@
 :root {
-  --bg-deep: #070b12;
-  --glass-bg: rgba(13, 21, 36, 0.34);
-  --glass-stroke: rgba(155, 179, 210, 0.2);
+  --bg-deep: #141415;
+  --glass-bg: rgba(28, 28, 30, 0.55);
+  --glass-stroke: rgba(60, 60, 65, 0.35);
   --text-main: #edf3fb;
-  --text-soft: #b8c6da;
+  --text-soft: #a1a1aa;
   --accent: #39b0ff;
   --nav-blur: 45px;
 
-  --home-dark-a: #0b1a2a;
-  --home-dark-b: #06080b;
+  --home-dark-a: #1c1c1e;
+  --home-dark-b: #111112;
   --home-light-a: #f4fff6;
   --home-light-b: #0a4b13;
 
-  --panel: rgba(13, 18, 25, 0.88);
+  --panel: rgba(24, 24, 26, 0.85);
   --text: #ecf5ff;
   --accent-gradient: linear-gradient(135deg, #60cfff, #36a6ff);
   --accent-glow-green: rgba(87, 194, 255, 0.45);
@@ -73,7 +73,9 @@ body {
 }
 
 body.home-active.theme-dark {
-  --panel: rgba(10, 14, 20, 0.9);
+  --panel: rgba(24, 24, 26, 0.85);
+  --glass-bg: rgba(28, 28, 30, 0.65);
+  --glass-stroke: rgba(60, 60, 65, 0.35);
   --text: #edf5ff;
   --accent-gradient: linear-gradient(135deg, #6dd3ff, #2f9df8);
   --accent-glow-green: rgba(83, 189, 255, 0.48);
@@ -863,11 +865,12 @@ button[type='submit']:active {
 
 .home-search-shell:focus-within {
   width: clamp(220px, 28vw, 400px);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 72%, #ffffff 28%);
   background: rgba(0, 0, 0, 0.32);
   box-shadow:
-    0 0 0 3px rgba(57, 176, 255, 0.12),
-    0 8px 24px rgba(0, 0, 0, 0.2);
+    0 0 0 1px var(--accent),
+    0 10px 24px rgba(0, 0, 0, 0.22),
+    0 0 18px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 .home-search-input {
@@ -878,7 +881,9 @@ button[type='submit']:active {
   outline: 0;
   color: #fff;
   font-size: 0.9rem;
-  padding: 0;
+  padding: 4px 8px;
+  border-radius: 10px;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -900,6 +905,11 @@ button[type='submit']:active {
 
 .home-search-shell:focus-within .home-search-input::placeholder {
   color: rgba(255, 255, 255, 0.22);
+}
+
+.home-search-shell:focus-within .home-search-input {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* Evitar fondo negro/amarillo del autofill del navegador */
@@ -983,12 +993,12 @@ button[type='submit']:active {
   pointer-events: none;
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
-  background: rgba(8, 14, 24, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 28, 30, 0.94);
+  border: 1px solid rgba(60, 60, 65, 0.35);
   box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.5),
-    0 4px 16px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   opacity: 0;
   visibility: hidden;
   transform: translateY(-6px) scale(0.98);
@@ -1513,17 +1523,17 @@ body.theme-light .lead-suggestion-count {
   border-radius: 16px;
   background: linear-gradient(
     135deg,
-    rgba(30, 40, 60, 0.95) 0%,
-    rgba(20, 28, 45, 0.9) 50%,
-    rgba(15, 22, 35, 0.85) 100%
+    rgba(32, 32, 34, 0.95) 0%,
+    rgba(24, 24, 26, 0.9) 50%,
+    rgba(18, 18, 20, 0.85) 100%
   );
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(60, 60, 65, 0.35);
   box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
@@ -1791,6 +1801,20 @@ body.home-active.theme-dark .toolbar-glass-bg {
 body.home-active.theme-dark .home-search-shell {
   background: rgba(0, 0, 0, 0.35);
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.home-active.theme-dark .home-search-shell:focus-within {
+  background: rgba(0, 0, 0, 0.44);
+  border-color: color-mix(in srgb, var(--accent) 78%, #ffffff 22%);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 12px 28px rgba(0, 0, 0, 0.34),
+    0 0 20px color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+body.home-active.theme-dark .home-search-shell:focus-within .home-search-input {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 body.home-active.theme-light .toolbar-glass-bg {
@@ -5022,10 +5046,10 @@ body.home-active.theme-light .bronze-card {
 }
 
 .schedule-panel {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.025) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(32, 32, 35, 0.85) 0%, rgba(20, 20, 22, 0.9) 100%);
+  border: 1px solid rgba(60, 60, 65, 0.35);
   border-radius: 16px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   display: flex;
@@ -8973,6 +8997,19 @@ body.home-active.theme-light .home-search-shell {
   border-color: rgba(15, 23, 42, 0.16);
 }
 
+body.home-active.theme-light .home-search-shell:focus-within {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: color-mix(in srgb, var(--accent) 68%, #0f172a 32%);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+body.home-active.theme-light .home-search-shell:focus-within .home-search-input {
+  background: color-mix(in srgb, var(--accent) 12%, rgba(255, 255, 255, 0.92));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 body.home-active.theme-light .home-search-input {
   color: #0f172a;
 }
@@ -9176,30 +9213,35 @@ body.home-active.theme-light .type-badge.not-eligible {
 }
 
 /* ============================================
-   SELECTOR DE COLOR DE ACENTO (solo light mode)
+   SELECTOR DE COLOR DE ACENTO
    ============================================ */
 
 .accent-color-picker {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 body.home-active.theme-light .accent-color-picker {
-  display: flex;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .accent-color-label {
   font-size: 0.68rem;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.7px;
   user-select: none;
+}
+
+body.home-active.theme-light .accent-color-label {
+  color: rgba(0, 0, 0, 0.4);
 }
 
 .accent-swatches {
@@ -9249,9 +9291,14 @@ body.home-active.theme-light .accent-color-picker {
 }
 
 .swatch-verde  { background: linear-gradient(145deg, #4ade80 0%, #0a4b13 100%); }
-.swatch-azul   { background: linear-gradient(145deg, #60a5fa 0%, #1e3a8a 100%); }
-.swatch-rojo   { background: linear-gradient(145deg, #fb7185 0%, #9f1239 100%); }
+.swatch-oceano { background: linear-gradient(145deg, #22d3ee 0%, #0e4f5c 100%); }
+.swatch-coral  { background: linear-gradient(145deg, #fb923c 0%, #9a3412 100%); }
 .swatch-morado { background: linear-gradient(145deg, #c084fc 0%, #6b21a8 100%); }
+.swatch-dorado { background: linear-gradient(145deg, #fbbf24 0%, #78350f 100%); }
+.swatch-rosa   { background: linear-gradient(145deg, #f472b6 0%, #9d174d 100%); }
+.swatch-fuego  { background: linear-gradient(145deg, #ef4444 0%, #7f1d1d 100%); }
+.swatch-veneno { background: linear-gradient(145deg, #a3e635 0%, #064e3b 100%); }
+.swatch-azul   { background: linear-gradient(145deg, #3b82f6 0%, #1e3a8a 100%); }
 
 /* ============================================
    PALETAS DE COLOR — Aplica en todas las páginas (theme-light)
@@ -9272,30 +9319,30 @@ body.home-active.theme-light.color-verde .page-overlay {
   background: linear-gradient(180deg, rgba(137, 255, 156, 0.16), rgba(10, 75, 19, 0.2));
 }
 
-body.theme-light.color-azul {
-  --home-light-a: #f0f5ff;
-  --home-light-b: #091a3d;
-  --accent: #2563eb;
-  --accent-gradient: linear-gradient(135deg, #bfd7ff, #091a3d);
-  --accent-glow-green: rgba(9, 26, 61, 0.52);
-  --panel: rgba(9, 17, 47, 0.9);
-  --text: #eaf0ff;
+body.theme-light.color-oceano {
+  --home-light-a: #ecfeff;
+  --home-light-b: #0e4f5c;
+  --accent: #0891b2;
+  --accent-gradient: linear-gradient(135deg, #a5f3fc, #0e4f5c);
+  --accent-glow-green: rgba(14, 79, 92, 0.52);
+  --panel: rgba(8, 50, 60, 0.9);
+  --text: #e0fcff;
 }
-body.home-active.theme-light.color-azul .page-overlay {
-  background: linear-gradient(180deg, rgba(100, 160, 255, 0.16), rgba(9, 26, 61, 0.2));
+body.home-active.theme-light.color-oceano .page-overlay {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.16), rgba(14, 79, 92, 0.2));
 }
 
-body.theme-light.color-rojo {
-  --home-light-a: #fff5f0;
-  --home-light-b: #4b0a0a;
-  --accent: #e11d48;
-  --accent-gradient: linear-gradient(135deg, #ffc9d4, #4b0a0a);
-  --accent-glow-green: rgba(75, 10, 10, 0.52);
-  --panel: rgba(47, 9, 9, 0.9);
-  --text: #ffecec;
+body.theme-light.color-coral {
+  --home-light-a: #fff7ed;
+  --home-light-b: #7c2d12;
+  --accent: #ea580c;
+  --accent-gradient: linear-gradient(135deg, #fed7aa, #7c2d12);
+  --accent-glow-green: rgba(124, 45, 18, 0.52);
+  --panel: rgba(60, 22, 8, 0.9);
+  --text: #fff1e6;
 }
-body.home-active.theme-light.color-rojo .page-overlay {
-  background: linear-gradient(180deg, rgba(255, 100, 100, 0.16), rgba(75, 10, 10, 0.2));
+body.home-active.theme-light.color-coral .page-overlay {
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.16), rgba(124, 45, 18, 0.2));
 }
 
 body.theme-light.color-morado {
@@ -9309,6 +9356,155 @@ body.theme-light.color-morado {
 }
 body.home-active.theme-light.color-morado .page-overlay {
   background: linear-gradient(180deg, rgba(180, 100, 255, 0.16), rgba(45, 10, 75, 0.2));
+}
+
+body.theme-light.color-dorado {
+  --home-light-a: #fffbeb;
+  --home-light-b: #78350f;
+  --accent: #d97706;
+  --accent-gradient: linear-gradient(135deg, #fde68a, #78350f);
+  --accent-glow-green: rgba(120, 53, 15, 0.52);
+  --panel: rgba(60, 28, 6, 0.9);
+  --text: #fef3c7;
+}
+body.home-active.theme-light.color-dorado .page-overlay {
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.18), rgba(120, 53, 15, 0.2));
+}
+
+body.theme-light.color-rosa {
+  --home-light-a: #fdf2f8;
+  --home-light-b: #831843;
+  --accent: #db2777;
+  --accent-gradient: linear-gradient(135deg, #fbcfe8, #831843);
+  --accent-glow-green: rgba(131, 24, 67, 0.52);
+  --panel: rgba(65, 12, 34, 0.9);
+  --text: #fce7f3;
+}
+body.home-active.theme-light.color-rosa .page-overlay {
+  background: linear-gradient(180deg, rgba(244, 114, 182, 0.16), rgba(131, 24, 67, 0.2));
+}
+
+body.theme-light.color-fuego {
+  --home-light-a: #fef2f2;
+  --home-light-b: #7f1d1d;
+  --accent: #ef4444;
+  --accent-gradient: linear-gradient(135deg, #fca5a5, #7f1d1d);
+  --accent-glow-green: rgba(127, 29, 29, 0.52);
+  --panel: rgba(69, 10, 10, 0.9);
+  --text: #fef2f2;
+}
+body.home-active.theme-light.color-fuego .page-overlay {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(127, 29, 29, 0.2));
+}
+
+body.theme-light.color-veneno {
+  --home-light-a: #f7fee7;
+  --home-light-b: #14532d;
+  --accent: #84cc16;
+  --accent-gradient: linear-gradient(135deg, #d9f99d, #14532d);
+  --accent-glow-green: rgba(20, 83, 45, 0.52);
+  --panel: rgba(6, 78, 59, 0.9);
+  --text: #f7fee7;
+}
+body.home-active.theme-light.color-veneno .page-overlay {
+  background: linear-gradient(180deg, rgba(132, 204, 22, 0.16), rgba(20, 83, 45, 0.2));
+}
+
+body.theme-light.color-azul {
+  --home-light-a: #eff6ff;
+  --home-light-b: #1e3a8a;
+  --accent: #3b82f6;
+  --accent-gradient: linear-gradient(135deg, #bfdbfe, #1e3a8a);
+  --accent-glow-green: rgba(30, 58, 138, 0.52);
+  --panel: rgba(23, 37, 84, 0.9);
+  --text: #eff6ff;
+}
+body.home-active.theme-light.color-azul .page-overlay {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.16), rgba(30, 58, 138, 0.2));
+}
+
+/* ============================================
+   DARK MODE COLOR THEMES (Glowing Embers at Bottom)
+   ============================================ */
+body.theme-dark.color-verde {
+  --accent: #22c55e;
+  --accent-gradient: linear-gradient(135deg, #4ade80, #16a34a);
+  --accent-glow-green: rgba(34, 197, 94, 0.48);
+}
+body.home-active.theme-dark.color-verde .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(34, 197, 94, 0.15) 100%);
+}
+
+body.theme-dark.color-oceano {
+  --accent: #06b6d4;
+  --accent-gradient: linear-gradient(135deg, #22d3ee, #0891b2);
+  --accent-glow-green: rgba(6, 182, 212, 0.48);
+}
+body.home-active.theme-dark.color-oceano .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(6, 182, 212, 0.15) 100%);
+}
+
+body.theme-dark.color-coral {
+  --accent: #f97316;
+  --accent-gradient: linear-gradient(135deg, #fb923c, #ea580c);
+  --accent-glow-green: rgba(249, 115, 22, 0.48);
+}
+body.home-active.theme-dark.color-coral .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(249, 115, 22, 0.18) 100%);
+}
+
+body.theme-dark.color-morado {
+  --accent: #a855f7;
+  --accent-gradient: linear-gradient(135deg, #c084fc, #9333ea);
+  --accent-glow-green: rgba(168, 85, 247, 0.48);
+}
+body.home-active.theme-dark.color-morado .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(168, 85, 247, 0.15) 100%);
+}
+
+body.theme-dark.color-dorado {
+  --accent: #eab308;
+  --accent-gradient: linear-gradient(135deg, #facc15, #ca8a04);
+  --accent-glow-green: rgba(234, 179, 8, 0.48);
+}
+body.home-active.theme-dark.color-dorado .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(234, 179, 8, 0.15) 100%);
+}
+
+body.theme-dark.color-rosa {
+  --accent: #ec4899;
+  --accent-gradient: linear-gradient(135deg, #f472b6, #db2777);
+  --accent-glow-green: rgba(236, 72, 153, 0.48);
+}
+body.home-active.theme-dark.color-rosa .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(236, 72, 153, 0.15) 100%);
+}
+
+body.theme-dark.color-fuego {
+  --accent: #ef4444;
+  --accent-gradient: linear-gradient(135deg, #f87171, #b91c1c);
+  --accent-glow-green: rgba(239, 68, 68, 0.48);
+}
+body.home-active.theme-dark.color-fuego .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(239, 68, 68, 0.15) 100%);
+}
+
+body.theme-dark.color-veneno {
+  --accent: #a3e635;
+  --accent-gradient: linear-gradient(135deg, #bef264, #4d7c0f);
+  --accent-glow-green: rgba(163, 230, 53, 0.48);
+}
+body.home-active.theme-dark.color-veneno .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(163, 230, 53, 0.15) 100%);
+}
+
+body.theme-dark.color-azul {
+  --accent: #3b82f6;
+  --accent-gradient: linear-gradient(135deg, #60a5fa, #1d4ed8);
+  --accent-glow-green: rgba(59, 130, 246, 0.48);
+}
+body.home-active.theme-dark.color-azul .page-overlay {
+  background: linear-gradient(180deg, transparent 40%, rgba(59, 130, 246, 0.15) 100%);
 }
 
 /* ============================================
@@ -9360,11 +9556,11 @@ body.home-active.theme-light.color-morado .page-overlay {
   z-index: 99000;
   display: flex;
   flex-direction: column;
-  background: rgba(14, 20, 32, 0.92);
+  background: rgba(28, 28, 30, 0.85);
   backdrop-filter: blur(36px) saturate(1.8);
   -webkit-backdrop-filter: blur(36px) saturate(1.8);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+  border: 1px solid rgba(60, 60, 65, 0.35);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transform-origin: top right;
   transform: scale(0.94) translateY(-6px);
   opacity: 0;

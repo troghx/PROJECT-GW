@@ -298,6 +298,16 @@
     return permissions.includes('audit.view');
   }
 
+  function hasCreditorEditorAccess() {
+    const session = getSessionUserData();
+    const role = String(session?.role || '').trim().toLowerCase();
+    if (role === 'admin' || role === 'supervisor') return true;
+    const permissions = Array.isArray(session?.permissions)
+      ? session.permissions.map((value) => String(value || '').trim().toLowerCase())
+      : [];
+    return permissions.includes('users.manage') || permissions.includes('users.permissions.manage');
+  }
+
   async function requestJson(url, options = {}) {
     const response = await fetch(url, options);
     const data = await response.json().catch(() => ({}));
@@ -577,6 +587,11 @@
       refs.suggest && (refs.suggest.innerHTML = '');
       refs.result?.classList.add('hidden');
       refs.result && (refs.result.innerHTML = '');
+      if (refs.editBtn) {
+        const canEditCreditors = hasCreditorEditorAccess();
+        refs.editBtn.hidden = !canEditCreditors;
+        refs.editBtn.disabled = !canEditCreditors;
+      }
     };
 
     const renderSuggestions = (query) => {
@@ -625,6 +640,7 @@
     refs.closeBtn?.addEventListener('click', closeModal);
     refs.cancelBtn?.addEventListener('click', closeModal);
     refs.editBtn?.addEventListener('click', () => {
+      if (!hasCreditorEditorAccess()) return;
       closeModal();
       openCreditorEditorModal();
     });
@@ -1100,6 +1116,7 @@
   }
 
   function openCreditorEditorModal() {
+    if (!hasCreditorEditorAccess()) return;
     const context = ensureCreditorEditorModal();
     const modal = context?.modal;
     if (!modal) return;

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260226i">
+  <link rel="stylesheet" href="styles.css?v=20260227h">
   <link rel="stylesheet" href="creditors-compact.css?v=20260217k">
   <link rel="stylesheet" href="creditors-final.css?v=20260218e">
   <link rel="stylesheet" href="budget.css?v=20260219d">
@@ -2384,7 +2384,6 @@
       gap: 4px;
       padding: 4px;
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
       margin-bottom: 16px;
       flex-wrap: wrap;
@@ -3877,24 +3876,21 @@
       }
     }
     
-    .lead-info-card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 16px 20px;
-      min-width: 0;
-    }
+        .lead-info-card {
+          background: rgba(28, 28, 30, 0.4);
+          border-radius: 12px;
+          padding: 16px 20px;
+          min-width: 0;
+        }
     
-    .lead-info-card h3 {
-      margin: 0 0 12px 0;
-      font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.5);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
+        .lead-info-card h3 {
+          margin: 0 0 12px 0;
+          font-size: 0.75rem;
+          color: rgba(255, 255, 255, 0.5);
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          padding-bottom: 8px;
+        }    
     .lead-info-card-wide {
       grid-column: 1 / -1;
     }
@@ -7007,10 +7003,15 @@
           <div class="accent-color-picker" id="accentColorPicker">
             <span class="accent-color-label">Color del tema</span>
             <div class="accent-swatches" role="radiogroup" aria-label="Color de acento">
-              <button class="accent-swatch swatch-verde active" data-color="verde" role="radio" aria-checked="true" type="button" title="Verde"></button>
-              <button class="accent-swatch swatch-azul" data-color="azul" role="radio" aria-checked="false" type="button" title="Azul"></button>
-              <button class="accent-swatch swatch-rojo" data-color="rojo" role="radio" aria-checked="false" type="button" title="Rojo"></button>
-              <button class="accent-swatch swatch-morado" data-color="morado" role="radio" aria-checked="false" type="button" title="Morado"></button>
+              <button class="accent-swatch swatch-verde active" data-color="verde" data-theme="light" role="radio" aria-checked="true" type="button" title="Verde"></button>
+              <button class="accent-swatch swatch-oceano" data-color="oceano" data-theme="light" role="radio" aria-checked="false" type="button" title="Océano"></button>
+              <button class="accent-swatch swatch-coral" data-color="coral" data-theme="light" role="radio" aria-checked="false" type="button" title="Coral"></button>
+              <button class="accent-swatch swatch-morado" data-color="morado" data-theme="light" role="radio" aria-checked="false" type="button" title="Morado"></button>
+              <button class="accent-swatch swatch-dorado" data-color="dorado" data-theme="light" role="radio" aria-checked="false" type="button" title="Dorado"></button>
+              <button class="accent-swatch swatch-rosa" data-color="rosa" data-theme="light" role="radio" aria-checked="false" type="button" title="Rosa"></button>
+              <button class="accent-swatch swatch-fuego" data-color="fuego" data-theme="dark" role="radio" aria-checked="false" type="button" title="Fuego"></button>
+              <button class="accent-swatch swatch-veneno" data-color="veneno" data-theme="dark" role="radio" aria-checked="false" type="button" title="Veneno"></button>
+              <button class="accent-swatch swatch-azul" data-color="azul" data-theme="dark" role="radio" aria-checked="false" type="button" title="Azul"></button>
             </div>
           </div>
 
@@ -8072,6 +8073,9 @@
                   <span class="summary-badge pastdue">
                     <small>VENCIDO</small> <strong id="creditorsPastDueTotal">$0.00</strong>
                   </span>
+                  <span class="summary-badge utilization-badge">
+                    <small>UTIL. PROM.</small> <strong id="creditorsAvgUtilization">-</strong>
+                  </span>
                   <span class="summary-badge fico">
                     <small>FICO</small> <strong id="creditorsFicoScore">Pendiente</strong>
                   </span>
@@ -8110,21 +8114,29 @@
 
             <!-- Lista de creditors guardados -->
             <div class="creditors-saved-section" id="creditorsSavedSection">
-              <div class="creditors-table-container">
-                <table class="creditors-table" id="creditorsSavedTable">
-                  <thead id="creditorsTableHead">
-                    <!-- Se genera dinámicamente desde JS para permitir reordenar -->
-                  </thead>
-                  <tbody id="creditorsSavedBody">
-                    <tr>
-                      <td colspan="12" class="empty-cell">
-                        <div class="creditors-empty-status">
-                          <span class="status-text" id="creditorsStatus">Sube reportes de crédito desde Archivos para extraer deudas automáticamente.</span>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div class="creditors-table-shell">
+                <button type="button" class="creditors-sort-toggle" id="creditorsActiveSortBtn" aria-label="Ordenar incluidos arriba" title="Ordenar incluidos arriba">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path class="arrow-up" d="M8 2.5l3 3.5H5l3-3.5z" fill="currentColor" stroke="none"></path>
+                    <path class="arrow-down" d="M8 13.5l3-3.5H5l3 3.5z" fill="currentColor" stroke="none"></path>
+                  </svg>
+                </button>
+                <div class="creditors-table-container">
+                  <table class="creditors-table" id="creditorsSavedTable">
+                    <thead id="creditorsTableHead">
+                      <!-- Se genera dinámicamente desde JS para permitir reordenar -->
+                    </thead>
+                    <tbody id="creditorsSavedBody">
+                      <tr>
+                        <td colspan="12" class="empty-cell">
+                          <div class="creditors-empty-status">
+                            <span class="status-text" id="creditorsStatus">Sube reportes de crédito desde Archivos para extraer deudas automáticamente.</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
@@ -8328,7 +8340,7 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260226e"></script>
   <script src="crm-helpers.js?v=20260216b"></script>
-  <script src="client.js?v=20260226d"></script>
+  <script src="client.js?v=20260227a"></script>
   <script src="budget.js?v=20260222a"></script>
   <script src="quick-actions.js?v=20260226b"></script>
   <script src="creditors-redesign.js?v=20260226e"></script>

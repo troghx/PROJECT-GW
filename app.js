@@ -60,7 +60,18 @@ const LEAD_SEARCH_TRANSFER_KEY = 'project_gw_leads_search_query';
 const LEAD_SEARCH_DEBOUNCE_MS = 70;
 const LEAD_SEARCH_SUGGESTION_LIMIT = 8;
 const LEAD_SEARCH_SUGGESTION_Z_INDEX = 2147483000;
-const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
+const ACCENT_COLORS_BY_THEME = {
+  light: ['verde', 'oceano', 'coral', 'morado', 'dorado', 'rosa'],
+  dark: ['fuego', 'veneno', 'azul']
+};
+const ACCENT_COLOR_DEFAULT_BY_THEME = {
+  light: 'verde',
+  dark: 'azul'
+};
+const ACCENT_COLOR_NAMES = Array.from(new Set([
+  ...ACCENT_COLORS_BY_THEME.light,
+  ...ACCENT_COLORS_BY_THEME.dark
+]));
 const LOGIN_PIN_LENGTH = 6;
 const LOGIN_BACKGROUND_ROTATE_MS = 6000;
 const LOGIN_BACKGROUND_FADE_OUT_MS = 220;
@@ -555,6 +566,7 @@ function applyTheme(theme, { owner } = {}) {
   document.body.classList.add(selected === 'light' ? 'theme-light' : 'theme-dark');
 
   writeScopedPreference(THEME_KEY, selected, owner);
+  syncAccentSwatchesForTheme(selected);
 
   if (themeSwitch) {
     themeSwitch.checked = selected === 'light';
@@ -575,10 +587,58 @@ function getInitialTheme(owner) {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
-function applyAccentColor(color, { owner } = {}) {
-  const selected = ACCENT_COLOR_NAMES.includes(color) ? color : 'verde';
+function normalizeThemeMode(themeValue) {
+  return themeValue === 'light' ? 'light' : 'dark';
+}
+
+function getCurrentThemeMode() {
+  return document.body.classList.contains('theme-light') ? 'light' : 'dark';
+}
+
+function getAccentStorageKeyForTheme(themeMode) {
+  return `${COLOR_KEY}_${normalizeThemeMode(themeMode)}`;
+}
+
+function getAllowedAccentColors(themeMode = getCurrentThemeMode()) {
+  const normalizedTheme = normalizeThemeMode(themeMode);
+  return Array.isArray(ACCENT_COLORS_BY_THEME[normalizedTheme])
+    ? ACCENT_COLORS_BY_THEME[normalizedTheme]
+    : ACCENT_COLORS_BY_THEME.dark;
+}
+
+function getDefaultAccentColor(themeMode = getCurrentThemeMode()) {
+  const normalizedTheme = normalizeThemeMode(themeMode);
+  return ACCENT_COLOR_DEFAULT_BY_THEME[normalizedTheme] || 'azul';
+}
+
+function coerceAccentColorForTheme(color, themeMode = getCurrentThemeMode()) {
+  const allowed = getAllowedAccentColors(themeMode);
+  return allowed.includes(color) ? color : getDefaultAccentColor(themeMode);
+}
+
+function syncAccentSwatchesForTheme(themeMode = getCurrentThemeMode()) {
+  const normalizedTheme = normalizeThemeMode(themeMode);
+  const allowed = new Set(getAllowedAccentColors(normalizedTheme));
+  document.querySelectorAll('.accent-swatch[data-color]').forEach((button) => {
+    const color = String(button.dataset.color || '').trim().toLowerCase();
+    const explicitTheme = String(button.dataset.theme || '').trim().toLowerCase();
+    const shouldShow = explicitTheme
+      ? explicitTheme === normalizedTheme
+      : allowed.has(color);
+    button.hidden = !shouldShow;
+    button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    button.tabIndex = shouldShow ? 0 : -1;
+  });
+}
+
+function applyAccentColor(color, { owner, theme } = {}) {
+  const themeMode = normalizeThemeMode(theme || getCurrentThemeMode());
+  syncAccentSwatchesForTheme(themeMode);
+  const normalizedColor = String(color || '').trim().toLowerCase().slice(0, 40);
+  const selected = coerceAccentColorForTheme(normalizedColor, themeMode);
   ACCENT_COLOR_NAMES.forEach((c) => document.body.classList.remove(`color-${c}`));
   document.body.classList.add(`color-${selected}`);
+  writeScopedPreference(getAccentStorageKeyForTheme(themeMode), selected, owner);
   writeScopedPreference(COLOR_KEY, selected, owner);
   document.querySelectorAll('.accent-swatch[data-color]').forEach((btn) => {
     const isActive = btn.dataset.color === selected;
@@ -587,9 +647,14 @@ function applyAccentColor(color, { owner } = {}) {
   });
 }
 
-function getInitialAccentColor(owner) {
+function getInitialAccentColor(owner, theme = getCurrentThemeMode()) {
+  const themeMode = normalizeThemeMode(theme);
+  const savedByTheme = readScopedPreference(getAccentStorageKeyForTheme(themeMode), owner);
+  if (savedByTheme) {
+    return coerceAccentColorForTheme(savedByTheme, themeMode);
+  }
   const saved = readScopedPreference(COLOR_KEY, owner);
-  return ACCENT_COLOR_NAMES.includes(saved) ? saved : 'verde';
+  return coerceAccentColorForTheme(saved, themeMode);
 }
 
 // ---- Notificaciones ----
@@ -838,6 +903,7 @@ function showLogin() {
   scheduleTasks = [];
   scheduleTasksLoaded = false;
   scheduleOwnerKey = '';
+  scheduleScope = 'mine';
   scheduleNotes = [];
   allEmailsCache = [];
   emailsLoaded = false;
@@ -973,6 +1039,12 @@ function hasCurrentSessionPermission(permissionKey) {
     return identity.role === 'admin' || identity.role === 'supervisor';
   }
   if (normalizedKey === 'emails.send' || normalizedKey === 'leads.create' || normalizedKey === 'leads.edit' || normalizedKey === 'notes.manage') {
+    return identity.role === 'admin' || identity.role === 'supervisor' || identity.role === 'seller';
+  }
+  if (normalizedKey === 'callbacks.view_all' || normalizedKey === 'audit.view') {
+    return identity.role === 'admin' || identity.role === 'supervisor';
+  }
+  if (normalizedKey === 'callbacks.complete_assigned' || normalizedKey === 'tasks.manage' || normalizedKey === 'files.manage') {
     return identity.role === 'admin' || identity.role === 'supervisor' || identity.role === 'seller';
   }
   if (normalizedKey === 'users.manage' || normalizedKey === 'users.permissions.manage') {
@@ -1564,7 +1636,13 @@ async function loadAdminUsers({ silent = false } = {}) {
 
 if (themeSwitch) {
   themeSwitch.addEventListener('change', () => {
-    applyTheme(themeSwitch.checked ? 'light' : 'dark');
+    const nextTheme = themeSwitch.checked ? 'light' : 'dark';
+    const currentSession = getSession();
+    applyTheme(nextTheme, { owner: currentSession });
+    applyAccentColor(getInitialAccentColor(currentSession, nextTheme), {
+      owner: currentSession,
+      theme: nextTheme
+    });
   });
 }
 
@@ -2001,6 +2079,7 @@ let scheduleViewDate = new Date();
 let scheduleSelectedDateKey = new Date().toISOString().slice(0, 10);
 let scheduleTasks = [];
 let scheduleOwnerKey = '';
+let scheduleScope = 'mine';
 let scheduleTasksLoaded = false;
 let scheduleNotes = [];
 let scheduleInteractionsBound = false;
@@ -2685,26 +2764,59 @@ function normalizeScheduleTimestamp(value) {
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 }
 
-function normalizeScheduleTask(callback) {
-  const callbackDate = normalizeScheduleDateKey(callback?.callbackDate);
-  if (!callbackDate) return null;
-  const leadId = Number(callback?.leadId);
-  const callbackCompletedAt = normalizeScheduleTimestamp(
-    callback?.callbackCompletedAt ?? callback?.callback_completed_at
+function normalizeScheduleTask(sourceTask) {
+  const callbackDate = normalizeScheduleDateKey(
+    sourceTask?.dueDate
+    || sourceTask?.due_date
+    || sourceTask?.callbackDate
+    || sourceTask?.callback_date
+    || (sourceTask?.dueAt ? String(sourceTask.dueAt).slice(0, 10) : '')
+    || (sourceTask?.due_at ? String(sourceTask.due_at).slice(0, 10) : '')
   );
+  if (!callbackDate) return null;
+
+  const leadId = Number(sourceTask?.relatedLeadId ?? sourceTask?.related_lead_id ?? sourceTask?.leadId);
+  const taskId = Number(sourceTask?.id ?? sourceTask?.taskId);
+  const callbackCompletedAt = normalizeScheduleTimestamp(
+    sourceTask?.completedAt
+    ?? sourceTask?.completed_at
+    ?? sourceTask?.callbackCompletedAt
+    ?? sourceTask?.callback_completed_at
+  );
+  const dueAt = normalizeScheduleTimestamp(sourceTask?.dueAt ?? sourceTask?.due_at);
+  const status = String(sourceTask?.status || '').trim().toLowerCase();
+
   return {
+    taskId: Number.isFinite(taskId) && taskId > 0 ? taskId : null,
+    taskType: String(sourceTask?.taskType || sourceTask?.task_type || 'callback').trim().toLowerCase(),
     leadId: Number.isFinite(leadId) && leadId > 0 ? leadId : null,
-    caseId: callback?.caseId ? String(callback.caseId) : '',
-    name: String(callback?.name || '').trim() || `Lead #${callback?.leadId || '-'}`,
+    caseId: sourceTask?.leadCaseId || sourceTask?.lead_case_id || sourceTask?.caseId ? String(sourceTask?.leadCaseId || sourceTask?.lead_case_id || sourceTask?.caseId) : '',
+    name: String(sourceTask?.title || sourceTask?.name || sourceTask?.leadName || '').trim() || `Task #${taskId || '-'}`,
+    description: String(sourceTask?.description || '').trim(),
+    priority: String(sourceTask?.priority || 'normal').trim().toLowerCase(),
+    status,
     callbackDate,
+    dueAt,
     callbackCompletedAt,
-    assignedTo: String(callback?.assignedTo || '').trim()
+    assignedTo: String(sourceTask?.ownerUsername || sourceTask?.owner_username || sourceTask?.assignedTo || '').trim(),
+    ownerTeam: String(sourceTask?.ownerTeam || sourceTask?.owner_team || '').trim(),
+    isOverdue: sourceTask?.isOverdue === true
   };
+}
+
+function getScheduleTaskPriorityRank(priority) {
+  const normalized = String(priority || '').trim().toLowerCase();
+  if (normalized === 'urgent') return 1;
+  if (normalized === 'high') return 2;
+  if (normalized === 'normal') return 3;
+  return 4;
 }
 
 function sortScheduleTasks(tasks) {
   tasks.sort((a, b) => {
     if (a.callbackDate !== b.callbackDate) return a.callbackDate.localeCompare(b.callbackDate);
+    const priorityDiff = getScheduleTaskPriorityRank(a.priority) - getScheduleTaskPriorityRank(b.priority);
+    if (priorityDiff !== 0) return priorityDiff;
     if (a.caseId !== b.caseId) return String(a.caseId).localeCompare(String(b.caseId), 'es');
     return String(a.name).localeCompare(String(b.name), 'es');
   });
@@ -2712,11 +2824,13 @@ function sortScheduleTasks(tasks) {
 }
 
 function isScheduleTaskCompleted(task) {
-  return Boolean(String(task?.callbackCompletedAt || '').trim());
+  const status = String(task?.status || '').trim().toLowerCase();
+  return status === 'completed' || status === 'cancelled' || Boolean(String(task?.callbackCompletedAt || '').trim());
 }
 
 function getScheduleTaskState(task, todayKey) {
   if (isScheduleTaskCompleted(task)) return 'completed';
+  if (task?.isOverdue === true) return 'missed';
   if (String(task?.callbackDate || '') < todayKey) return 'missed';
   return 'pending';
 }
@@ -2724,7 +2838,13 @@ function getScheduleTaskState(task, todayKey) {
 function getScheduleTaskPresentation(task, todayKey) {
   const state = getScheduleTaskState(task, todayKey);
   if (state === 'completed') return { state, statusLabel: 'Completada', statusClass: 'is-completed' };
-  if (state === 'missed') return { state, statusLabel: 'No completada', statusClass: 'is-overdue' };
+  if (state === 'missed') return { state, statusLabel: 'Vencida', statusClass: 'is-overdue' };
+  if (String(task?.status || '').trim().toLowerCase() === 'in_progress') {
+    return { state, statusLabel: 'En progreso', statusClass: 'is-pending' };
+  }
+  if (String(task?.status || '').trim().toLowerCase() === 'escalated') {
+    return { state, statusLabel: 'Escalada', statusClass: 'is-overdue' };
+  }
   return { state, statusLabel: 'Pendiente', statusClass: 'is-pending' };
 }
 
@@ -2804,6 +2924,9 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
   const caseLabel = task.caseId ? `Caso #${escapeHtml(String(task.caseId))}` : 'Caso sin ID';
   const presentation = getScheduleTaskPresentation(task, todayKey);
   const actionButtons = [];
+  const priorityLabel = String(task.priority || '').trim().toLowerCase();
+  const taskOwnerLabel = String(task.assignedTo || '').trim();
+  const typeLabel = String(task.taskType || '').trim().toLowerCase() === 'callback' ? 'Callback' : 'Task';
 
   if (task.leadId) {
     actionButtons.push(`<button type="button" class="schedule-open-lead-btn" data-open-lead-id="${task.leadId}">Abrir lead</button>`);
@@ -2811,20 +2934,24 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
 
   const canCompleteToday = showCompleteAction
     && presentation.state === 'pending'
-    && task.callbackDate === todayKey
-    && Number.isInteger(task.leadId)
-    && task.leadId > 0;
+    && Number.isInteger(task.taskId)
+    && task.taskId > 0;
 
   if (canCompleteToday) {
-    const isSaving = scheduleCompleteLeadInFlight === task.leadId;
-    actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-lead-id="${task.leadId}" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Guardando...' : 'Marcar completada'}</button>`);
+    const isSaving = scheduleCompleteLeadInFlight === task.taskId;
+    actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-task-id="${task.taskId}" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Guardando...' : 'Marcar completada'}</button>`);
   }
+
+  const ownerMeta = scheduleScope === 'team' && taskOwnerLabel
+    ? ` · @${escapeHtml(taskOwnerLabel)}`
+    : '';
+  const priorityMeta = priorityLabel ? ` · ${escapeHtml(priorityLabel.toUpperCase())}` : '';
 
   return `
     <article class="schedule-task-card ${presentation.statusClass}">
       <div class="schedule-task-main">
         <p class="schedule-task-title">${escapeHtml(task.name)}</p>
-        <p class="schedule-task-meta">${caseLabel} - ${escapeHtml(formatScheduleDateLabel(task.callbackDate))}</p>
+        <p class="schedule-task-meta">${typeLabel} · ${caseLabel} - ${escapeHtml(formatScheduleDateLabel(task.callbackDate))}${priorityMeta}${ownerMeta}</p>
       </div>
       <div class="schedule-task-side">
         <span class="schedule-task-status">${presentation.statusLabel}</span>
@@ -2834,21 +2961,17 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
   `;
 }
 
-async function markScheduleTaskCompleted(leadId) {
-  const numericLeadId = Number(leadId);
-  if (!Number.isInteger(numericLeadId) || numericLeadId <= 0) return;
+async function markScheduleTaskCompleted(taskId) {
+  const numericTaskId = Number(taskId);
+  if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) return;
   if (scheduleCompleteLeadInFlight) return;
 
-  const session = getSession();
-  const username = String(session?.username || session?.name || '').trim();
-
-  scheduleCompleteLeadInFlight = numericLeadId;
+  scheduleCompleteLeadInFlight = numericTaskId;
   renderScheduleAgenda();
   try {
-    const result = await requestJson(`/api/callbacks/${numericLeadId}/complete`, {
+    const result = await requestJson(`/api/tasks/${numericTaskId}/complete`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
+      headers: { 'Content-Type': 'application/json' }
     });
     showToast(result?.message || 'Task marcada como completada.', 'success');
     await loadScheduleTasks({ force: true });
@@ -2882,7 +3005,9 @@ function renderScheduleAgenda() {
   }
 
   if (!sortedTasks.length) {
-    calendarAgendaList.innerHTML = '<p class="schedule-empty-message">Aun no hay tasks asignadas para ti.</p>';
+    calendarAgendaList.innerHTML = scheduleScope === 'team'
+      ? '<p class="schedule-empty-message">Aun no hay tasks en la bandeja de equipo.</p>'
+      : '<p class="schedule-empty-message">Aun no hay tasks asignadas para ti.</p>';
     return;
   }
 
@@ -2935,6 +3060,7 @@ function renderScheduleAgenda() {
 }
 async function loadScheduleTasks({ force = false } = {}) {
   const ownerKey = getScheduleOwner();
+  const ownerScopeKey = `${ownerKey}::${scheduleScope}`;
   if (!ownerKey) {
     scheduleTasks = [];
     scheduleTasksLoaded = false;
@@ -2943,31 +3069,52 @@ async function loadScheduleTasks({ force = false } = {}) {
     return [];
   }
 
-  if (!force && scheduleTasksLoaded && scheduleOwnerKey === ownerKey) {
+  if (!force && scheduleTasksLoaded && scheduleOwnerKey === ownerScopeKey) {
     renderScheduleMonth();
     renderScheduleAgenda();
     return scheduleTasks;
   }
 
-  scheduleOwnerKey = ownerKey;
+  scheduleOwnerKey = ownerScopeKey;
 
   try {
     const cacheBuster = force ? `&_=${Date.now()}` : '';
-    const data = await requestJson(`/api/callbacks?from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}${cacheBuster}`, {
-      cache: 'no-store'
-    });
-    const callbacks = Array.isArray(data?.callbacks) ? data.callbacks : [];
+    const scopeParam = scheduleScope === 'team' ? 'team' : 'mine';
+    const data = await requestJson(
+      `/api/tasks?scope=${encodeURIComponent(scopeParam)}&from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}&includeCompleted=true${cacheBuster}`,
+      { cache: 'no-store' }
+    );
+    const incomingTasks = Array.isArray(data?.tasks) ? data.tasks : [];
     scheduleTasks = sortScheduleTasks(
-      callbacks
-        .map((callback) => normalizeScheduleTask(callback))
+      incomingTasks
+        .map((task) => normalizeScheduleTask(task))
         .filter(Boolean)
-        .filter((callback) => normalizePreferenceOwner(callback.assignedTo) === ownerKey)
     );
     scheduleTasksLoaded = true;
   } catch (error) {
-    console.error('Error al cargar tasks del calendario:', error);
-    scheduleTasks = [];
-    scheduleTasksLoaded = false;
+    console.error('Error al cargar tasks generales, fallback callbacks:', error);
+    try {
+      const cacheBuster = force ? `&_=${Date.now()}` : '';
+      const data = await requestJson(`/api/callbacks?from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}${cacheBuster}`, {
+        cache: 'no-store'
+      });
+      const callbacks = Array.isArray(data?.callbacks) ? data.callbacks : [];
+      scheduleTasks = sortScheduleTasks(
+        callbacks
+          .map((callback) => normalizeScheduleTask(callback))
+          .filter(Boolean)
+          .filter((callback) => (
+            scheduleScope === 'team'
+              ? true
+              : normalizePreferenceOwner(callback.assignedTo) === ownerKey
+          ))
+      );
+      scheduleTasksLoaded = true;
+    } catch (fallbackError) {
+      console.error('Error al cargar fallback callbacks:', fallbackError);
+      scheduleTasks = [];
+      scheduleTasksLoaded = false;
+    }
   }
 
   renderScheduleMonth();
@@ -2978,17 +3125,35 @@ async function loadScheduleTasks({ force = false } = {}) {
 function hydrateScheduleForCurrentUser({ forceTasks = false } = {}) {
   const session = getSession();
   const ownerKey = getScheduleOwner(session);
+  const ownerScopeKey = `${ownerKey}::${scheduleScope}`;
   const ownerLabel = String(session?.username || session?.name || 'Sin usuario');
-
-  if (calendarOwnerBadge) {
-    calendarOwnerBadge.textContent = ownerLabel ? `@${ownerLabel}` : '-';
+  const canViewTeam = hasCurrentSessionPermission('callbacks.view_all');
+  if (!canViewTeam && scheduleScope !== 'mine') {
+    scheduleScope = 'mine';
   }
 
-  if (scheduleOwnerKey !== ownerKey) {
+  if (calendarOwnerBadge) {
+    if (scheduleScope === 'team' && canViewTeam) {
+      calendarOwnerBadge.textContent = 'Equipo';
+      calendarOwnerBadge.setAttribute('title', 'Click para cambiar a tu bandeja');
+      calendarOwnerBadge.style.cursor = 'pointer';
+    } else {
+      calendarOwnerBadge.textContent = ownerLabel ? `@${ownerLabel}` : '-';
+      if (canViewTeam) {
+        calendarOwnerBadge.setAttribute('title', 'Click para cambiar a bandeja de equipo');
+        calendarOwnerBadge.style.cursor = 'pointer';
+      } else {
+        calendarOwnerBadge.removeAttribute('title');
+        calendarOwnerBadge.style.cursor = '';
+      }
+    }
+  }
+
+  if (scheduleOwnerKey !== ownerScopeKey) {
     scheduleTasks = [];
     scheduleTasksLoaded = false;
   }
-  scheduleOwnerKey = ownerKey;
+  scheduleOwnerKey = ownerScopeKey;
 
   if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
     scheduleSelectedDateKey = toIsoDateLocal(new Date());
@@ -3489,11 +3654,11 @@ function initializeScheduleInteractions() {
       const target = event.target instanceof Element ? event.target : null;
       if (!target) return;
 
-      const completeBtn = target.closest('[data-complete-lead-id]');
+      const completeBtn = target.closest('[data-complete-task-id]');
       if (completeBtn) {
-        const leadId = Number(completeBtn.dataset.completeLeadId);
-        if (!Number.isFinite(leadId) || leadId <= 0) return;
-        void markScheduleTaskCompleted(leadId);
+        const taskId = Number(completeBtn.dataset.completeTaskId);
+        if (!Number.isFinite(taskId) || taskId <= 0) return;
+        void markScheduleTaskCompleted(taskId);
         return;
       }
 
@@ -3502,6 +3667,15 @@ function initializeScheduleInteractions() {
       const leadId = Number(openBtn.dataset.openLeadId);
       if (!Number.isFinite(leadId) || leadId <= 0) return;
       window.location.href = `/client.html?id=${leadId}`;
+    });
+  }
+
+  if (calendarOwnerBadge) {
+    calendarOwnerBadge.addEventListener('click', () => {
+      if (!hasCurrentSessionPermission('callbacks.view_all')) return;
+      scheduleScope = scheduleScope === 'team' ? 'mine' : 'team';
+      scheduleTasksLoaded = false;
+      hydrateScheduleForCurrentUser({ forceTasks: true });
     });
   }
 

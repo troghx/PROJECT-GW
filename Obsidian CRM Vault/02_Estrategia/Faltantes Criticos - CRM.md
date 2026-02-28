@@ -1,5 +1,5 @@
 # Faltantes Criticos - CRM
-Fecha: 2026-02-26
+Fecha: 2026-02-27
 Estado: Aprobado para ejecucion
 Alcance: Este plan excluye integracion API de correo y API de reportes de credito.
 
@@ -27,24 +27,28 @@ El CRM ya tiene base funcional fuerte, pero faltan bloques criticos para cerrar 
 - [x] Exponer historial de cambios por lead en UI y permitir undo de cambios auditados.
 
 4. Pipeline comercial y KPI
-- [ ] Estandarizar etapas del pipeline.
-- [ ] Registrar historial de cambios por lead.
-- [ ] Implementar dashboard KPI (conversion, aging, cierre, perdida).
-- [ ] Filtros por periodo/agente/source.
+- [x] Existe base inicial de estado de lead (`status`) y opciones en UI.
+- [x] Estandarizar etapas del pipeline + transiciones validas en backend.
+- [x] Registrar historial de cambios por lead (`lead_stage_history` + endpoint por lead).
+- [x] Implementar KPI de pipeline por API (`/api/kpi/pipeline`).
+- [x] Filtros por periodo/agente/source.
 
 5. Tareas operativas completas
-- [ ] Extender modelo de callback a motor general de tareas.
-- [ ] Agregar prioridad, vencimiento, recurrencia, SLA.
-- [ ] Escalamiento por vencimiento.
-- [ ] Vistas por owner/equipo.
+- [x] Callbacks y notificaciones operativas ya existen (parcial, orientado a callback).
+- [x] Extender modelo de callback a motor general de tareas.
+- [x] Agregar prioridad, vencimiento, recurrencia, SLA.
+- [x] Escalamiento por vencimiento.
+- [x] Vistas por owner/equipo.
 
 6. Compliance y proteccion de datos
+- [x] Redaccion parcial aplicada en `audit_log` para `ssn`, `co_applicant_ssn`, tokens y credenciales.
 - [ ] Cifrado o enmascarado de PII sensible (SSN, cuenta bancaria).
 - [ ] Politica de acceso/export para PII.
-- [ ] Redaccion de logs con datos sensibles.
+- [ ] Redaccion de logs con datos sensibles (faltan logs operativos fuera de auditoria).
 - [ ] Checklist de cumplimiento operativo.
 
 7. Observabilidad y resiliencia
+- [x] Correlacion base por request (`x-request-id`) y endpoint `/api/health` disponibles (parcial).
 - [ ] Logging estructurado con correlacion por request.
 - [ ] Monitoreo y alertas operativas.
 - [ ] Healthchecks extendidos.
@@ -57,10 +61,10 @@ El CRM ya tiene base funcional fuerte, pero faltan bloques criticos para cerrar 
 - [ ] Checklist de release y rollback.
 
 ## Plan de Ataque por Bloques
-1. Bloque A (inmediato): Seguridad base + RBAC inicial.
-2. Bloque B: Auditoria + Tareas operativas.
-3. Bloque C: Pipeline/KPI + Observabilidad.
-4. Bloque D: QA/CI + endurecimiento final.
+1. Bloque A (inmediato): Seguridad base + RBAC inicial. (completado)
+2. Bloque B: Auditoria + Tareas operativas. (completado)
+3. Bloque C: Pipeline/KPI + Observabilidad. (pendiente)
+4. Bloque D: QA/CI + endurecimiento final. (pendiente)
 
 ## Regla de ejecucion
 No avanzar al siguiente bloque si quedan pendientes criticos del bloque actual.
@@ -88,3 +92,16 @@ No avanzar al siguiente bloque si quedan pendientes criticos del bloque actual.
   - Endpoints admin para consultar y actualizar permisos por usuario.
   - Middleware por permiso aplicado a gestion de usuarios, permisos y acciones criticas (correos/leads/callbacks).
   - UI admin con boton `Permisos` por usuario y panel flotante para grant/revoke por modulo.
+- Auditoria de estado real (2026-02-27):
+  - Pipeline/KPI: no hay endpoints ni tablas dedicadas para KPI o historial de etapas.
+  - Tareas: no existe tabla/API de tareas general (solo callback_date + endpoints `/api/callbacks`).
+  - Compliance PII: SSN y datos bancarios persisten en claro en tablas de dominio; falta cifrado/mascarado de salida.
+  - Observabilidad/QA: no hay suite de tests ni pipeline CI (`package.json` sin script `test`, sin `.github/workflows`).
+
+## Actualizacion de ejecucion (2026-02-27)
+- Fase 4 implementada:
+  - Tabla `lead_tasks` en BD con prioridad, vencimiento, recurrencia, SLA y metadatos.
+  - Endpoints: `GET /api/tasks`, `POST /api/tasks`, `PATCH /api/tasks/:id`, `PATCH /api/tasks/:id/complete`, `POST /api/tasks/escalation/run`.
+  - Escalamiento automatico por barrido periodico en backend.
+  - Sincronizacion callback->task desde `lead.callback_date` y completado task->lead.
+  - Calendario conectado a `/api/tasks` con bandeja `mine/team` en UI.

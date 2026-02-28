@@ -75,9 +75,9 @@
   text-align: center !important; 
 }
 
-.creditors-table .col-past-due { 
-  width: 50px !important; 
-  text-align: right !important; 
+.creditors-table .col-utilization {
+  width: 50px !important;
+  text-align: center !important;
 }
 
 .creditors-table .col-actions { 

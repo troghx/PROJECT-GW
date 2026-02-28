@@ -17,9 +17,13 @@
   let creditorsParseRunId = 0;
   let aiAnalyzerUnavailable = false;
   let ficoPersistQueue = Promise.resolve();
-  let columnOrder = JSON.parse(localStorage.getItem('creditorsColumnOrder') || 'null') || [
-    'checkbox', 'num', 'name', 'debt', 'party', 'account', 'resp', 'status', 'type', 'months', 'pastDue', 'actions'
+  const ACTIVE_SORT_STORAGE_KEY = 'creditorsActiveSortDirection';
+  const ACTIVE_SORT_FIRST = 'active-first';
+  const ACTIVE_SORT_LAST = 'active-last';
+  const columnOrder = [
+    'checkbox', 'num', 'name', 'account', 'debt', 'party', 'resp', 'status', 'type', 'months', 'utilization', 'actions'
   ];
+  let activeSortDirection = getStoredActiveSortDirection();
 
   const KNOWN_CREDITORS = [
     'CAPITAL ONE', 'CHASE', 'BANK OF AMERICA', 'WELLS FARGO', 'CITIBANK', 'CITI',
@@ -986,6 +990,102 @@
       .reduce((sum, entry) => sum + normalizeMoney(entry.debt_amount || entry.debtAmount), 0);
   }
 
+  function normalizeActiveSortDirection(value) {
+    return value === ACTIVE_SORT_LAST ? ACTIVE_SORT_LAST : ACTIVE_SORT_FIRST;
+  }
+
+  function getStoredActiveSortDirection() {
+    try {
+      const stored = localStorage.getItem(ACTIVE_SORT_STORAGE_KEY);
+      return normalizeActiveSortDirection(stored);
+    } catch (_error) {
+      return ACTIVE_SORT_FIRST;
+    }
+  }
+
+  function persistActiveSortDirection(direction) {
+    try {
+      localStorage.setItem(ACTIVE_SORT_STORAGE_KEY, normalizeActiveSortDirection(direction));
+    } catch (_error) {
+      // Ignorar errores de persistencia localStorage.
+    }
+  }
+
+  function getSortLabel(direction = activeSortDirection) {
+    return normalizeActiveSortDirection(direction) === ACTIVE_SORT_LAST
+      ? 'Ordenar incluidos abajo'
+      : 'Ordenar incluidos arriba';
+  }
+
+  function updateSortToggleState() {
+    const sortBtn = document.getElementById('creditorsActiveSortBtn');
+    if (!sortBtn) return;
+    sortBtn.dataset.direction = normalizeActiveSortDirection(activeSortDirection);
+    const label = getSortLabel(activeSortDirection);
+    sortBtn.setAttribute('title', label);
+    sortBtn.setAttribute('aria-label', label);
+  }
+
+  function setActiveSortDirection(direction, options = {}) {
+    const { persist = true, rerender = false } = options;
+    const normalized = normalizeActiveSortDirection(direction);
+    const changed = normalized !== activeSortDirection;
+    activeSortDirection = normalized;
+
+    if (persist && changed) {
+      persistActiveSortDirection(activeSortDirection);
+    }
+
+    updateSortToggleState();
+
+    if (rerender && changed) {
+      renderSaved();
+    }
+  }
+
+  function toggleActiveSortDirection() {
+    const nextDirection = activeSortDirection === ACTIVE_SORT_LAST ? ACTIVE_SORT_FIRST : ACTIVE_SORT_LAST;
+    setActiveSortDirection(nextDirection, { persist: true, rerender: true });
+  }
+
+  function bindActiveSortToggle() {
+    const sortBtn = document.getElementById('creditorsActiveSortBtn');
+    if (!sortBtn) return;
+    if (sortBtn.dataset.bound === '1') {
+      updateSortToggleState();
+      return;
+    }
+
+    sortBtn.dataset.bound = '1';
+    sortBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      toggleActiveSortDirection();
+    });
+
+    updateSortToggleState();
+  }
+
+  function getDisplayCreditors(entries = currentCreditors) {
+    if (!Array.isArray(entries) || !entries.length) return [];
+
+    const direction = normalizeActiveSortDirection(activeSortDirection);
+    const rows = entries.map((entry, index) => {
+      const isActive = isCreditorEntryActive(entry);
+      const isIncluded = isActive && entry.is_included !== false;
+      return { entry, index, isIncluded };
+    });
+
+    rows.sort((a, b) => {
+      if (a.isIncluded === b.isIncluded) return a.index - b.index;
+      if (direction === ACTIVE_SORT_LAST) {
+        return a.isIncluded ? 1 : -1;
+      }
+      return a.isIncluded ? -1 : 1;
+    });
+
+    return rows.map((item) => item.entry);
+  }
+
   function formatDebtSharePercent(value) {
     const normalized = Number(value);
     if (!Number.isFinite(normalized) || normalized <= 0) return '';
@@ -1108,6 +1208,8 @@
         debtAmount: 0,
         debtSourceRank: 0,
         pastDue: 0,
+        creditLimit: 0,
+        highCredit: 0,
         isIncluded: true
       };
 
@@ -1183,7 +1285,18 @@
           }
         }
 
-        if (/credit limit|highest balance|high balance|high credit|monthly payment|term source|terms count|payment history|times 30\/60\/90/i.test(line)) {
+        const creditLimitMatch = line.match(/credit\s*limit[:\s]*\$?([\d,]+\.?\d*)/i);
+        if (creditLimitMatch) {
+          const clVal = normalizeMoney(creditLimitMatch[1]);
+          if (clVal > 0) creditor.creditLimit = clVal;
+        }
+        const highCreditMatch = line.match(/(?:high(?:est)?\s*(?:credit|balance))[:\s]*\$?([\d,]+\.?\d*)/i);
+        if (highCreditMatch) {
+          const hcVal = normalizeMoney(highCreditMatch[1]);
+          if (hcVal > 0) creditor.highCredit = hcVal;
+        }
+
+        if (/(?:credit limit|highest balance|high balance|high credit|monthly payment|term source|terms count|payment history|times 30\/60\/90)/i.test(line) && !creditLimitMatch && !highCreditMatch) {
           continue;
         }
 
@@ -1238,6 +1351,8 @@
             : Math.min(prev.monthsReviewed, creditor.monthsReviewed);
         }
         prev.pastDue = Math.max(normalizeMoney(prev.pastDue), normalizeMoney(creditor.pastDue));
+        if (!prev.creditLimit && creditor.creditLimit) prev.creditLimit = creditor.creditLimit;
+        if (!prev.highCredit && creditor.highCredit) prev.highCredit = creditor.highCredit;
 
         const prevRank = Number(prev.debtSourceRank || 0);
         const nextRank = Number(creditor.debtSourceRank || 0);
@@ -1313,6 +1428,8 @@
       monthsReviewed,
       debtAmount,
       pastDue: normalizeMoney(entry.pastDue || entry.past_due),
+      creditLimit: normalizeMoney(entry.creditLimit || entry.credit_limit),
+      highCredit: normalizeMoney(entry.highCredit || entry.high_credit),
       isIncluded: debtAmount > 0,
       debtorParty: party
     };
@@ -1390,7 +1507,7 @@
         <td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>
         <td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>
         <td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>
-        <td class="col-past-due">${normalizeMoney(entry.past_due || entry.pastDue) > 0 ? formatCurrency(entry.past_due || entry.pastDue) : '-'}</td>
+        <td class="col-utilization">-</td>
         <td class="col-actions">${deleteBtn}</td>
       </tr>
     `;
@@ -1403,6 +1520,8 @@
     let pastDueTotal = 0;
     let applicantDebt = 0;
     let coappDebt = 0;
+    let utilSum = 0;
+    let utilCount = 0;
 
     activeCreditors.forEach((entry) => {
       const debt = normalizeMoney(entry.debt_amount || entry.debtAmount);
@@ -1413,6 +1532,13 @@
       if (included) includedDebt += debt;
       pastDueTotal += normalizeMoney(entry.past_due || entry.pastDue);
 
+      const creditLimit = normalizeMoney(entry.credit_limit || entry.creditLimit)
+        || normalizeMoney(entry.high_credit || entry.highCredit);
+      if (creditLimit > 0 && debt >= 0) {
+        utilSum += (debt / creditLimit) * 100;
+        utilCount++;
+      }
+
       if (party === 'coapp') coappDebt += debt;
       if (party === 'applicant') applicantDebt += debt;
     });
@@ -1421,6 +1547,7 @@
     const elIncluded = document.getElementById('creditorsIncludedAmount');
     const elCount = document.getElementById('creditorsAccountsCount');
     const elPastDue = document.getElementById('creditorsPastDueTotal');
+    const elAvgUtil = document.getElementById('creditorsAvgUtilization');
     const elPartyTotal = document.getElementById('creditorsPartyTotalDebt');
     const elPartyCount = document.getElementById('creditorsPartyAccountsCount');
     const elPartyIncluded = document.getElementById('creditorsPartyIncludedAmount');
@@ -1431,6 +1558,7 @@
     if (elIncluded) elIncluded.textContent = formatCurrency(includedDebt);
     if (elCount) elCount.textContent = String(activeCreditors.length);
     if (elPastDue) elPastDue.textContent = formatCurrency(pastDueTotal);
+    if (elAvgUtil) elAvgUtil.textContent = utilCount > 0 ? `${Math.round(utilSum / utilCount)}%` : '-';
     if (elPartyTotal) elPartyTotal.textContent = formatCurrency(totalDebt);
     if (elPartyCount) elPartyCount.textContent = String(activeCreditors.length);
     if (elPartyIncluded) elPartyIncluded.textContent = formatCurrency(includedDebt);
@@ -1457,7 +1585,7 @@
     status: { class: 'col-status', label: 'STATUS' },
     type: { class: 'col-type', label: 'TIPO' },
     months: { class: 'col-months', label: 'MESES' },
-    pastDue: { class: 'col-past-due', label: 'VENCIDO' },
+    utilization: { class: 'col-utilization', label: 'UTIL.' },
     actions: { class: 'col-actions', label: '', html: '<button class="btn-header-icon btn-delete-icon" id="creditorsDeleteAllBtn" title="Eliminar todas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' }
   };
 
@@ -1535,206 +1663,45 @@
   function bindHeaderBulkActions() {
     const selectAllBtn = document.getElementById('creditorsSelectAllBtn');
     if (selectAllBtn) {
-      selectAllBtn.setAttribute('draggable', 'false');
       selectAllBtn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
         await handleBulkSelectAll();
       };
-      selectAllBtn.onmousedown = (event) => event.stopPropagation();
     }
 
     const deleteAllBtn = document.getElementById('creditorsDeleteAllBtn');
     if (deleteAllBtn) {
-      deleteAllBtn.setAttribute('draggable', 'false');
       deleteAllBtn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
         await handleBulkDeleteAll();
       };
-      deleteAllBtn.onmousedown = (event) => event.stopPropagation();
     }
   }
 
   function renderTableHeader() {
     const thead = document.getElementById('creditorsTableHead');
     if (!thead) return;
-    
+
     const tr = document.createElement('tr');
     tr.id = 'creditorsHeaderRow';
-    
+
     columnOrder.forEach((colKey, index) => {
       const col = columnDefs[colKey];
       const th = document.createElement('th');
       th.className = col.class;
-      th.draggable = true;
       th.dataset.column = colKey;
       th.dataset.index = index;
       th.innerHTML = col.html || col.label;
-      
-      // Eventos drag & drop premium
-      th.addEventListener('dragstart', handleDragStart);
-      th.addEventListener('dragover', handleDragOver);
-      th.addEventListener('drop', handleDrop);
-      th.addEventListener('dragenter', handleDragEnter);
-      th.addEventListener('dragleave', handleDragLeave);
-      th.addEventListener('dragend', handleDragEnd);
-      
-      // Tooltip de arrastre
-      th.title = `Arrastra para reordenar: ${col.label || colKey}`;
-      
       tr.appendChild(th);
     });
-    
+
     thead.innerHTML = '';
     thead.appendChild(tr);
     bindHeaderBulkActions();
   }
 
-  let draggedCol = null;
-  let dragSourceEl = null;
-  let dragGhost = null;
-
-  function handleDragStart(e) {
-    draggedCol = this.dataset.column;
-    dragSourceEl = this;
-    
-    // Efecto de elevación suave
-    requestAnimationFrame(() => {
-      this.classList.add('dragging');
-    });
-    
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', draggedCol);
-    
-    // Feedback táctil (si está disponible)
-    if (navigator.vibrate) {
-      navigator.vibrate(15);
-    }
-  }
-
-  function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const targetTh = e.currentTarget;
-    if (targetTh === dragSourceEl) return;
-    
-    // Indicador de posición suave
-    const rect = targetTh.getBoundingClientRect();
-    const midX = rect.left + rect.width / 2;
-    const isAfter = e.clientX > midX;
-    
-    // Guardar dirección para el drop
-    targetTh.dataset.dropPosition = isAfter ? 'after' : 'before';
-  }
-
-  function handleDragEnter(e) {
-    e.preventDefault();
-    const targetTh = e.currentTarget;
-    if (targetTh !== dragSourceEl) {
-      targetTh.classList.add('drag-over');
-      
-      // Sonido suave de hover (opcional, muy sutil)
-      // Solo si el usuario ha interactuado previamente
-    }
-  }
-
-  function handleDragLeave(e) {
-    const targetTh = e.currentTarget;
-    // Verificar que realmente salió del elemento (no entró a un hijo)
-    if (!targetTh.contains(e.relatedTarget)) {
-      targetTh.classList.remove('drag-over');
-      delete targetTh.dataset.dropPosition;
-    }
-  }
-
-  function handleDragEnd(e) {
-    // Limpiar todos los estados
-    document.querySelectorAll('#creditorsHeaderRow th').forEach(th => {
-      th.classList.remove('dragging', 'drag-over');
-      delete th.dataset.dropPosition;
-    });
-    draggedCol = null;
-    dragSourceEl = null;
-  }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    const targetTh = e.currentTarget;
-    targetTh.classList.remove('drag-over');
-    
-    const targetCol = targetTh.dataset.column;
-    if (!draggedCol || draggedCol === targetCol) {
-      handleDragEnd(e);
-      return;
-    }
-    
-    // Calcular índices
-    const fromIndex = columnOrder.indexOf(draggedCol);
-    let toIndex = columnOrder.indexOf(targetCol);
-    
-    // Ajustar según posición del cursor (antes o después del target)
-    const dropPosition = targetTh.dataset.dropPosition;
-    if (dropPosition === 'after' && fromIndex < toIndex) {
-      toIndex++;
-    } else if (dropPosition === 'before' && fromIndex > toIndex) {
-      toIndex--;
-    }
-    
-    // Reordenar array
-    columnOrder.splice(fromIndex, 1);
-    columnOrder.splice(toIndex, 0, draggedCol);
-    
-    // Guardar preferencia
-    localStorage.setItem('creditorsColumnOrder', JSON.stringify(columnOrder));
-    
-    // Feedback de éxito
-    if (navigator.vibrate) {
-      navigator.vibrate([20, 30, 20]);
-    }
-    
-    // Animar el cambio
-    animateColumnReorder(fromIndex, toIndex, () => {
-      renderTableHeader();
-      renderSaved();
-      
-      // Animación de entrada suave
-      requestAnimationFrame(() => {
-        const headers = document.querySelectorAll('#creditorsHeaderRow th');
-        headers.forEach((th, i) => {
-          th.style.opacity = '0';
-          th.style.transform = 'translateY(-5px)';
-          setTimeout(() => {
-            th.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-            th.style.opacity = '1';
-            th.style.transform = 'translateY(0)';
-          }, i * 30);
-        });
-      });
-    });
-  }
-
-  function animateColumnReorder(fromIndex, toIndex, callback) {
-    // Animación fluida del reordenamiento
-    const tbody = document.getElementById('creditorsSavedBody');
-    if (!tbody || !tbody.children.length) {
-      callback();
-      return;
-    }
-    
-    // Aplicar transición a todas las celdas
-    const rows = tbody.querySelectorAll('tr');
-    rows.forEach(row => {
-      const cells = row.querySelectorAll('td');
-      cells.forEach(cell => {
-        cell.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease';
-      });
-    });
-    
-    // Ejecutar callback después de la transición
-    setTimeout(callback, 50);
-  }
 
   function renderSaved() {
     const tbody = document.getElementById('creditorsSavedBody');
@@ -1742,6 +1709,7 @@
 
     // Asegurar que el header esté renderizado
     renderTableHeader();
+    updateSortToggleState();
 
     if (!currentCreditors.length) {
       tbody.innerHTML = `
@@ -1758,7 +1726,8 @@
     }
 
     const includedActiveDebtTotal = getIncludedActiveDebtTotal(currentCreditors);
-    tbody.innerHTML = currentCreditors.map((entry, index) => renderRowOrdered(entry, index, includedActiveDebtTotal)).join('');
+    const displayCreditors = getDisplayCreditors(currentCreditors);
+    tbody.innerHTML = displayCreditors.map((entry, index) => renderRowOrdered(entry, index, includedActiveDebtTotal)).join('');
     updateSummary();
 
     tbody.querySelectorAll('.row-checkbox').forEach((checkbox) => {
@@ -1815,7 +1784,17 @@
       status: `<td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>`,
       type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>`,
       months: `<td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>`,
-      pastDue: `<td class="col-past-due">${normalizeMoney(entry.past_due || entry.pastDue) > 0 ? formatCurrency(entry.past_due || entry.pastDue) : '-'}</td>`,
+      utilization: (() => {
+        const creditLimit = normalizeMoney(entry.credit_limit || entry.creditLimit)
+          || normalizeMoney(entry.high_credit || entry.highCredit);
+        const bal = debtAmount;
+        if (creditLimit > 0 && bal >= 0) {
+          const pct = Math.min(Math.round((bal / creditLimit) * 100), 999);
+          const cls = pct >= 80 ? 'util-high' : pct >= 30 ? 'util-mid' : 'util-low';
+          return `<td class="col-utilization"><span class="badge-util ${cls}" title="${formatCurrency(bal)} / ${formatCurrency(creditLimit)}">${pct}%</span></td>`;
+        }
+        return '<td class="col-utilization">-</td>';
+      })(),
       actions: `<td class="col-actions">${deleteBtn}</td>`
     };
     
@@ -2249,6 +2228,7 @@
     if (applyTotalBtn) {
       applyTotalBtn.addEventListener('click', applyTotalToCalculator);
     }
+    bindActiveSortToggle();
 
     // Botones Copiar Cuenta (delegación de eventos)
     const savedBody = document.getElementById('creditorsSavedBody');

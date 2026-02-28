@@ -1272,6 +1272,371 @@ CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications (recipie
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (recipient_username) WHERE read_at IS NULL;
 
 -- ============================================
+-- TABLA: Motor general de tareas operativas
+-- ============================================
+CREATE TABLE IF NOT EXISTS lead_tasks (
+  id BIGSERIAL PRIMARY KEY,
+  task_type VARCHAR(40) NOT NULL DEFAULT 'general',
+  title VARCHAR(180) NOT NULL,
+  description TEXT,
+  priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  owner_username VARCHAR(120) NOT NULL,
+  owner_team VARCHAR(120),
+  related_lead_id BIGINT REFERENCES leads(id) ON DELETE SET NULL,
+  due_date DATE,
+  due_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  recurrence_rule VARCHAR(20) NOT NULL DEFAULT 'none',
+  recurrence_interval INTEGER NOT NULL DEFAULT 1,
+  recurrence_end_date DATE,
+  sla_minutes INTEGER,
+  sla_due_at TIMESTAMPTZ,
+  sla_breached_at TIMESTAMPTZ,
+  escalated_at TIMESTAMPTZ,
+  escalated_to_username VARCHAR(120),
+  escalation_level INTEGER NOT NULL DEFAULT 0,
+  source_callback_date DATE,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by_user_id BIGINT,
+  created_by_username VARCHAR(120),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'task_type'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN task_type VARCHAR(40) NOT NULL DEFAULT 'general';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'description'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN description TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'priority'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN priority VARCHAR(20) NOT NULL DEFAULT 'normal';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'status'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'pending';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'owner_team'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN owner_team VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'related_lead_id'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN related_lead_id BIGINT REFERENCES leads(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'due_date'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN due_date DATE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'due_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN due_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'completed_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN completed_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'recurrence_rule'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN recurrence_rule VARCHAR(20) NOT NULL DEFAULT 'none';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'recurrence_interval'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN recurrence_interval INTEGER NOT NULL DEFAULT 1;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'recurrence_end_date'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN recurrence_end_date DATE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'sla_minutes'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN sla_minutes INTEGER;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'sla_due_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN sla_due_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'sla_breached_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN sla_breached_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'escalated_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN escalated_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'escalated_to_username'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN escalated_to_username VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'escalation_level'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN escalation_level INTEGER NOT NULL DEFAULT 0;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'source_callback_date'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN source_callback_date DATE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'metadata'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'created_by_user_id'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN created_by_user_id BIGINT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'created_by_username'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN created_by_username VARCHAR(120);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_tasks' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE lead_tasks ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_priority_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_priority_chk
+      CHECK (priority IN ('low', 'normal', 'high', 'urgent'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_status_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_status_chk
+      CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled', 'escalated'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_recurrence_rule_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_recurrence_rule_chk
+      CHECK (recurrence_rule IN ('none', 'daily', 'weekly', 'monthly'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_recurrence_interval_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_recurrence_interval_chk
+      CHECK (recurrence_interval >= 1 AND recurrence_interval <= 365);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_sla_minutes_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_sla_minutes_chk
+      CHECK (sla_minutes IS NULL OR (sla_minutes >= 1 AND sla_minutes <= 525600));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'lead_tasks_escalation_level_chk'
+  ) THEN
+    ALTER TABLE lead_tasks
+      ADD CONSTRAINT lead_tasks_escalation_level_chk
+      CHECK (escalation_level >= 0 AND escalation_level <= 10);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_owner_due ON lead_tasks (owner_username, due_date, due_at, status);
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_owner_team_due ON lead_tasks (owner_team, due_date, due_at, status);
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_status_due ON lead_tasks (status, due_at, due_date);
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_related_lead ON lead_tasks (related_lead_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_escalation_pending
+  ON lead_tasks (due_at, due_date)
+  WHERE status IN ('pending', 'in_progress', 'escalated') AND completed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lead_tasks_sla_due
+  ON lead_tasks (sla_due_at)
+  WHERE status IN ('pending', 'in_progress', 'escalated') AND completed_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_lead_tasks_callback_lead
+  ON lead_tasks (related_lead_id)
+  WHERE task_type = 'callback' AND related_lead_id IS NOT NULL;
+
+INSERT INTO lead_tasks (
+  task_type,
+  title,
+  description,
+  priority,
+  status,
+  owner_username,
+  owner_team,
+  related_lead_id,
+  due_date,
+  due_at,
+  completed_at,
+  recurrence_rule,
+  recurrence_interval,
+  sla_minutes,
+  sla_due_at,
+  source_callback_date,
+  metadata,
+  created_by_username
+)
+SELECT
+  'callback',
+  'Callback pendiente',
+  'Task generada automaticamente desde callback_date de lead.',
+  'normal',
+  CASE
+    WHEN l.callback_completed_at IS NOT NULL THEN 'completed'
+    WHEN l.callback_date < CURRENT_DATE THEN 'escalated'
+    ELSE 'pending'
+  END,
+  COALESCE(NULLIF(btrim(l.assigned_to), ''), 'sistema'),
+  NULL,
+  l.id,
+  l.callback_date::date,
+  (l.callback_date::date::timestamp + INTERVAL '23 hours 59 minutes'),
+  l.callback_completed_at,
+  'none',
+  1,
+  1440,
+  (l.callback_date::date::timestamp + INTERVAL '23 hours 59 minutes'),
+  l.callback_date::date,
+  jsonb_build_object('legacy_callback_sync', TRUE),
+  'migration.callback'
+FROM leads l
+WHERE l.callback_date IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM lead_tasks t
+    WHERE t.task_type = 'callback'
+      AND t.related_lead_id = l.id
+  );
+
+-- ============================================
+-- TABLA: Historial de etapas del pipeline
+-- ============================================
+CREATE TABLE IF NOT EXISTS lead_stage_history (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  from_status VARCHAR(120),
+  to_status VARCHAR(120) NOT NULL,
+  from_stage_key VARCHAR(40),
+  to_stage_key VARCHAR(40),
+  changed_by_user_id BIGINT,
+  changed_by_username VARCHAR(120),
+  request_id VARCHAR(120),
+  change_reason VARCHAR(240),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_stage_history_lead_created ON lead_stage_history (lead_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_stage_history_to_stage_created ON lead_stage_history (to_stage_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_stage_history_actor_created ON lead_stage_history (changed_by_username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_stage_history_actor_id_created ON lead_stage_history (changed_by_user_id, created_at DESC);
+
+INSERT INTO lead_stage_history (lead_id, from_status, to_status, from_stage_key, to_stage_key, change_reason)
+SELECT l.id, NULL, l.status, NULL, NULL, 'migration.baseline'
+FROM leads l
+WHERE l.status IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM lead_stage_history h
+    WHERE h.lead_id = l.id
+  );
+
+-- ============================================
 -- TABLA: Historial de correos enviados
 -- ============================================
 CREATE TABLE IF NOT EXISTS sent_emails (

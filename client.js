@@ -19,6 +19,7 @@
       self_employed: 'selfEmployed'
     };
     const LEAD_STATUS_OPTIONS = [
+      'New Lead',
       'Attempring contact',
       'Bad number',
       'bad state',
@@ -44,7 +45,8 @@
       'Warm',
       'Contacted Warm',
       'Meeting',
-      'Transferred to CCCF'
+      'Transferred to CCCF',
+      'Test'
     ];
     const LEAD_AUDIT_FIELD_LABELS = {
       full_name: 'Nombre',
@@ -97,7 +99,18 @@
     const AUTH_TOKEN_KEY = 'project_gw_auth_token';
     const THEME_KEY = 'project_gw_theme';
     const COLOR_KEY = 'project_gw_accent_color';
-    const ACCENT_COLOR_NAMES = ['verde', 'azul', 'rojo', 'morado'];
+    const ACCENT_COLORS_BY_THEME = {
+      light: ['verde', 'oceano', 'coral', 'morado', 'dorado', 'rosa'],
+      dark: ['fuego', 'veneno', 'azul']
+    };
+    const ACCENT_COLOR_DEFAULT_BY_THEME = {
+      light: 'verde',
+      dark: 'azul'
+    };
+    const ACCENT_COLOR_NAMES = Array.from(new Set([
+      ...ACCENT_COLORS_BY_THEME.light,
+      ...ACCENT_COLORS_BY_THEME.dark
+    ]));
     const sessionHandleTag = document.getElementById('sessionHandleTag');
     let authRefreshPromise = null;
 
@@ -313,6 +326,7 @@
       document.body.classList.remove('theme-dark', 'theme-light');
       document.body.classList.add(`theme-${selected}`);
       writeScopedPreference(THEME_KEY, selected, owner);
+      syncAccentSwatchesForTheme(selected);
 
       const switchEl = document.getElementById('themeSwitch');
       if (switchEl) {
@@ -330,10 +344,58 @@
       return 'dark';
     }
 
-    function applyAccentColor(color, { owner } = {}) {
-      const selected = ACCENT_COLOR_NAMES.includes(color) ? color : 'verde';
+    function normalizeThemeMode(themeValue) {
+      return themeValue === 'light' ? 'light' : 'dark';
+    }
+
+    function getCurrentThemeMode() {
+      return document.body.classList.contains('theme-light') ? 'light' : 'dark';
+    }
+
+    function getAccentStorageKeyForTheme(themeMode) {
+      return `${COLOR_KEY}_${normalizeThemeMode(themeMode)}`;
+    }
+
+    function getAllowedAccentColors(themeMode = getCurrentThemeMode()) {
+      const normalizedTheme = normalizeThemeMode(themeMode);
+      return Array.isArray(ACCENT_COLORS_BY_THEME[normalizedTheme])
+        ? ACCENT_COLORS_BY_THEME[normalizedTheme]
+        : ACCENT_COLORS_BY_THEME.dark;
+    }
+
+    function getDefaultAccentColor(themeMode = getCurrentThemeMode()) {
+      const normalizedTheme = normalizeThemeMode(themeMode);
+      return ACCENT_COLOR_DEFAULT_BY_THEME[normalizedTheme] || 'azul';
+    }
+
+    function coerceAccentColorForTheme(color, themeMode = getCurrentThemeMode()) {
+      const allowed = getAllowedAccentColors(themeMode);
+      return allowed.includes(color) ? color : getDefaultAccentColor(themeMode);
+    }
+
+    function syncAccentSwatchesForTheme(themeMode = getCurrentThemeMode()) {
+      const normalizedTheme = normalizeThemeMode(themeMode);
+      const allowed = new Set(getAllowedAccentColors(normalizedTheme));
+      document.querySelectorAll('.accent-swatch[data-color]').forEach((button) => {
+        const color = String(button.dataset.color || '').trim().toLowerCase();
+        const explicitTheme = String(button.dataset.theme || '').trim().toLowerCase();
+        const shouldShow = explicitTheme
+          ? explicitTheme === normalizedTheme
+          : allowed.has(color);
+        button.hidden = !shouldShow;
+        button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+        button.tabIndex = shouldShow ? 0 : -1;
+      });
+    }
+
+    function applyAccentColor(color, { owner, theme } = {}) {
+      const themeMode = normalizeThemeMode(theme || getCurrentThemeMode());
+      syncAccentSwatchesForTheme(themeMode);
+      const normalizedColor = String(color || '').trim().toLowerCase().slice(0, 40);
+      const selected = coerceAccentColorForTheme(normalizedColor, themeMode);
       ACCENT_COLOR_NAMES.forEach((entry) => document.body.classList.remove(`color-${entry}`));
       document.body.classList.add(`color-${selected}`);
+      writeScopedPreference(getAccentStorageKeyForTheme(themeMode), selected, owner);
       writeScopedPreference(COLOR_KEY, selected, owner);
 
       document.querySelectorAll('.accent-swatch[data-color]').forEach((button) => {
@@ -343,9 +405,14 @@
       });
     }
 
-    function getInitialAccentColor(owner) {
+    function getInitialAccentColor(owner, theme = getCurrentThemeMode()) {
+      const themeMode = normalizeThemeMode(theme);
+      const savedByTheme = readScopedPreference(getAccentStorageKeyForTheme(themeMode), owner);
+      if (savedByTheme) {
+        return coerceAccentColorForTheme(savedByTheme, themeMode);
+      }
       const savedColor = readScopedPreference(COLOR_KEY, owner);
-      return ACCENT_COLOR_NAMES.includes(savedColor) ? savedColor : 'verde';
+      return coerceAccentColorForTheme(savedColor, themeMode);
     }
 
     const initialSessionUser = readSessionUser();
@@ -361,7 +428,13 @@
     const themeSwitch = document.getElementById('themeSwitch');
     if (themeSwitch) {
       themeSwitch.addEventListener('change', () => {
-        applyTheme(themeSwitch.checked ? 'light' : 'dark');
+        const nextTheme = themeSwitch.checked ? 'light' : 'dark';
+        const currentSession = readSessionUser();
+        applyTheme(nextTheme, { owner: currentSession });
+        applyAccentColor(getInitialAccentColor(currentSession, nextTheme), {
+          owner: currentSession,
+          theme: nextTheme
+        });
       });
     }
 
@@ -4417,6 +4490,59 @@
       return String(value || '').trim().slice(0, 120);
     }
 
+    function normalizeLeadStatusToken(value) {
+      return normalizeLeadStatus(value).toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    let pipelineCatalogCache = null;
+    let pipelineCatalogLoadPromise = null;
+
+    async function ensurePipelineCatalogLoaded() {
+      if (pipelineCatalogCache) return pipelineCatalogCache;
+      if (pipelineCatalogLoadPromise) return pipelineCatalogLoadPromise;
+
+      pipelineCatalogLoadPromise = (async () => {
+        const response = await fetch('/api/pipeline/stages');
+        if (!response.ok) throw new Error('No se pudo cargar catalogo de pipeline.');
+        const data = await response.json().catch(() => ({}));
+        const allowedNextByStatusRaw = data && typeof data.allowedNextByStatus === 'object'
+          ? data.allowedNextByStatus
+          : {};
+        const allowedNextByStatus = new Map();
+        Object.entries(allowedNextByStatusRaw).forEach(([statusLabel, statuses]) => {
+          const normalizedLabel = normalizeLeadStatusToken(statusLabel);
+          if (!normalizedLabel) return;
+          allowedNextByStatus.set(
+            normalizedLabel,
+            Array.isArray(statuses)
+              ? statuses.map((entry) => normalizeLeadStatus(entry)).filter(Boolean)
+              : []
+          );
+        });
+
+        pipelineCatalogCache = { allowedNextByStatus };
+        return pipelineCatalogCache;
+      })();
+
+      try {
+        return await pipelineCatalogLoadPromise;
+      } catch (_error) {
+        return null;
+      } finally {
+        pipelineCatalogLoadPromise = null;
+      }
+    }
+
+    function loadPipelineCatalogInBackground() {
+      ensurePipelineCatalogLoaded()
+        .then((catalog) => {
+          if (!catalog || !leadStatusBadgeSelect) return;
+          const currentStatus = normalizeLeadStatus(currentLeadData?.status) || normalizeLeadStatus(leadStatusBadgeSelect.value) || 'New Lead';
+          renderLeadStatusBadgeOptions(currentStatus);
+        })
+        .catch(() => {});
+    }
+
     function getLeadStatusToneClass(statusValue) {
       const status = normalizeLeadStatus(statusValue).toLowerCase();
       if (!status || status === 'new' || status === 'new lead' || status === 'new duplicate') return 'new';
@@ -4432,15 +4558,23 @@
       const currentStatus = normalizeLeadStatus(currentStatusValue);
       const statusMap = new Map();
 
-      LEAD_STATUS_OPTIONS.forEach((optionValue) => {
+      const currentStatusKey = normalizeLeadStatusToken(currentStatus);
+      const allowedFromCatalog = currentStatusKey && pipelineCatalogCache?.allowedNextByStatus instanceof Map
+        ? pipelineCatalogCache.allowedNextByStatus.get(currentStatusKey)
+        : null;
+      const sourceOptions = Array.isArray(allowedFromCatalog) && allowedFromCatalog.length
+        ? allowedFromCatalog
+        : LEAD_STATUS_OPTIONS;
+
+      sourceOptions.forEach((optionValue) => {
         const normalizedOption = normalizeLeadStatus(optionValue);
         if (!normalizedOption) return;
-        const key = normalizedOption.toLowerCase();
+        const key = normalizeLeadStatusToken(normalizedOption);
         if (!statusMap.has(key)) statusMap.set(key, normalizedOption);
       });
 
       if (currentStatus) {
-        const currentKey = currentStatus.toLowerCase();
+        const currentKey = normalizeLeadStatusToken(currentStatus);
         if (!statusMap.has(currentKey)) statusMap.set(currentKey, currentStatus);
       }
 
@@ -4479,6 +4613,7 @@
       if (!leadStatusBadgeSelect) return;
       if (leadStatusBadgeSelect.dataset.bound === '1') return;
       leadStatusBadgeSelect.dataset.bound = '1';
+      loadPipelineCatalogInBackground();
 
       leadStatusBadgeSelect.addEventListener('change', async () => {
         if (leadStatusSaving) return;

@@ -576,14 +576,12 @@
   padding: 0 2px !important;
 }
 
-/* 11. Vencido */
-.col-past-due {
+/* 11. Utilización */
+.col-utilization {
   width: 55px;
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
-  color: rgba(248, 113, 113, 0.8);
   font-size: 0.75rem;
-  padding-right: 4px !important;
 }
 
 /* 12. Acciones */
@@ -774,8 +772,8 @@ body.theme-light .col-num {
   color: rgba(15, 23, 42, 0.5);
 }
 
-body.theme-light .col-past-due {
-  color: rgba(220, 38, 38, 0.85);
+body.theme-light .col-utilization {
+  color: rgba(15, 23, 42, 0.7);
 }
 
 body.theme-light .import-tab {

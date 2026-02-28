@@ -320,6 +320,81 @@ const zipLookupCache = new Map();
 const CREDIT_REPORT_AI_TIMEOUT_MS = 25000;
 const CREDIT_REPORT_AI_MAX_TEXT_CHARS = 120000;
 const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
+const PIPELINE_STAGE_CATALOG = [
+  { key: 'new', label: 'Nuevo', order: 1, terminal: false },
+  { key: 'contact', label: 'Contacto', order: 2, terminal: false },
+  { key: 'docs', label: 'Documentos', order: 3, terminal: false },
+  { key: 'underwriting', label: 'Underwriting', order: 4, terminal: false },
+  { key: 'closing', label: 'Cierre', order: 5, terminal: false },
+  { key: 'won', label: 'Ganado', order: 6, terminal: true },
+  { key: 'lost', label: 'Perdido', order: 7, terminal: true }
+];
+const PIPELINE_STATUS_CATALOG = [
+  { key: 'new_lead', label: 'New Lead', stageKey: 'new' },
+  { key: 'new', label: 'New', stageKey: 'new' },
+  { key: 'new_duplicate', label: 'New Duplicate', stageKey: 'new' },
+  { key: 'test', label: 'Test', stageKey: 'new' },
+
+  { key: 'attempting_contact_typo', label: 'Attempring contact', stageKey: 'contact' },
+  { key: 'warm', label: 'Warm', stageKey: 'contact' },
+  { key: 'contacted_warm', label: 'Contacted Warm', stageKey: 'contact' },
+  { key: 'meeting', label: 'Meeting', stageKey: 'contact' },
+  { key: 'nurture', label: 'Nurture', stageKey: 'contact' },
+  { key: 'hotlist', label: 'Hotlist', stageKey: 'contact' },
+  { key: 'ca_hold', label: 'CA Hold', stageKey: 'contact' },
+  { key: 'looking_for_a_loan', label: 'Looking for a loan', stageKey: 'contact' },
+
+  { key: 'docs_sent', label: 'Docs sent', stageKey: 'docs' },
+  { key: 'docs_back', label: 'Docs back', stageKey: 'docs' },
+
+  { key: 'submitted_to_uw', label: 'Submitted to UW', stageKey: 'underwriting' },
+
+  { key: 'sent_to_debtmanager', label: 'Sent to DebtManager', stageKey: 'closing' },
+
+  { key: 'banking', label: 'Banking', stageKey: 'won' },
+  { key: 'transferred_to_cccf', label: 'Transferred to CCCF', stageKey: 'won' },
+
+  { key: 'uw_reject', label: 'UW Reject', stageKey: 'lost' },
+  { key: 'bad_number', label: 'Bad number', stageKey: 'lost' },
+  { key: 'bad_state', label: 'bad state', stageKey: 'lost' },
+  { key: 'dead', label: 'Dead', stageKey: 'lost' },
+  { key: 'dnc', label: 'DNC', stageKey: 'lost' },
+  { key: 'not_interested', label: 'Not interested', stageKey: 'lost' },
+  { key: 'nq_debt_type', label: 'NQ Debt type', stageKey: 'lost' },
+  { key: 'nq_language', label: 'NQ language', stageKey: 'lost' },
+  { key: 'nq_cant_afford', label: 'NQ Can\'t afford', stageKey: 'lost' },
+  { key: 'nq_debt_amount', label: 'NQ Debt Amount', stageKey: 'lost' }
+];
+const PIPELINE_STATUS_ALIAS_TO_KEY = new Map([
+  ['attempting contact', 'attempting_contact_typo']
+]);
+const PIPELINE_STAGE_TRANSITIONS = new Map([
+  ['new', new Set(['new', 'contact', 'docs', 'lost'])],
+  ['contact', new Set(['contact', 'docs', 'underwriting', 'closing', 'won', 'lost'])],
+  ['docs', new Set(['contact', 'docs', 'underwriting', 'closing', 'won', 'lost'])],
+  ['underwriting', new Set(['contact', 'docs', 'underwriting', 'closing', 'won', 'lost'])],
+  ['closing', new Set(['contact', 'docs', 'closing', 'won', 'lost'])],
+  ['won', new Set(['won', 'closing', 'contact', 'lost'])],
+  ['lost', new Set(['lost', 'contact', 'new'])]
+]);
+const PIPELINE_STAGE_BY_KEY = new Map(PIPELINE_STAGE_CATALOG.map((entry) => [entry.key, entry]));
+const PIPELINE_STATUS_BY_KEY = new Map(PIPELINE_STATUS_CATALOG.map((entry) => [entry.key, entry]));
+const PIPELINE_STATUS_BY_TOKEN = new Map(
+  PIPELINE_STATUS_CATALOG.map((entry) => [normalizePipelineStatusToken(entry.label), entry])
+);
+const PIPELINE_WON_STAGE_KEYS = new Set(['won']);
+const PIPELINE_LOST_STAGE_KEYS = new Set(['lost']);
+const TASK_TYPE_VALUES = new Set(['general', 'callback']);
+const TASK_PRIORITY_VALUES = new Set(['low', 'normal', 'high', 'urgent']);
+const TASK_STATUS_VALUES = new Set(['pending', 'in_progress', 'completed', 'cancelled', 'escalated']);
+const TASK_RECURRENCE_RULE_VALUES = new Set(['none', 'daily', 'weekly', 'monthly']);
+const TASK_LIST_LIMIT_DEFAULT = 500;
+const TASK_LIST_LIMIT_MAX = 1000;
+const TASK_DEFAULT_SLA_MINUTES = parsePositiveInt(process.env.TASK_DEFAULT_SLA_MINUTES, 1440, 30, 10080);
+const TASK_ESCALATION_INTERVAL_MS = parsePositiveInt(process.env.TASK_ESCALATION_INTERVAL_MS, 120000, 30000, 3600000);
+const TASK_ESCALATION_COOLDOWN_MINUTES = parsePositiveInt(process.env.TASK_ESCALATION_COOLDOWN_MINUTES, 30, 5, 1440);
+let taskEscalationIntervalHandle = null;
+let taskEscalationInProgress = false;
 
 const LEAD_SELECT_COLUMNS = `
   id, case_id, full_name, co_applicant_name, co_applicant_email, co_applicant_home_phone, co_applicant_cell_phone, co_applicant_dob, co_applicant_ssn,
@@ -401,6 +476,16 @@ function getStateTypeFromCode(stateCode) {
 
 function getProgramFeePercentForState(stateCode) {
   return getStateTypeFromCode(stateCode) === 'Green' ? 25 : 29.5;
+}
+
+function applyLeadDerivedFields(lead) {
+  if (!lead || typeof lead !== 'object') return lead;
+  lead.state_type = getStateTypeFromCode(lead.state_code);
+  const stageKey = getLeadStageKey(lead.status);
+  const stage = stageKey ? PIPELINE_STAGE_BY_KEY.get(stageKey) || null : null;
+  lead.pipeline_stage_key = stageKey;
+  lead.pipeline_stage_label = stage?.label || null;
+  return lead;
 }
 
 async function createNotification(recipientUsername, type, title, body, leadId) {
@@ -1169,6 +1254,57 @@ function parseNonNegativeInt(value, fallback = 0, max = 50000) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.min(max, parsed);
+}
+
+function formatDateToIsoDay(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function buildKpiDateRange(query = {}) {
+  const fromRaw = cleanText(query.from, 20);
+  const toRaw = cleanText(query.to, 20);
+  const periodRaw = cleanText(query.period, 12).toLowerCase();
+  const periodDays = periodRaw === '7d' ? 7 : periodRaw === '90d' ? 90 : 30;
+
+  let from = null;
+  let to = null;
+
+  if (fromRaw) {
+    if (!isValidISODate(fromRaw)) {
+      return { ok: false, message: 'Parametro from invalido. Usa YYYY-MM-DD.' };
+    }
+    from = new Date(`${fromRaw}T00:00:00Z`);
+  }
+
+  if (toRaw) {
+    if (!isValidISODate(toRaw)) {
+      return { ok: false, message: 'Parametro to invalido. Usa YYYY-MM-DD.' };
+    }
+    to = new Date(`${toRaw}T00:00:00Z`);
+  }
+
+  const now = new Date();
+  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  if (!to) to = todayUtc;
+  if (!from) {
+    from = new Date(to.getTime() - ((periodDays - 1) * 24 * 60 * 60 * 1000));
+  }
+
+  if (from.getTime() > to.getTime()) {
+    return { ok: false, message: 'Parametro from no puede ser mayor que to.' };
+  }
+
+  const toExclusive = new Date(to.getTime() + (24 * 60 * 60 * 1000));
+  return {
+    ok: true,
+    from,
+    to,
+    toExclusive,
+    fromIso: formatDateToIsoDay(from),
+    toIso: formatDateToIsoDay(to)
+  };
 }
 
 function normalizeAuditDateFilter(value, fieldName) {
@@ -2093,6 +2229,835 @@ function normalizePhone(value, fieldName = 'telefono') {
   return { ok: true, value: formatPhoneDigits(digits), digits };
 }
 
+function normalizePipelineStatusToken(value) {
+  return cleanText(value, 120)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolvePipelineStatusDefinition(value) {
+  const token = normalizePipelineStatusToken(value);
+  if (!token) return null;
+
+  const direct = PIPELINE_STATUS_BY_TOKEN.get(token);
+  if (direct) return direct;
+
+  const aliasKey = PIPELINE_STATUS_ALIAS_TO_KEY.get(token);
+  if (!aliasKey) return null;
+  return PIPELINE_STATUS_BY_KEY.get(aliasKey) || null;
+}
+
+function normalizeLeadStatusLabel(value, fieldName = 'status') {
+  const text = cleanText(value, 120);
+  if (!text) {
+    return { ok: false, message: `${fieldName} es obligatorio.` };
+  }
+
+  const definition = resolvePipelineStatusDefinition(text);
+  if (!definition) {
+    return {
+      ok: false,
+      message: `${fieldName} no es valido. Usa un status del catalogo de pipeline.`
+    };
+  }
+
+  return { ok: true, value: definition.label, definition };
+}
+
+function getAllowedNextStageKeys(fromStageKey) {
+  const normalized = cleanText(fromStageKey, 40).toLowerCase();
+  const allowed = PIPELINE_STAGE_TRANSITIONS.get(normalized);
+  if (allowed instanceof Set && allowed.size > 0) return allowed;
+  return new Set(PIPELINE_STAGE_CATALOG.map((entry) => entry.key));
+}
+
+function getAllowedNextStatusLabels(fromStatusValue) {
+  const fromDefinition = resolvePipelineStatusDefinition(fromStatusValue);
+  const fromStageKey = fromDefinition?.stageKey || '';
+  const allowedStageKeys = getAllowedNextStageKeys(fromStageKey);
+  return PIPELINE_STATUS_CATALOG
+    .filter((entry) => allowedStageKeys.has(entry.stageKey))
+    .map((entry) => entry.label);
+}
+
+function validateLeadStatusTransition(fromStatusValue, toStatusValue) {
+  const fromDefinition = resolvePipelineStatusDefinition(fromStatusValue);
+  const normalizedTarget = normalizeLeadStatusLabel(toStatusValue, 'status');
+  if (!normalizedTarget.ok) return normalizedTarget;
+
+  const toDefinition = normalizedTarget.definition;
+  const fromToken = normalizePipelineStatusToken(fromDefinition?.label || fromStatusValue);
+  const toToken = normalizePipelineStatusToken(toDefinition.label);
+  if (fromToken && fromToken === toToken) {
+    return {
+      ok: true,
+      from: fromDefinition,
+      to: toDefinition,
+      changed: false,
+      allowedNextStatuses: getAllowedNextStatusLabels(fromDefinition?.label || '')
+    };
+  }
+
+  if (!fromDefinition) {
+    return {
+      ok: true,
+      from: null,
+      to: toDefinition,
+      changed: true,
+      allowedNextStatuses: getAllowedNextStatusLabels('')
+    };
+  }
+
+  const allowedStageKeys = getAllowedNextStageKeys(fromDefinition.stageKey);
+  if (!allowedStageKeys.has(toDefinition.stageKey)) {
+    return {
+      ok: false,
+      message: `Transicion de status no permitida (${fromDefinition.label} -> ${toDefinition.label}).`,
+      from: fromDefinition,
+      to: toDefinition,
+      allowedNextStatuses: getAllowedNextStatusLabels(fromDefinition.label)
+    };
+  }
+
+  return {
+    ok: true,
+    from: fromDefinition,
+    to: toDefinition,
+    changed: true,
+    allowedNextStatuses: getAllowedNextStatusLabels(fromDefinition.label)
+  };
+}
+
+function getLeadStageKey(statusValue) {
+  return resolvePipelineStatusDefinition(statusValue)?.stageKey || null;
+}
+
+function isPipelineWonStatus(statusValue) {
+  const stageKey = getLeadStageKey(statusValue);
+  return stageKey ? PIPELINE_WON_STAGE_KEYS.has(stageKey) : false;
+}
+
+function isPipelineLostStatus(statusValue) {
+  const stageKey = getLeadStageKey(statusValue);
+  return stageKey ? PIPELINE_LOST_STAGE_KEYS.has(stageKey) : false;
+}
+
+async function recordLeadStageHistory({
+  leadId,
+  fromStatus = null,
+  toStatus,
+  req = null,
+  reason = null,
+  client = pool
+}) {
+  const normalizedLeadId = Number(leadId);
+  if (!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) return;
+
+  const normalizedTo = normalizeLeadStatusLabel(toStatus, 'status');
+  if (!normalizedTo.ok) return;
+
+  const normalizedFrom = fromStatus ? normalizeLeadStatusLabel(fromStatus, 'status') : null;
+  const fromLabel = normalizedFrom?.ok ? normalizedFrom.value : toNullableText(fromStatus, 120);
+  const toLabel = normalizedTo.value;
+
+  const actorId = Number(req?.auth?.id);
+  const actorUserId = Number.isInteger(actorId) && actorId > 0 ? actorId : null;
+  const actorUsername = cleanText(req?.auth?.username, 120).toLowerCase() || null;
+  const requestId = cleanText(req?.requestId || req?.headers?.['x-request-id'], 120) || null;
+  const reasonText = toNullableText(reason, 240);
+
+  await client.query(
+    `INSERT INTO lead_stage_history (
+       lead_id, from_status, to_status, from_stage_key, to_stage_key,
+       changed_by_user_id, changed_by_username, request_id, change_reason
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      normalizedLeadId,
+      fromLabel,
+      toLabel,
+      getLeadStageKey(fromLabel),
+      getLeadStageKey(toLabel),
+      actorUserId,
+      actorUsername,
+      requestId,
+      reasonText
+    ]
+  );
+}
+
+function mapLeadStageHistoryRow(row) {
+  const fromStatus = cleanText(row?.from_status, 120) || null;
+  const toStatus = cleanText(row?.to_status, 120) || null;
+  const fromStageKey = cleanText(row?.from_stage_key, 40).toLowerCase() || null;
+  const toStageKey = cleanText(row?.to_stage_key, 40).toLowerCase() || null;
+  const fromStage = fromStageKey ? PIPELINE_STAGE_BY_KEY.get(fromStageKey) || null : null;
+  const toStage = toStageKey ? PIPELINE_STAGE_BY_KEY.get(toStageKey) || null : null;
+
+  return {
+    id: Number(row?.id || 0),
+    leadId: Number(row?.lead_id || 0),
+    fromStatus,
+    toStatus,
+    fromStageKey,
+    toStageKey,
+    fromStageLabel: fromStage?.label || null,
+    toStageLabel: toStage?.label || null,
+    changedByUserId: Number(row?.changed_by_user_id || 0) || null,
+    changedByUsername: cleanText(row?.changed_by_username, 120) || null,
+    requestId: cleanText(row?.request_id, 120) || null,
+    reason: cleanText(row?.change_reason, 240) || null,
+    createdAt: row?.created_at || null
+  };
+}
+
+function normalizeTaskType(value, { required = false, fieldName = 'taskType' } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: 'general' };
+  }
+  const normalized = cleanText(value, 40).toLowerCase();
+  if (!normalized) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: 'general' };
+  }
+  if (!TASK_TYPE_VALUES.has(normalized)) {
+    return { ok: false, message: `${fieldName} debe ser general o callback.` };
+  }
+  return { ok: true, provided: true, value: normalized };
+}
+
+function normalizeTaskPriority(value, { required = false, fieldName = 'priority' } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: 'normal' };
+  }
+  const normalized = cleanText(value, 20).toLowerCase();
+  if (!normalized) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: 'normal' };
+  }
+  if (!TASK_PRIORITY_VALUES.has(normalized)) {
+    return { ok: false, message: `${fieldName} debe ser low, normal, high o urgent.` };
+  }
+  return { ok: true, provided: true, value: normalized };
+}
+
+function normalizeTaskStatus(value, { required = false, fieldName = 'status' } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: 'pending' };
+  }
+  const normalized = cleanText(value, 20).toLowerCase();
+  if (!normalized) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: 'pending' };
+  }
+  if (!TASK_STATUS_VALUES.has(normalized)) {
+    return { ok: false, message: `${fieldName} debe ser pending, in_progress, completed, cancelled o escalated.` };
+  }
+  return { ok: true, provided: true, value: normalized };
+}
+
+function normalizeTaskRecurrenceRule(value, { required = false, fieldName = 'recurrenceRule' } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: 'none' };
+  }
+  const normalized = cleanText(value, 20).toLowerCase();
+  if (!normalized) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: 'none' };
+  }
+  if (!TASK_RECURRENCE_RULE_VALUES.has(normalized)) {
+    return { ok: false, message: `${fieldName} debe ser none, daily, weekly o monthly.` };
+  }
+  return { ok: true, provided: true, value: normalized };
+}
+
+function normalizeTaskDateOnly(value, { fieldName = 'date', required = false } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: null };
+  }
+  if (value === null || String(value).trim() === '') {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: null };
+  }
+  const normalized = String(value).trim();
+  if (!isValidISODate(normalized)) {
+    return { ok: false, message: `${fieldName} debe tener formato YYYY-MM-DD.` };
+  }
+  return { ok: true, provided: true, value: normalized };
+}
+
+function normalizeTaskTimestamp(value, { fieldName = 'timestamp', required = false } = {}) {
+  if (value === undefined) {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: null };
+  }
+  if (value === null || String(value).trim() === '') {
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: true, value: null };
+  }
+  const parsed = new Date(String(value).trim());
+  if (Number.isNaN(parsed.getTime())) {
+    return { ok: false, message: `${fieldName} debe ser una fecha/hora valida.` };
+  }
+  return { ok: true, provided: true, value: parsed.toISOString() };
+}
+
+function normalizeTaskRecurrenceInterval(value, { fieldName = 'recurrenceInterval' } = {}) {
+  if (value === undefined) return { ok: true, provided: false, value: 1 };
+  if (value === null || String(value).trim() === '') return { ok: true, provided: true, value: 1 };
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) {
+    return { ok: false, message: `${fieldName} debe ser un entero entre 1 y 365.` };
+  }
+  return { ok: true, provided: true, value: parsed };
+}
+
+function normalizeTaskSlaMinutes(value, { fieldName = 'slaMinutes' } = {}) {
+  if (value === undefined) return { ok: true, provided: false, value: null };
+  if (value === null || String(value).trim() === '') return { ok: true, provided: true, value: null };
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 525600) {
+    return { ok: false, message: `${fieldName} debe ser un entero entre 1 y 525600.` };
+  }
+  return { ok: true, provided: true, value: parsed };
+}
+
+function normalizeTaskMetadata(value, { fieldName = 'metadata' } = {}) {
+  if (value === undefined) return { ok: true, provided: false, value: {} };
+  if (value === null || value === '') return { ok: true, provided: true, value: {} };
+
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch (_error) {
+      return { ok: false, message: `${fieldName} debe ser un JSON valido.` };
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, message: `${fieldName} debe ser un objeto JSON.` };
+  }
+
+  return { ok: true, provided: true, value: toAuditSafeValue(parsed) || {} };
+}
+
+function normalizeTaskOwnerUsername(value, { required = false, fallback = null, fieldName = 'ownerUsername' } = {}) {
+  if (value === undefined) {
+    const normalizedFallback = cleanText(fallback, 120);
+    if (normalizedFallback) return { ok: true, provided: false, value: normalizedFallback };
+    if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+    return { ok: true, provided: false, value: null };
+  }
+
+  const normalized = cleanText(value, 120);
+  if (normalized) return { ok: true, provided: true, value: normalized };
+
+  const normalizedFallback = cleanText(fallback, 120);
+  if (normalizedFallback) return { ok: true, provided: true, value: normalizedFallback };
+  if (required) return { ok: false, message: `${fieldName} es obligatorio.` };
+  return { ok: true, provided: true, value: null };
+}
+
+function normalizeTaskOwnerTeam(value) {
+  if (value === undefined) return { ok: true, provided: false, value: null };
+  const normalized = cleanText(value, 120);
+  return { ok: true, provided: true, value: normalized || null };
+}
+
+function normalizeDateOnlyForApi(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+function normalizeTimestampForApi(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function getTaskDueTimestamp(task) {
+  const dueAt = normalizeTimestampForApi(task?.due_at ?? task?.dueAt);
+  if (dueAt) {
+    const dueAtMs = new Date(dueAt).getTime();
+    if (Number.isFinite(dueAtMs)) return dueAtMs;
+  }
+
+  const dueDate = normalizeDateOnlyForApi(task?.due_date ?? task?.dueDate);
+  if (!dueDate) return null;
+  const dueDateMs = new Date(`${dueDate}T23:59:59Z`).getTime();
+  return Number.isFinite(dueDateMs) ? dueDateMs : null;
+}
+
+function deriveTaskSlaStatus(row) {
+  const slaDueAt = normalizeTimestampForApi(row?.sla_due_at ?? row?.slaDueAt);
+  if (!slaDueAt) return null;
+
+  const slaDueMs = new Date(slaDueAt).getTime();
+  if (!Number.isFinite(slaDueMs)) return null;
+
+  const completedAt = normalizeTimestampForApi(row?.completed_at ?? row?.completedAt);
+  if (completedAt) {
+    const completedMs = new Date(completedAt).getTime();
+    if (Number.isFinite(completedMs) && completedMs <= slaDueMs) return 'met';
+    return 'breached';
+  }
+
+  return Date.now() > slaDueMs ? 'breached' : 'pending';
+}
+
+function mapLeadTaskRow(row) {
+  const status = cleanText(row?.status, 20).toLowerCase() || 'pending';
+  const completedAt = normalizeTimestampForApi(row?.completed_at);
+  const dueTimestamp = getTaskDueTimestamp(row);
+  const isClosed = status === 'completed' || status === 'cancelled';
+  const isOverdue = !isClosed && Number.isFinite(dueTimestamp) && dueTimestamp < Date.now();
+
+  return {
+    id: Number(row?.id || 0),
+    taskType: cleanText(row?.task_type, 40).toLowerCase() || 'general',
+    title: cleanText(row?.title, 180) || 'Task',
+    description: cleanText(row?.description, 5000) || '',
+    priority: cleanText(row?.priority, 20).toLowerCase() || 'normal',
+    status,
+    ownerUsername: cleanText(row?.owner_username, 120) || null,
+    ownerTeam: cleanText(row?.owner_team, 120) || null,
+    relatedLeadId: Number(row?.related_lead_id || 0) || null,
+    leadCaseId: Number(row?.lead_case_id || 0) || null,
+    leadName: cleanText(row?.lead_full_name, 120) || null,
+    dueDate: normalizeDateOnlyForApi(row?.due_date),
+    dueAt: normalizeTimestampForApi(row?.due_at),
+    completedAt,
+    recurrenceRule: cleanText(row?.recurrence_rule, 20).toLowerCase() || 'none',
+    recurrenceInterval: Number(row?.recurrence_interval || 1) || 1,
+    recurrenceEndDate: normalizeDateOnlyForApi(row?.recurrence_end_date),
+    slaMinutes: Number.isInteger(Number(row?.sla_minutes)) ? Number(row.sla_minutes) : null,
+    slaDueAt: normalizeTimestampForApi(row?.sla_due_at),
+    slaBreachedAt: normalizeTimestampForApi(row?.sla_breached_at),
+    slaStatus: deriveTaskSlaStatus(row),
+    escalatedAt: normalizeTimestampForApi(row?.escalated_at),
+    escalatedToUsername: cleanText(row?.escalated_to_username, 120) || null,
+    escalationLevel: Number(row?.escalation_level || 0) || 0,
+    sourceCallbackDate: normalizeDateOnlyForApi(row?.source_callback_date),
+    metadata: row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? row.metadata
+      : {},
+    createdByUserId: Number(row?.created_by_user_id || 0) || null,
+    createdByUsername: cleanText(row?.created_by_username, 120) || null,
+    createdAt: normalizeTimestampForApi(row?.created_at),
+    updatedAt: normalizeTimestampForApi(row?.updated_at),
+    isOverdue
+  };
+}
+
+function getTaskActorLabel(req) {
+  const displayName = cleanText(req?.auth?.displayName, 120);
+  const username = cleanText(req?.auth?.username, 120);
+  return displayName || username || 'sistema';
+}
+
+function buildTaskDueAtFromDate(isoDate) {
+  if (!isValidISODate(isoDate)) return null;
+  return `${isoDate}T23:59:00.000Z`;
+}
+
+function computeTaskSlaDueAt({
+  explicitSlaDueAt = null,
+  slaMinutes = null,
+  anchorTimestamp = null
+} = {}) {
+  if (explicitSlaDueAt) return explicitSlaDueAt;
+  if (!Number.isInteger(slaMinutes) || slaMinutes <= 0) return null;
+
+  const anchor = anchorTimestamp
+    ? new Date(anchorTimestamp)
+    : new Date();
+  if (Number.isNaN(anchor.getTime())) return null;
+  return new Date(anchor.getTime() + (slaMinutes * 60 * 1000)).toISOString();
+}
+
+function canAccessTaskByOwner(authContext, ownerUsername) {
+  if (hasAuthPermission(authContext, 'callbacks.view_all')) return true;
+  const identities = getAuthIdentities(authContext);
+  const owner = cleanText(ownerUsername, 120).toLowerCase();
+  return Boolean(owner && identities.includes(owner));
+}
+
+function parseBooleanQuery(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'si', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseTaskFilterList(rawValue, allowedSet) {
+  const raw = cleanText(rawValue, 300).toLowerCase();
+  if (!raw) return [];
+  return Array.from(new Set(
+    raw
+      .split(',')
+      .map((entry) => cleanText(entry, 40).toLowerCase())
+      .filter((entry) => allowedSet.has(entry))
+  ));
+}
+
+function computeNextRecurringDue({ dueDate, dueAt, recurrenceRule, recurrenceInterval }) {
+  const interval = Number.isInteger(Number(recurrenceInterval)) ? Number(recurrenceInterval) : 1;
+  if (!TASK_RECURRENCE_RULE_VALUES.has(recurrenceRule) || recurrenceRule === 'none') return null;
+
+  const anchor = dueAt
+    ? new Date(dueAt)
+    : (dueDate ? new Date(`${dueDate}T12:00:00Z`) : null);
+  if (!anchor || Number.isNaN(anchor.getTime())) return null;
+
+  const next = new Date(anchor.getTime());
+  if (recurrenceRule === 'daily') {
+    next.setUTCDate(next.getUTCDate() + interval);
+  } else if (recurrenceRule === 'weekly') {
+    next.setUTCDate(next.getUTCDate() + (7 * interval));
+  } else if (recurrenceRule === 'monthly') {
+    next.setUTCMonth(next.getUTCMonth() + interval);
+  }
+
+  if (Number.isNaN(next.getTime())) return null;
+  return {
+    dueDate: next.toISOString().slice(0, 10),
+    dueAt: dueAt ? next.toISOString() : null
+  };
+}
+
+async function createNextRecurringTask(taskRow, { req = null, client = pool } = {}) {
+  const recurrenceRule = cleanText(taskRow?.recurrence_rule, 20).toLowerCase();
+  if (!TASK_RECURRENCE_RULE_VALUES.has(recurrenceRule) || recurrenceRule === 'none') return null;
+
+  const recurrenceInterval = Number(taskRow?.recurrence_interval || 1);
+  const dueDate = normalizeDateOnlyForApi(taskRow?.due_date);
+  const dueAt = normalizeTimestampForApi(taskRow?.due_at);
+  const nextDue = computeNextRecurringDue({ dueDate, dueAt, recurrenceRule, recurrenceInterval });
+  if (!nextDue) return null;
+
+  const recurrenceEndDate = normalizeDateOnlyForApi(taskRow?.recurrence_end_date);
+  if (recurrenceEndDate && nextDue.dueDate > recurrenceEndDate) {
+    return null;
+  }
+
+  const createdByUserId = Number(req?.auth?.id);
+  const normalizedCreatedByUserId = Number.isInteger(createdByUserId) && createdByUserId > 0
+    ? createdByUserId
+    : null;
+  const createdByUsername = cleanText(req?.auth?.username, 120).toLowerCase()
+    || cleanText(taskRow?.created_by_username, 120).toLowerCase()
+    || null;
+  const metadata = {
+    ...(taskRow?.metadata && typeof taskRow.metadata === 'object' ? taskRow.metadata : {}),
+    recurring_from_task_id: Number(taskRow?.id || 0) || null
+  };
+  const slaMinutes = Number(taskRow?.sla_minutes || 0);
+  const nextSlaDueAt = computeTaskSlaDueAt({
+    explicitSlaDueAt: null,
+    slaMinutes: Number.isInteger(slaMinutes) && slaMinutes > 0 ? slaMinutes : null,
+    anchorTimestamp: nextDue.dueAt || buildTaskDueAtFromDate(nextDue.dueDate)
+  });
+
+  const { rows } = await client.query(
+    `INSERT INTO lead_tasks (
+       task_type,
+       title,
+       description,
+       priority,
+       status,
+       owner_username,
+       owner_team,
+       related_lead_id,
+       due_date,
+       due_at,
+       recurrence_rule,
+       recurrence_interval,
+       recurrence_end_date,
+       sla_minutes,
+       sla_due_at,
+       metadata,
+       created_by_user_id,
+       created_by_username
+     ) VALUES (
+       $1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9,
+       $10, $11, $12, $13, $14, $15::jsonb, $16, $17
+     )
+     RETURNING *`,
+    [
+      cleanText(taskRow?.task_type, 40).toLowerCase() || 'general',
+      cleanText(taskRow?.title, 180) || 'Task',
+      toNullableText(taskRow?.description, 5000),
+      cleanText(taskRow?.priority, 20).toLowerCase() || 'normal',
+      cleanText(taskRow?.owner_username, 120) || 'sistema',
+      toNullableText(taskRow?.owner_team, 120),
+      Number(taskRow?.related_lead_id || 0) || null,
+      nextDue.dueDate,
+      nextDue.dueAt,
+      recurrenceRule,
+      recurrenceInterval,
+      recurrenceEndDate,
+      Number.isInteger(slaMinutes) && slaMinutes > 0 ? slaMinutes : null,
+      nextSlaDueAt,
+      JSON.stringify(metadata),
+      normalizedCreatedByUserId,
+      createdByUsername
+    ]
+  );
+
+  return rows[0] || null;
+}
+
+async function syncCallbackTaskFromLead(lead, { req = null, client = pool } = {}) {
+  const leadId = Number(lead?.id || 0);
+  if (!Number.isInteger(leadId) || leadId <= 0) return null;
+
+  const callbackDate = normalizeDateOnlyForApi(lead?.callback_date);
+  if (!callbackDate) {
+    await client.query(
+      `DELETE FROM lead_tasks
+       WHERE task_type = 'callback'
+         AND related_lead_id = $1`,
+      [leadId]
+    );
+    return null;
+  }
+
+  const callbackCompletedAt = normalizeTimestampForApi(lead?.callback_completed_at);
+  const dueAt = buildTaskDueAtFromDate(callbackDate);
+  const ownerUsername = cleanText(lead?.assigned_to, 120) || 'sistema';
+  const actorUsername = cleanText(req?.auth?.username, 120).toLowerCase() || null;
+  const actorUserId = Number(req?.auth?.id);
+  const normalizedActorUserId = Number.isInteger(actorUserId) && actorUserId > 0 ? actorUserId : null;
+  const caseLabel = Number(lead?.case_id || 0) || null;
+  const leadName = cleanText(lead?.full_name, 120) || `Lead #${leadId}`;
+  const description = caseLabel
+    ? `Callback del caso #${caseLabel}.`
+    : `Callback del lead #${leadId}.`;
+
+  let taskStatus = 'pending';
+  if (callbackCompletedAt) {
+    taskStatus = 'completed';
+  } else if (callbackDate < formatDateToIsoDay(new Date())) {
+    taskStatus = 'escalated';
+  }
+
+  const metadata = {
+    callback_source: 'lead.callback_date',
+    caseId: caseLabel,
+    leadName
+  };
+
+  const { rows } = await client.query(
+    `INSERT INTO lead_tasks (
+       task_type,
+       title,
+       description,
+       priority,
+       status,
+       owner_username,
+       owner_team,
+       related_lead_id,
+       due_date,
+       due_at,
+       completed_at,
+       recurrence_rule,
+       recurrence_interval,
+       sla_minutes,
+       sla_due_at,
+       source_callback_date,
+       metadata,
+       created_by_user_id,
+       created_by_username
+     ) VALUES (
+       'callback', $1, $2, 'normal', $3, $4, NULL, $5, $6, $7, $8,
+       'none', 1, 1440, $9, $10, $11::jsonb, $12, $13
+     )
+     ON CONFLICT (related_lead_id) WHERE (task_type = 'callback' AND related_lead_id IS NOT NULL)
+     DO UPDATE SET
+       title = EXCLUDED.title,
+       description = EXCLUDED.description,
+       status = EXCLUDED.status,
+       owner_username = EXCLUDED.owner_username,
+       due_date = EXCLUDED.due_date,
+       due_at = EXCLUDED.due_at,
+       completed_at = EXCLUDED.completed_at,
+       sla_due_at = EXCLUDED.sla_due_at,
+       source_callback_date = EXCLUDED.source_callback_date,
+       metadata = EXCLUDED.metadata,
+       updated_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [
+      `Callback - ${leadName}`,
+      description,
+      taskStatus,
+      ownerUsername,
+      leadId,
+      callbackDate,
+      dueAt,
+      callbackCompletedAt,
+      dueAt,
+      callbackDate,
+      JSON.stringify(metadata),
+      normalizedActorUserId,
+      actorUsername
+    ]
+  );
+
+  return rows[0] || null;
+}
+
+async function markCallbackTaskCompletedByLeadId(leadId, completedAt = null, client = pool) {
+  const normalizedLeadId = Number(leadId);
+  if (!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) return null;
+
+  const { rows } = await client.query(
+    `UPDATE lead_tasks
+     SET status = 'completed',
+         completed_at = COALESCE($2::timestamptz, completed_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE task_type = 'callback'
+       AND related_lead_id = $1
+     RETURNING *`,
+    [normalizedLeadId, completedAt]
+  );
+
+  return rows[0] || null;
+}
+
+async function getTaskEscalationTargets(client = pool) {
+  const { rows } = await client.query(
+    `SELECT username
+     FROM app_users
+     WHERE is_active = TRUE
+       AND role IN ('supervisor', 'admin')
+     ORDER BY CASE role WHEN 'supervisor' THEN 0 ELSE 1 END, lower(username) ASC
+     LIMIT 200`
+  );
+
+  return rows
+    .map((row) => cleanText(row.username, 120).toLowerCase())
+    .filter(Boolean);
+}
+
+function pickTaskEscalationTarget(ownerUsername, targets) {
+  const owner = cleanText(ownerUsername, 120).toLowerCase();
+  const firstNonOwner = targets.find((entry) => entry !== owner);
+  return firstNonOwner || targets[0] || null;
+}
+
+async function runTaskEscalationSweep({ limit = 200 } = {}) {
+  if (taskEscalationInProgress) {
+    return { ok: true, skipped: true, escalated: 0 };
+  }
+
+  taskEscalationInProgress = true;
+  try {
+    const escalationTargets = await getTaskEscalationTargets();
+    if (!escalationTargets.length) {
+      return { ok: true, skipped: false, escalated: 0 };
+    }
+
+    const boundedLimit = parsePositiveInt(limit, 200, 1, 500);
+    const { rows: candidates } = await pool.query(
+      `SELECT id, title, owner_username, related_lead_id
+       FROM lead_tasks
+       WHERE status IN ('pending', 'in_progress', 'escalated')
+         AND completed_at IS NULL
+         AND (
+           (sla_due_at IS NOT NULL AND sla_due_at < CURRENT_TIMESTAMP)
+           OR (sla_due_at IS NULL AND due_at IS NOT NULL AND due_at < CURRENT_TIMESTAMP)
+           OR (sla_due_at IS NULL AND due_at IS NULL AND due_date IS NOT NULL AND due_date < CURRENT_DATE)
+         )
+         AND (
+           escalated_at IS NULL
+           OR escalated_at <= CURRENT_TIMESTAMP - ($1::int * INTERVAL '1 minute')
+         )
+       ORDER BY COALESCE(sla_due_at, due_at, due_date::timestamp, created_at) ASC, id ASC
+       LIMIT $2`,
+      [TASK_ESCALATION_COOLDOWN_MINUTES, boundedLimit]
+    );
+
+    let escalatedCount = 0;
+    for (const row of candidates) {
+      const escalationTarget = pickTaskEscalationTarget(row.owner_username, escalationTargets);
+      if (!escalationTarget) continue;
+
+      const { rows: updatedRows } = await pool.query(
+        `UPDATE lead_tasks
+         SET status = 'escalated',
+             escalated_at = CURRENT_TIMESTAMP,
+             escalated_to_username = $2,
+             escalation_level = LEAST(escalation_level + 1, 10),
+             sla_breached_at = COALESCE(sla_breached_at, CURRENT_TIMESTAMP),
+             owner_team = COALESCE(owner_team, 'supervision'),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND completed_at IS NULL
+         RETURNING id, title, related_lead_id, owner_username, escalation_level`,
+        [row.id, escalationTarget]
+      );
+
+      if (!updatedRows.length) continue;
+      escalatedCount += 1;
+
+      const updated = updatedRows[0];
+      const title = cleanText(updated.title, 120) || 'Task escalada';
+      const body = `Task escalada automaticamente. Owner original: ${cleanText(updated.owner_username, 120) || 'sin owner'}. Nivel ${Number(updated.escalation_level || 0)}.`;
+      await createNotification(
+        escalationTarget,
+        'task_escalated',
+        title,
+        body,
+        Number(updated.related_lead_id || 0) || null
+      ).catch(() => {});
+    }
+
+    return { ok: true, skipped: false, escalated: escalatedCount };
+  } catch (error) {
+    console.error('Error en escalamiento automatico de tareas:', error);
+    return { ok: false, skipped: false, escalated: 0 };
+  } finally {
+    taskEscalationInProgress = false;
+  }
+}
+
+function startTaskEscalationLoop() {
+  if (taskEscalationIntervalHandle) {
+    clearInterval(taskEscalationIntervalHandle);
+    taskEscalationIntervalHandle = null;
+  }
+
+  taskEscalationIntervalHandle = setInterval(() => {
+    runTaskEscalationSweep().catch((error) => {
+      console.error('Error ejecutando barrido de escalamiento:', error);
+    });
+  }, TASK_ESCALATION_INTERVAL_MS);
+
+  if (typeof taskEscalationIntervalHandle.unref === 'function') {
+    taskEscalationIntervalHandle.unref();
+  }
+
+  runTaskEscalationSweep().catch((error) => {
+    console.error('Error ejecutando escalamiento inicial:', error);
+  });
+}
+
 function parseLeadPatchBody(body = {}) {
   const changes = {};
 
@@ -2379,7 +3344,9 @@ function parseLeadPatchBody(body = {}) {
 
   const status = pickFirstDefined(body, ['status', 'leadStatus']);
   if (status !== undefined) {
-    changes.status = toNullableText(status, 120);
+    const normalizedStatus = normalizeLeadStatusLabel(status, 'status');
+    if (!normalizedStatus.ok) return normalizedStatus;
+    changes.status = normalizedStatus.value;
   }
 
   const assignedTo = pickFirstDefined(body, ['assignedTo', 'assigned_to']);
@@ -2625,6 +3592,8 @@ function normalizeAiCreditorEntry(entry, sourceReport) {
     monthsReviewed: normalizeAiMonthsReviewed(pickFirstDefined(entry, ['monthsReviewed', 'months_reviewed', 'months'])),
     debtAmount,
     pastDue: normalizeAiMoneyValue(pickFirstDefined(entry, ['pastDue', 'past_due'])),
+    creditLimit: normalizeAiMoneyValue(pickFirstDefined(entry, ['creditLimit', 'credit_limit'])),
+    highCredit: normalizeAiMoneyValue(pickFirstDefined(entry, ['highCredit', 'high_credit'])),
     isIncluded: debtAmount > 0
   };
 }
@@ -2641,12 +3610,14 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
   const prompt = [
     'Extrae cuentas de un reporte de credito y responde SOLO JSON valido.',
     'Devuelve este formato exacto:',
-    '{"creditors":[{"creditorName":"","debtAmount":0,"accountNumber":"","accountStatus":"","accountType":"","responsibility":"","monthsReviewed":null,"pastDue":0}]}',
+    '{"creditors":[{"creditorName":"","debtAmount":0,"accountNumber":"","accountStatus":"","accountType":"","responsibility":"","monthsReviewed":null,"pastDue":0,"creditLimit":0,"highCredit":0}]}',
     '',
     'Reglas:',
-    '- No inventes datos. Si falta algo usa null o "".',
+    '- No inventes datos. Si falta algo usa null o 0.',
     '- creditorName = SOLO el nombre del acreedor/banco/empresa (ej: "TBOM/MILESTONE", "CAPITAL ONE", "JPMCB CARD"). NUNCA incluir direcciones, ciudades, estados, ZIP codes ni PO BOX en el nombre.',
     '- debtAmount = deuda mas reciente/actual para esa cuenta (current balance, unpaid balance, amount due o equivalente).',
+    '- creditLimit = limite de credito de la cuenta (Credit Limit, Credit Line). Si no existe (prestamos, auto loans, etc.) usar 0.',
+    '- highCredit = credito mas alto usado (High Credit, Highest Balance). Si no existe usar 0.',
     '- monthsReviewed: si hay multiples valores posibles para la misma cuenta, usar SIEMPRE el menor entero.',
     '- Debe salir una fila por cuenta detectada.',
     '- accountType = SOLO el tipo de cuenta limpio: "Credit Card", "Auto Loan", "Mortgage", "Personal Loan", "Student Loan", "Installment", "Revolving", "Unsecured", "Secured", "Collection", "Charge Account". NO incluir la palabra "Type" ni otros campos.',
@@ -4672,6 +5643,245 @@ app.post('/api/emails/bulk-delete', async (req, res) => {
   }
 });
 
+app.get('/api/pipeline/stages', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  const canViewPipeline = hasAuthPermission(req.auth, 'leads.view_all') || hasAuthPermission(req.auth, 'leads.view_assigned');
+  if (!canViewPipeline) {
+    return res.status(403).json({ message: 'No tienes permisos para consultar pipeline.' });
+  }
+
+  const stages = PIPELINE_STAGE_CATALOG.map((stage) => ({
+    key: stage.key,
+    label: stage.label,
+    order: stage.order,
+    terminal: stage.terminal,
+    nextStageKeys: Array.from(getAllowedNextStageKeys(stage.key))
+  }));
+
+  const statuses = PIPELINE_STATUS_CATALOG.map((status) => ({
+    key: status.key,
+    label: status.label,
+    stageKey: status.stageKey,
+    stageLabel: PIPELINE_STAGE_BY_KEY.get(status.stageKey)?.label || status.stageKey
+  }));
+
+  const allowedNextByStatus = {};
+  PIPELINE_STATUS_CATALOG.forEach((status) => {
+    allowedNextByStatus[status.label] = getAllowedNextStatusLabels(status.label);
+  });
+
+  return res.json({
+    stages,
+    statuses,
+    allowedNextByStatus
+  });
+});
+
+app.get('/api/kpi/pipeline', async (req, res) => {
+  const range = buildKpiDateRange(req.query || {});
+  if (!range.ok) {
+    return res.status(400).json({ message: range.message });
+  }
+
+  const sourceFilter = cleanText(req.query.source, 60).toLowerCase() || null;
+  const agentFilter = cleanText(req.query.agent, 120).toLowerCase() || null;
+
+  try {
+    await hydrateAuthPermissions(req);
+    const canViewAllLeads = hasAuthPermission(req.auth, 'leads.view_all');
+    const canViewAssignedLeads = hasAuthPermission(req.auth, 'leads.view_assigned');
+    if (!canViewAllLeads && !canViewAssignedLeads) {
+      return res.status(403).json({ message: 'No tienes permisos para consultar KPI.' });
+    }
+
+    const identities = canViewAllLeads ? [] : getAuthIdentities(req.auth);
+    if (!canViewAllLeads && !identities.length) {
+      return res.status(403).json({ message: 'No autorizado para consultar KPI.' });
+    }
+
+    const baseParams = [range.from.toISOString(), range.toExclusive.toISOString()];
+    const leadConditions = [
+      'created_at >= $1::timestamptz',
+      'created_at < $2::timestamptz'
+    ];
+
+    if (sourceFilter) {
+      baseParams.push(sourceFilter);
+      leadConditions.push(`lower(coalesce(source, '')) = $${baseParams.length}`);
+    }
+
+    if (agentFilter) {
+      baseParams.push(agentFilter);
+      leadConditions.push(`lower(coalesce(assigned_to, '')) = $${baseParams.length}`);
+    }
+
+    if (!canViewAllLeads) {
+      baseParams.push(identities);
+      leadConditions.push(`(assigned_to IS NULL OR lower(coalesce(assigned_to, '')) = ANY($${baseParams.length}::text[]))`);
+    }
+
+    const leadWhereSql = leadConditions.length ? `WHERE ${leadConditions.join(' AND ')}` : '';
+    const { rows: leadRows } = await pool.query(
+      `SELECT id, status, source, assigned_to, created_at
+       FROM leads
+       ${leadWhereSql}`,
+      baseParams
+    );
+
+    const stageCountMap = new Map(PIPELINE_STAGE_CATALOG.map((stage) => [stage.key, 0]));
+    let unknownStageCount = 0;
+    let wonLeads = 0;
+    let lostLeads = 0;
+    let activeLeads = 0;
+
+    const agingBuckets = {
+      '0-7': 0,
+      '8-30': 0,
+      '31-60': 0,
+      '61+': 0
+    };
+    const sourceMap = new Map();
+    const agentMap = new Map();
+    const nowMs = Date.now();
+
+    leadRows.forEach((lead) => {
+      const statusLabel = cleanText(lead.status, 120) || '';
+      const stageKey = getLeadStageKey(statusLabel);
+      if (stageKey && stageCountMap.has(stageKey)) {
+        stageCountMap.set(stageKey, Number(stageCountMap.get(stageKey) || 0) + 1);
+      } else {
+        unknownStageCount += 1;
+      }
+
+      const isWon = isPipelineWonStatus(statusLabel);
+      const isLost = isPipelineLostStatus(statusLabel);
+      if (isWon) wonLeads += 1;
+      if (isLost) lostLeads += 1;
+      if (!isWon && !isLost) {
+        activeLeads += 1;
+        const createdMs = new Date(lead.created_at).getTime();
+        const ageDays = Number.isFinite(createdMs) ? Math.max(0, Math.floor((nowMs - createdMs) / (24 * 60 * 60 * 1000))) : 0;
+        if (ageDays <= 7) agingBuckets['0-7'] += 1;
+        else if (ageDays <= 30) agingBuckets['8-30'] += 1;
+        else if (ageDays <= 60) agingBuckets['31-60'] += 1;
+        else agingBuckets['61+'] += 1;
+      }
+
+      const sourceKey = cleanText(lead.source, 60) || 'Sin source';
+      sourceMap.set(sourceKey, Number(sourceMap.get(sourceKey) || 0) + 1);
+
+      const agentKey = cleanText(lead.assigned_to, 120) || 'Sin asignar';
+      const previousAgent = agentMap.get(agentKey) || { total: 0, won: 0, lost: 0, active: 0 };
+      previousAgent.total += 1;
+      if (isWon) previousAgent.won += 1;
+      else if (isLost) previousAgent.lost += 1;
+      else previousAgent.active += 1;
+      agentMap.set(agentKey, previousAgent);
+    });
+
+    const totalLeads = leadRows.length;
+    const conversionRate = totalLeads > 0 ? Number(((wonLeads / totalLeads) * 100).toFixed(2)) : 0;
+    const lossRate = totalLeads > 0 ? Number(((lostLeads / totalLeads) * 100).toFixed(2)) : 0;
+
+    const stageCounts = PIPELINE_STAGE_CATALOG.map((stage) => {
+      const count = Number(stageCountMap.get(stage.key) || 0);
+      return {
+        stageKey: stage.key,
+        stageLabel: stage.label,
+        count,
+        sharePercent: totalLeads > 0 ? Number(((count / totalLeads) * 100).toFixed(2)) : 0
+      };
+    });
+    if (unknownStageCount > 0) {
+      stageCounts.push({
+        stageKey: 'unknown',
+        stageLabel: 'Sin catalogar',
+        count: unknownStageCount,
+        sharePercent: totalLeads > 0 ? Number(((unknownStageCount / totalLeads) * 100).toFixed(2)) : 0
+      });
+    }
+
+    const sourceBreakdown = Array.from(sourceMap.entries())
+      .map(([source, count]) => ({
+        source,
+        count,
+        sharePercent: totalLeads > 0 ? Number(((count / totalLeads) * 100).toFixed(2)) : 0
+      }))
+      .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source, 'es', { sensitivity: 'base' }));
+
+    const agentBreakdown = Array.from(agentMap.entries())
+      .map(([agent, totals]) => ({
+        agent,
+        total: totals.total,
+        won: totals.won,
+        lost: totals.lost,
+        active: totals.active,
+        conversionRate: totals.total > 0 ? Number(((totals.won / totals.total) * 100).toFixed(2)) : 0
+      }))
+      .sort((a, b) => b.total - a.total || a.agent.localeCompare(b.agent, 'es', { sensitivity: 'base' }));
+
+    const historyParams = [range.from.toISOString(), range.toExclusive.toISOString()];
+    const historyConditions = [
+      'h.created_at >= $1::timestamptz',
+      'h.created_at < $2::timestamptz'
+    ];
+    if (sourceFilter) {
+      historyParams.push(sourceFilter);
+      historyConditions.push(`lower(coalesce(l.source, '')) = $${historyParams.length}`);
+    }
+    if (agentFilter) {
+      historyParams.push(agentFilter);
+      historyConditions.push(`lower(coalesce(l.assigned_to, '')) = $${historyParams.length}`);
+    }
+    if (!canViewAllLeads) {
+      historyParams.push(identities);
+      historyConditions.push(`(l.assigned_to IS NULL OR lower(coalesce(l.assigned_to, '')) = ANY($${historyParams.length}::text[]))`);
+    }
+
+    const historyWhereSql = historyConditions.length ? `WHERE ${historyConditions.join(' AND ')}` : '';
+    const { rows: historyRows } = await pool.query(
+      `SELECT lower(coalesce(h.changed_by_username, 'sistema')) AS actor, COUNT(*)::int AS stage_changes
+       FROM lead_stage_history h
+       JOIN leads l ON l.id = h.lead_id
+       ${historyWhereSql}
+       GROUP BY lower(coalesce(h.changed_by_username, 'sistema'))
+       ORDER BY stage_changes DESC, actor ASC
+       LIMIT 50`,
+      historyParams
+    );
+
+    const productivity = historyRows.map((row) => ({
+      actor: cleanText(row.actor, 120) || 'sistema',
+      stageChanges: Number(row.stage_changes || 0)
+    }));
+
+    return res.json({
+      filters: {
+        from: range.fromIso,
+        to: range.toIso,
+        source: sourceFilter,
+        agent: agentFilter
+      },
+      totals: {
+        totalLeads,
+        activeLeads,
+        wonLeads,
+        lostLeads,
+        conversionRate,
+        lossRate
+      },
+      stageCounts,
+      aging: agingBuckets,
+      sourceBreakdown,
+      agentBreakdown,
+      productivity
+    });
+  } catch (error) {
+    console.error('Error al consultar KPI de pipeline:', error);
+    return res.status(500).json({ message: 'No se pudo consultar KPI de pipeline.' });
+  }
+});
+
 app.get('/api/leads', async (req, res) => {
   try {
     await hydrateAuthPermissions(req);
@@ -4700,10 +5910,7 @@ app.get('/api/leads', async (req, res) => {
       ));
     }
 
-    const leadsWithStateType = rows.map((lead) => ({
-      ...lead,
-      state_type: getStateTypeFromCode(lead.state_code)
-    }));
+    const leadsWithStateType = rows.map((lead) => applyLeadDerivedFields(lead));
 
     res.json({ leads: leadsWithStateType });
   } catch (error) {
@@ -4765,10 +5972,7 @@ app.get('/api/leads/duplicates', async (req, res) => {
       ));
     }
 
-    const matches = rows.map((lead) => ({
-      ...lead,
-      state_type: getStateTypeFromCode(lead.state_code)
-    }));
+    const matches = rows.map((lead) => applyLeadDerivedFields(lead));
 
     res.json({
       phone: normalizedPhone.value,
@@ -4862,6 +6066,20 @@ app.post('/api/leads', async (req, res) => {
 
     const lead = rows[0];
 
+    await syncCallbackTaskFromLead(lead, { req }).catch((error) => {
+      console.error('Error sincronizando callback task (create):', error);
+    });
+
+    await recordLeadStageHistory({
+      leadId: lead.id,
+      fromStatus: null,
+      toStatus: lead.status,
+      req,
+      reason: 'lead.create'
+    }).catch((error) => {
+      console.error('Error registrando stage history (create):', error);
+    });
+
     await writeAuditLog({
       req,
       action: 'lead.create',
@@ -4876,7 +6094,7 @@ app.post('/api/leads', async (req, res) => {
       }
     });
 
-    lead.state_type = getStateTypeFromCode(lead.state_code);
+    applyLeadDerivedFields(lead);
     res.status(201).json({ lead });
   } catch (error) {
     console.error('Error al crear lead:', error.message);
@@ -4946,6 +6164,69 @@ app.get('/api/leads/:id/audit-history', async (req, res) => {
   } catch (error) {
     console.error('Error al consultar historial de auditoria del lead:', error);
     return res.status(500).json({ message: 'No se pudo consultar historial de auditoria.' });
+  }
+});
+
+app.get('/api/leads/:id/stage-history', async (req, res) => {
+  const leadId = parsePositiveInteger(req.params.id);
+  if (!leadId) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  const canViewAllLeads = hasAuthPermission(req.auth, 'leads.view_all');
+  const canViewAssignedLeads = hasAuthPermission(req.auth, 'leads.view_assigned');
+  if (!canViewAllLeads && !canViewAssignedLeads) {
+    return res.status(403).json({ message: 'No tienes permisos para consultar historial de etapas.' });
+  }
+
+  const limit = parsePositiveInt(req.query.limit, 120, 1, 500);
+
+  try {
+    const { rows: leadRows } = await pool.query(
+      `SELECT id, assigned_to
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!leadRows.length) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const lead = leadRows[0];
+    if (!canAccessAssignedLead(req.auth, lead.assigned_to)) {
+      return res.status(403).json({ message: 'No tienes permisos para ver historial de este lead.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         id,
+         lead_id,
+         from_status,
+         to_status,
+         from_stage_key,
+         to_stage_key,
+         changed_by_user_id,
+         changed_by_username,
+         request_id,
+         change_reason,
+         created_at
+       FROM lead_stage_history
+       WHERE lead_id = $1
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [leadId, limit]
+    );
+
+    return res.json({
+      leadId,
+      count: rows.length,
+      history: rows.map(mapLeadStageHistoryRow)
+    });
+  } catch (error) {
+    console.error('Error al consultar stage history del lead:', error);
+    return res.status(500).json({ message: 'No se pudo consultar historial de etapas.' });
   }
 });
 
@@ -5081,6 +6362,10 @@ app.post('/api/leads/:id/audit-history/:auditId/undo', async (req, res) => {
 
     const updatedLead = updatedRows[0];
 
+    await syncCallbackTaskFromLead(updatedLead, { req, client }).catch((error) => {
+      console.error('Error sincronizando callback task (undo):', error);
+    });
+
     await writeAuditLog({
       req,
       action: 'lead.undo',
@@ -5096,7 +6381,19 @@ app.post('/api/leads/:id/audit-history/:auditId/undo', async (req, res) => {
       client
     });
 
-    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
+    const statusChanged = normalizePipelineStatusToken(currentLead.status) !== normalizePipelineStatusToken(updatedLead.status);
+    if (statusChanged) {
+      await recordLeadStageHistory({
+        leadId: updatedLead.id,
+        fromStatus: currentLead.status,
+        toStatus: updatedLead.status,
+        req,
+        reason: 'lead.undo',
+        client
+      });
+    }
+
+    applyLeadDerivedFields(updatedLead);
     await client.query('COMMIT');
     return res.json({
       ok: true,
@@ -5134,7 +6431,7 @@ app.get('/api/leads/:id', async (req, res) => {
     }
 
     const lead = rows[0];
-    lead.state_type = getStateTypeFromCode(lead.state_code);
+    applyLeadDerivedFields(lead);
 
     res.json({ lead });
   } catch (error) {
@@ -5183,6 +6480,25 @@ app.patch('/api/leads/:id', async (req, res) => {
     }
 
     const beforeLead = existingLeadRows[0];
+    let statusTransition = null;
+    if (Object.prototype.hasOwnProperty.call(changes, 'status')) {
+      statusTransition = validateLeadStatusTransition(beforeLead.status, changes.status);
+      if (!statusTransition.ok) {
+        return res.status(400).json({
+          message: statusTransition.message || 'Transicion de status no permitida.',
+          code: 'INVALID_STAGE_TRANSITION',
+          details: {
+            fromStatus: statusTransition?.from?.label || cleanText(beforeLead.status, 120) || null,
+            toStatus: statusTransition?.to?.label || cleanText(changes.status, 120) || null,
+            allowedNextStatuses: Array.isArray(statusTransition?.allowedNextStatuses)
+              ? statusTransition.allowedNextStatuses
+              : []
+          }
+        });
+      }
+      changes.status = statusTransition.to.label;
+    }
+
     let effectiveStateCode = changes.state_code;
     if (effectiveStateCode === undefined) {
       effectiveStateCode = beforeLead.state_code;
@@ -5235,6 +6551,10 @@ app.patch('/api/leads/:id', async (req, res) => {
 
     const lead = rows[0];
 
+    await syncCallbackTaskFromLead(lead, { req }).catch((error) => {
+      console.error('Error sincronizando callback task (patch):', error);
+    });
+
     if (changes.assigned_to && lead.assigned_to) {
       await createLeadAssignmentNotification(lead.assigned_to, lead).catch(() => {});
     }
@@ -5265,7 +6585,20 @@ app.patch('/api/leads/:id', async (req, res) => {
       }
     }
 
-    lead.state_type = getStateTypeFromCode(lead.state_code);
+    const statusChanged = normalizePipelineStatusToken(beforeLead.status) !== normalizePipelineStatusToken(lead.status);
+    if (statusChanged) {
+      await recordLeadStageHistory({
+        leadId: lead.id,
+        fromStatus: beforeLead.status,
+        toStatus: lead.status,
+        req,
+        reason: statusTransition?.changed ? 'lead.patch' : 'lead.patch_legacy'
+      }).catch((error) => {
+        console.error('Error registrando stage history (patch):', error);
+      });
+    }
+
+    applyLeadDerivedFields(lead);
     res.json({ lead, message: 'Lead actualizado correctamente.' });
   } catch (error) {
     console.error('Error al actualizar lead:', error);
@@ -5349,6 +6682,835 @@ app.delete('/api/notifications/:id', async (req, res) => {
     console.error('Error al eliminar notificacion:', error);
     return res.status(500).json({ message: 'Error al eliminar notificacion.' });
   }
+});
+
+app.get('/api/tasks', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'tasks.manage')) {
+    return res.status(403).json({ message: 'No tienes permisos para consultar tareas.' });
+  }
+
+  const fromDate = cleanText(req.query.from, 16);
+  const toDate = cleanText(req.query.to, 16);
+  if (fromDate && !isValidISODate(fromDate)) {
+    return res.status(400).json({ message: 'Parametro from invalido. Usa YYYY-MM-DD.' });
+  }
+  if (toDate && !isValidISODate(toDate)) {
+    return res.status(400).json({ message: 'Parametro to invalido. Usa YYYY-MM-DD.' });
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ message: 'Parametro from no puede ser mayor que to.' });
+  }
+
+  const canViewTeam = hasAuthPermission(req.auth, 'callbacks.view_all');
+  const requestedScope = cleanText(req.query.scope, 20).toLowerCase();
+  const scope = requestedScope === 'team' && canViewTeam ? 'team' : 'mine';
+  const includeCompleted = parseBooleanQuery(req.query.includeCompleted, true);
+  const statusFilter = parseTaskFilterList(req.query.status, TASK_STATUS_VALUES);
+  const priorityFilter = parseTaskFilterList(req.query.priority, TASK_PRIORITY_VALUES);
+  const ownerFilter = cleanText(req.query.owner || req.query.ownerUsername, 120).toLowerCase();
+  const ownerTeamFilter = cleanText(req.query.team || req.query.ownerTeam, 120).toLowerCase();
+  const limit = parsePositiveInt(req.query.limit, TASK_LIST_LIMIT_DEFAULT, 1, TASK_LIST_LIMIT_MAX);
+  const runEscalation = parseBooleanQuery(req.query.refreshEscalation, true);
+
+  const conditions = ['1=1'];
+  const values = [];
+  const pushValue = (value) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+
+  if (fromDate) {
+    const fromToken = pushValue(fromDate);
+    conditions.push(`COALESCE(t.due_date, (t.due_at AT TIME ZONE 'UTC')::date, t.created_at::date) >= ${fromToken}::date`);
+  }
+  if (toDate) {
+    const toToken = pushValue(toDate);
+    conditions.push(`COALESCE(t.due_date, (t.due_at AT TIME ZONE 'UTC')::date, t.created_at::date) <= ${toToken}::date`);
+  }
+  if (!includeCompleted) {
+    conditions.push(`t.status NOT IN ('completed', 'cancelled')`);
+  }
+  if (statusFilter.length) {
+    const statusToken = pushValue(statusFilter);
+    conditions.push(`t.status = ANY(${statusToken}::text[])`);
+  }
+  if (priorityFilter.length) {
+    const priorityToken = pushValue(priorityFilter);
+    conditions.push(`t.priority = ANY(${priorityToken}::text[])`);
+  }
+  if (ownerTeamFilter) {
+    const teamToken = pushValue(ownerTeamFilter);
+    conditions.push(`lower(coalesce(t.owner_team, '')) = ${teamToken}`);
+  }
+
+  if (scope === 'team') {
+    if (ownerFilter) {
+      const ownerToken = pushValue(ownerFilter);
+      conditions.push(`lower(coalesce(t.owner_username, '')) = ${ownerToken}`);
+    }
+  } else {
+    const identities = getAuthIdentities(req.auth);
+    if (!identities.length) {
+      return res.status(403).json({ message: 'No autorizado para consultar tu bandeja de tareas.' });
+    }
+    const identityToken = pushValue(identities);
+    conditions.push(`lower(coalesce(t.owner_username, '')) = ANY(${identityToken}::text[])`);
+  }
+
+  try {
+    let escalationResult = { ok: true, skipped: true, escalated: 0 };
+    if (runEscalation) {
+      escalationResult = await runTaskEscalationSweep({ limit: 120 });
+    }
+
+    const limitToken = pushValue(limit);
+    const { rows } = await pool.query(
+      `SELECT
+         t.*,
+         l.case_id AS lead_case_id,
+         l.full_name AS lead_full_name
+       FROM lead_tasks t
+       LEFT JOIN leads l ON l.id = t.related_lead_id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY
+         CASE t.priority
+           WHEN 'urgent' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'normal' THEN 3
+           ELSE 4
+         END ASC,
+         COALESCE(t.due_at, t.due_date::timestamp, t.created_at) ASC,
+         t.id ASC
+       LIMIT ${limitToken}`,
+      values
+    );
+
+    const tasks = rows.map((row) => mapLeadTaskRow(row));
+    return res.json({
+      tasks,
+      scope,
+      canViewTeam,
+      escalation: {
+        executed: runEscalation,
+        escalated: Number(escalationResult?.escalated || 0)
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener tareas operativas:', error);
+    return res.status(500).json({ message: 'Error al obtener tareas operativas.' });
+  }
+});
+
+app.post('/api/tasks', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'tasks.manage')) {
+    return res.status(403).json({ message: 'No tienes permisos para crear tareas.' });
+  }
+
+  const body = req.body || {};
+  const normalizedTaskType = normalizeTaskType(pickFirstDefined(body, ['taskType', 'task_type']), { required: false });
+  if (!normalizedTaskType.ok) return res.status(400).json({ message: normalizedTaskType.message });
+
+  const title = cleanText(pickFirstDefined(body, ['title']), 180);
+  if (!title) {
+    return res.status(400).json({ message: 'title es obligatorio.' });
+  }
+
+  const description = toNullableText(pickFirstDefined(body, ['description', 'notes']), 5000);
+  const normalizedPriority = normalizeTaskPriority(pickFirstDefined(body, ['priority']));
+  if (!normalizedPriority.ok) return res.status(400).json({ message: normalizedPriority.message });
+
+  const normalizedStatus = normalizeTaskStatus(pickFirstDefined(body, ['status']));
+  if (!normalizedStatus.ok) return res.status(400).json({ message: normalizedStatus.message });
+
+  const ownerFallback = getTaskActorLabel(req);
+  const normalizedOwner = normalizeTaskOwnerUsername(
+    pickFirstDefined(body, ['ownerUsername', 'owner_username', 'assignedTo', 'assigned_to']),
+    { required: true, fallback: ownerFallback }
+  );
+  if (!normalizedOwner.ok || !normalizedOwner.value) {
+    return res.status(400).json({ message: normalizedOwner.message || 'ownerUsername es obligatorio.' });
+  }
+
+  const normalizedOwnerTeam = normalizeTaskOwnerTeam(
+    pickFirstDefined(body, ['ownerTeam', 'owner_team'])
+  );
+  if (!normalizedOwnerTeam.ok) return res.status(400).json({ message: 'ownerTeam invalido.' });
+
+  const dueDateInput = normalizeTaskDateOnly(
+    pickFirstDefined(body, ['dueDate', 'due_date']),
+    { fieldName: 'dueDate', required: false }
+  );
+  if (!dueDateInput.ok) return res.status(400).json({ message: dueDateInput.message });
+
+  const dueAtInput = normalizeTaskTimestamp(
+    pickFirstDefined(body, ['dueAt', 'due_at']),
+    { fieldName: 'dueAt', required: false }
+  );
+  if (!dueAtInput.ok) return res.status(400).json({ message: dueAtInput.message });
+
+  const recurrenceRuleInput = normalizeTaskRecurrenceRule(
+    pickFirstDefined(body, ['recurrenceRule', 'recurrence_rule']),
+    { required: false, fieldName: 'recurrenceRule' }
+  );
+  if (!recurrenceRuleInput.ok) return res.status(400).json({ message: recurrenceRuleInput.message });
+
+  const recurrenceIntervalInput = normalizeTaskRecurrenceInterval(
+    pickFirstDefined(body, ['recurrenceInterval', 'recurrence_interval']),
+    { fieldName: 'recurrenceInterval' }
+  );
+  if (!recurrenceIntervalInput.ok) return res.status(400).json({ message: recurrenceIntervalInput.message });
+
+  const recurrenceEndDateInput = normalizeTaskDateOnly(
+    pickFirstDefined(body, ['recurrenceEndDate', 'recurrence_end_date']),
+    { fieldName: 'recurrenceEndDate', required: false }
+  );
+  if (!recurrenceEndDateInput.ok) return res.status(400).json({ message: recurrenceEndDateInput.message });
+
+  const slaMinutesInput = normalizeTaskSlaMinutes(
+    pickFirstDefined(body, ['slaMinutes', 'sla_minutes']),
+    { fieldName: 'slaMinutes' }
+  );
+  if (!slaMinutesInput.ok) return res.status(400).json({ message: slaMinutesInput.message });
+
+  const slaDueAtInput = normalizeTaskTimestamp(
+    pickFirstDefined(body, ['slaDueAt', 'sla_due_at']),
+    { fieldName: 'slaDueAt', required: false }
+  );
+  if (!slaDueAtInput.ok) return res.status(400).json({ message: slaDueAtInput.message });
+
+  const metadataInput = normalizeTaskMetadata(
+    pickFirstDefined(body, ['metadata']),
+    { fieldName: 'metadata' }
+  );
+  if (!metadataInput.ok) return res.status(400).json({ message: metadataInput.message });
+
+  const relatedLeadIdRaw = pickFirstDefined(body, ['relatedLeadId', 'related_lead_id', 'leadId', 'lead_id']);
+  const relatedLeadId = relatedLeadIdRaw === undefined || relatedLeadIdRaw === null || String(relatedLeadIdRaw).trim() === ''
+    ? null
+    : parsePositiveInteger(relatedLeadIdRaw);
+  if (relatedLeadIdRaw !== undefined && relatedLeadId === null) {
+    return res.status(400).json({ message: 'relatedLeadId debe ser un entero positivo.' });
+  }
+
+  let dueAt = dueAtInput.value;
+  let dueDate = dueDateInput.value;
+  if (dueAt && !dueDate) {
+    dueDate = dueAt.slice(0, 10);
+  }
+  if (!dueAt && dueDate) {
+    dueAt = buildTaskDueAtFromDate(dueDate);
+  }
+
+  const recurrenceRule = recurrenceRuleInput.value;
+  const recurrenceInterval = recurrenceRule === 'none' ? 1 : recurrenceIntervalInput.value;
+  const recurrenceEndDate = recurrenceRule === 'none' ? null : recurrenceEndDateInput.value;
+  if (recurrenceRule !== 'none' && !dueDate && !dueAt) {
+    return res.status(400).json({ message: 'Las tareas recurrentes requieren dueDate o dueAt.' });
+  }
+  if (recurrenceEndDate && dueDate && recurrenceEndDate < dueDate) {
+    return res.status(400).json({ message: 'recurrenceEndDate no puede ser menor que dueDate.' });
+  }
+
+  const slaMinutes = slaMinutesInput.provided
+    ? slaMinutesInput.value
+    : (dueDate || dueAt ? TASK_DEFAULT_SLA_MINUTES : null);
+  const slaDueAt = computeTaskSlaDueAt({
+    explicitSlaDueAt: slaDueAtInput.value,
+    slaMinutes: Number.isInteger(slaMinutes) && slaMinutes > 0 ? slaMinutes : null,
+    anchorTimestamp: dueAt || buildTaskDueAtFromDate(dueDate)
+  });
+
+  const status = normalizedStatus.value;
+  const completedAt = status === 'completed'
+    ? (normalizeTimestampForApi(pickFirstDefined(body, ['completedAt', 'completed_at'])) || new Date().toISOString())
+    : null;
+
+  try {
+    if (relatedLeadId !== null) {
+      const { rows: leadRows } = await pool.query(
+        `SELECT id
+         FROM leads
+         WHERE id = $1
+         LIMIT 1`,
+        [relatedLeadId]
+      );
+      if (!leadRows.length) {
+        return res.status(400).json({ message: 'relatedLeadId no existe.' });
+      }
+    }
+
+    const actorUserId = Number(req.auth?.id);
+    const normalizedActorUserId = Number.isInteger(actorUserId) && actorUserId > 0 ? actorUserId : null;
+    const actorUsername = cleanText(req.auth?.username, 120).toLowerCase() || null;
+
+    const { rows } = await pool.query(
+      `INSERT INTO lead_tasks (
+         task_type,
+         title,
+         description,
+         priority,
+         status,
+         owner_username,
+         owner_team,
+         related_lead_id,
+         due_date,
+         due_at,
+         completed_at,
+         recurrence_rule,
+         recurrence_interval,
+         recurrence_end_date,
+         sla_minutes,
+         sla_due_at,
+         source_callback_date,
+         metadata,
+         created_by_user_id,
+         created_by_username
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+         $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20
+       )
+       RETURNING *`,
+      [
+        normalizedTaskType.value,
+        title,
+        description,
+        normalizedPriority.value,
+        status,
+        normalizedOwner.value,
+        normalizedOwnerTeam.value,
+        relatedLeadId,
+        dueDate,
+        dueAt,
+        completedAt,
+        recurrenceRule,
+        recurrenceInterval,
+        recurrenceEndDate,
+        slaMinutes,
+        slaDueAt,
+        normalizedTaskType.value === 'callback' ? dueDate : null,
+        JSON.stringify(metadataInput.value || {}),
+        normalizedActorUserId,
+        actorUsername
+      ]
+    );
+
+    const created = rows[0];
+
+    if (cleanText(created.task_type, 40).toLowerCase() === 'callback' && Number(created.related_lead_id || 0) > 0) {
+      const callbackDate = normalizeDateOnlyForApi(created.due_date);
+      const callbackCompletedAt = cleanText(created.status, 20).toLowerCase() === 'completed'
+        ? normalizeTimestampForApi(created.completed_at) || new Date().toISOString()
+        : null;
+      await pool.query(
+        `UPDATE leads
+         SET callback_date = $2::date,
+             callback_completed_at = $3::timestamptz,
+             assigned_to = COALESCE($4, assigned_to),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [created.related_lead_id, callbackDate, callbackCompletedAt, cleanText(created.owner_username, 120) || null]
+      );
+    }
+
+    await writeAuditLog({
+      req,
+      action: 'task.create',
+      entityType: 'task',
+      entityId: created.id,
+      before: null,
+      after: created,
+      metadata: {
+        taskType: created.task_type,
+        ownerUsername: created.owner_username
+      }
+    });
+
+    const { rows: withLeadRows } = await pool.query(
+      `SELECT t.*, l.case_id AS lead_case_id, l.full_name AS lead_full_name
+       FROM lead_tasks t
+       LEFT JOIN leads l ON l.id = t.related_lead_id
+       WHERE t.id = $1
+       LIMIT 1`,
+      [created.id]
+    );
+
+    return res.status(201).json({
+      task: mapLeadTaskRow(withLeadRows[0] || created),
+      message: 'Task creada correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al crear task:', error);
+    return res.status(500).json({ message: 'Error al crear task.' });
+  }
+});
+
+app.patch('/api/tasks/:id', async (req, res) => {
+  const taskId = parsePositiveInteger(req.params.id);
+  if (!taskId) {
+    return res.status(400).json({ message: 'taskId invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'tasks.manage')) {
+    return res.status(403).json({ message: 'No tienes permisos para actualizar tareas.' });
+  }
+
+  try {
+    const { rows: currentRows } = await pool.query(
+      `SELECT *
+       FROM lead_tasks
+       WHERE id = $1
+       LIMIT 1`,
+      [taskId]
+    );
+    if (!currentRows.length) {
+      return res.status(404).json({ message: 'Task no encontrada.' });
+    }
+
+    const current = currentRows[0];
+    if (!canAccessTaskByOwner(req.auth, current.owner_username)) {
+      return res.status(403).json({ message: 'No tienes permisos para actualizar esta task.' });
+    }
+
+    const body = req.body || {};
+    const updates = [];
+    const values = [];
+    const changedFields = [];
+
+    const pushUpdate = (column, value, fieldLabel = column) => {
+      const existingIndex = updates.findIndex((entry) => entry.startsWith(`${column} =`));
+      if (existingIndex >= 0) {
+        updates[existingIndex] = `${column} = $${existingIndex + 1}`;
+        values[existingIndex] = value;
+      } else {
+        updates.push(`${column} = $${updates.length + 1}`);
+        values.push(value);
+      }
+      if (!changedFields.includes(fieldLabel)) changedFields.push(fieldLabel);
+    };
+
+    if (Object.prototype.hasOwnProperty.call(body, 'title')) {
+      const title = cleanText(body.title, 180);
+      if (!title) {
+        return res.status(400).json({ message: 'title no puede estar vacio.' });
+      }
+      pushUpdate('title', title, 'title');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'description') || Object.prototype.hasOwnProperty.call(body, 'notes')) {
+      const description = toNullableText(pickFirstDefined(body, ['description', 'notes']), 5000);
+      pushUpdate('description', description, 'description');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'priority')) {
+      const normalizedPriority = normalizeTaskPriority(body.priority, { required: true });
+      if (!normalizedPriority.ok) return res.status(400).json({ message: normalizedPriority.message });
+      pushUpdate('priority', normalizedPriority.value, 'priority');
+    }
+
+    let incomingStatus = null;
+    if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+      const normalizedStatus = normalizeTaskStatus(body.status, { required: true });
+      if (!normalizedStatus.ok) return res.status(400).json({ message: normalizedStatus.message });
+      incomingStatus = normalizedStatus.value;
+      pushUpdate('status', incomingStatus, 'status');
+    }
+
+    const hasDueDateInput = Object.prototype.hasOwnProperty.call(body, 'dueDate')
+      || Object.prototype.hasOwnProperty.call(body, 'due_date');
+    const hasDueAtInput = Object.prototype.hasOwnProperty.call(body, 'dueAt')
+      || Object.prototype.hasOwnProperty.call(body, 'due_at');
+    let incomingDueDate = null;
+    let incomingDueAt = null;
+    if (hasDueDateInput) {
+      const dueDateInput = normalizeTaskDateOnly(
+        pickFirstDefined(body, ['dueDate', 'due_date']),
+        { fieldName: 'dueDate', required: false }
+      );
+      if (!dueDateInput.ok) return res.status(400).json({ message: dueDateInput.message });
+      incomingDueDate = dueDateInput.value;
+      pushUpdate('due_date', incomingDueDate, 'dueDate');
+    }
+
+    if (hasDueAtInput) {
+      const dueAtInput = normalizeTaskTimestamp(
+        pickFirstDefined(body, ['dueAt', 'due_at']),
+        { fieldName: 'dueAt', required: false }
+      );
+      if (!dueAtInput.ok) return res.status(400).json({ message: dueAtInput.message });
+      incomingDueAt = dueAtInput.value;
+      pushUpdate('due_at', incomingDueAt, 'dueAt');
+    }
+
+    if (hasDueAtInput && incomingDueAt && !hasDueDateInput) {
+      pushUpdate('due_date', incomingDueAt.slice(0, 10), 'dueDate');
+    }
+
+    if (hasDueDateInput && !hasDueAtInput) {
+      if (incomingDueDate) {
+        pushUpdate('due_at', buildTaskDueAtFromDate(incomingDueDate), 'dueAt');
+      } else {
+        pushUpdate('due_at', null, 'dueAt');
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'ownerUsername')
+      || Object.prototype.hasOwnProperty.call(body, 'owner_username')
+      || Object.prototype.hasOwnProperty.call(body, 'assignedTo')
+      || Object.prototype.hasOwnProperty.call(body, 'assigned_to')) {
+      const normalizedOwner = normalizeTaskOwnerUsername(
+        pickFirstDefined(body, ['ownerUsername', 'owner_username', 'assignedTo', 'assigned_to']),
+        { required: true, fallback: current.owner_username }
+      );
+      if (!normalizedOwner.ok || !normalizedOwner.value) {
+        return res.status(400).json({ message: normalizedOwner.message || 'ownerUsername invalido.' });
+      }
+      pushUpdate('owner_username', normalizedOwner.value, 'ownerUsername');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'ownerTeam') || Object.prototype.hasOwnProperty.call(body, 'owner_team')) {
+      const normalizedOwnerTeam = normalizeTaskOwnerTeam(
+        pickFirstDefined(body, ['ownerTeam', 'owner_team'])
+      );
+      pushUpdate('owner_team', normalizedOwnerTeam.value, 'ownerTeam');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'relatedLeadId')
+      || Object.prototype.hasOwnProperty.call(body, 'related_lead_id')
+      || Object.prototype.hasOwnProperty.call(body, 'leadId')
+      || Object.prototype.hasOwnProperty.call(body, 'lead_id')) {
+      const relatedLeadIdRaw = pickFirstDefined(body, ['relatedLeadId', 'related_lead_id', 'leadId', 'lead_id']);
+      const relatedLeadId = relatedLeadIdRaw === null || relatedLeadIdRaw === ''
+        ? null
+        : parsePositiveInteger(relatedLeadIdRaw);
+      if (relatedLeadIdRaw !== null && relatedLeadIdRaw !== '' && !relatedLeadId) {
+        return res.status(400).json({ message: 'relatedLeadId debe ser un entero positivo.' });
+      }
+      if (relatedLeadId !== null) {
+        const { rows: leadRows } = await pool.query(
+          `SELECT id
+           FROM leads
+           WHERE id = $1
+           LIMIT 1`,
+          [relatedLeadId]
+        );
+        if (!leadRows.length) {
+          return res.status(400).json({ message: 'relatedLeadId no existe.' });
+        }
+      }
+      pushUpdate('related_lead_id', relatedLeadId, 'relatedLeadId');
+    }
+
+    let recurrenceRule = cleanText(current.recurrence_rule, 20).toLowerCase() || 'none';
+    if (Object.prototype.hasOwnProperty.call(body, 'recurrenceRule') || Object.prototype.hasOwnProperty.call(body, 'recurrence_rule')) {
+      const recurrenceRuleInput = normalizeTaskRecurrenceRule(
+        pickFirstDefined(body, ['recurrenceRule', 'recurrence_rule']),
+        { required: true, fieldName: 'recurrenceRule' }
+      );
+      if (!recurrenceRuleInput.ok) return res.status(400).json({ message: recurrenceRuleInput.message });
+      recurrenceRule = recurrenceRuleInput.value;
+      pushUpdate('recurrence_rule', recurrenceRule, 'recurrenceRule');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'recurrenceInterval') || Object.prototype.hasOwnProperty.call(body, 'recurrence_interval')) {
+      const recurrenceIntervalInput = normalizeTaskRecurrenceInterval(
+        pickFirstDefined(body, ['recurrenceInterval', 'recurrence_interval']),
+        { fieldName: 'recurrenceInterval' }
+      );
+      if (!recurrenceIntervalInput.ok) return res.status(400).json({ message: recurrenceIntervalInput.message });
+      pushUpdate('recurrence_interval', recurrenceIntervalInput.value, 'recurrenceInterval');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'recurrenceEndDate') || Object.prototype.hasOwnProperty.call(body, 'recurrence_end_date')) {
+      const recurrenceEndDateInput = normalizeTaskDateOnly(
+        pickFirstDefined(body, ['recurrenceEndDate', 'recurrence_end_date']),
+        { fieldName: 'recurrenceEndDate', required: false }
+      );
+      if (!recurrenceEndDateInput.ok) return res.status(400).json({ message: recurrenceEndDateInput.message });
+      pushUpdate('recurrence_end_date', recurrenceEndDateInput.value, 'recurrenceEndDate');
+    }
+
+    let slaMinutes = Number.isInteger(Number(current.sla_minutes)) ? Number(current.sla_minutes) : null;
+    if (Object.prototype.hasOwnProperty.call(body, 'slaMinutes') || Object.prototype.hasOwnProperty.call(body, 'sla_minutes')) {
+      const slaMinutesInput = normalizeTaskSlaMinutes(
+        pickFirstDefined(body, ['slaMinutes', 'sla_minutes']),
+        { fieldName: 'slaMinutes' }
+      );
+      if (!slaMinutesInput.ok) return res.status(400).json({ message: slaMinutesInput.message });
+      slaMinutes = slaMinutesInput.value;
+      pushUpdate('sla_minutes', slaMinutes, 'slaMinutes');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'slaDueAt') || Object.prototype.hasOwnProperty.call(body, 'sla_due_at')) {
+      const slaDueAtInput = normalizeTaskTimestamp(
+        pickFirstDefined(body, ['slaDueAt', 'sla_due_at']),
+        { fieldName: 'slaDueAt', required: false }
+      );
+      if (!slaDueAtInput.ok) return res.status(400).json({ message: slaDueAtInput.message });
+      pushUpdate('sla_due_at', slaDueAtInput.value, 'slaDueAt');
+    } else if (
+      Object.prototype.hasOwnProperty.call(body, 'dueDate')
+      || Object.prototype.hasOwnProperty.call(body, 'due_date')
+      || Object.prototype.hasOwnProperty.call(body, 'dueAt')
+      || Object.prototype.hasOwnProperty.call(body, 'due_at')
+      || Object.prototype.hasOwnProperty.call(body, 'slaMinutes')
+      || Object.prototype.hasOwnProperty.call(body, 'sla_minutes')
+    ) {
+      const anchorDueAt = incomingDueAt || normalizeTimestampForApi(current.due_at)
+        || buildTaskDueAtFromDate(incomingDueDate || normalizeDateOnlyForApi(current.due_date));
+      const computedSlaDueAt = computeTaskSlaDueAt({
+        explicitSlaDueAt: null,
+        slaMinutes,
+        anchorTimestamp: anchorDueAt
+      });
+      pushUpdate('sla_due_at', computedSlaDueAt, 'slaDueAt');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'metadata')) {
+      const metadataInput = normalizeTaskMetadata(body.metadata, { fieldName: 'metadata' });
+      if (!metadataInput.ok) return res.status(400).json({ message: metadataInput.message });
+      pushUpdate('metadata', JSON.stringify(metadataInput.value || {}), 'metadata');
+    }
+
+    if (incomingStatus === 'completed') {
+      const completedAtInput = normalizeTaskTimestamp(
+        pickFirstDefined(body, ['completedAt', 'completed_at']),
+        { fieldName: 'completedAt', required: false }
+      );
+      if (!completedAtInput.ok) return res.status(400).json({ message: completedAtInput.message });
+      pushUpdate('completed_at', completedAtInput.value || new Date().toISOString(), 'completedAt');
+    } else if (incomingStatus && incomingStatus !== 'completed') {
+      pushUpdate('completed_at', null, 'completedAt');
+    }
+
+    if (!updates.length) {
+      return res.status(400).json({ message: 'No hay campos para actualizar en la task.' });
+    }
+
+    if (recurrenceRule === 'none') {
+      const hasRecurrenceRuleUpdate = updates.some((entry) => entry.startsWith('recurrence_rule ='));
+      if (hasRecurrenceRuleUpdate) {
+        pushUpdate('recurrence_interval', 1, 'recurrenceInterval');
+        pushUpdate('recurrence_end_date', null, 'recurrenceEndDate');
+      }
+    }
+
+    values.push(taskId);
+    const { rows: updatedRows } = await pool.query(
+      `UPDATE lead_tasks
+       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    );
+
+    if (!updatedRows.length) {
+      return res.status(404).json({ message: 'Task no encontrada.' });
+    }
+
+    const updated = updatedRows[0];
+
+    if (cleanText(updated.task_type, 40).toLowerCase() === 'callback' && Number(updated.related_lead_id || 0) > 0) {
+      const callbackDate = normalizeDateOnlyForApi(updated.due_date);
+      const callbackCompletedAt = cleanText(updated.status, 20).toLowerCase() === 'completed'
+        ? normalizeTimestampForApi(updated.completed_at) || new Date().toISOString()
+        : null;
+      await pool.query(
+        `UPDATE leads
+         SET callback_date = $2::date,
+             callback_completed_at = $3::timestamptz,
+             assigned_to = COALESCE($4, assigned_to),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [updated.related_lead_id, callbackDate, callbackCompletedAt, cleanText(updated.owner_username, 120) || null]
+      );
+    }
+
+    await writeAuditLog({
+      req,
+      action: 'task.update',
+      entityType: 'task',
+      entityId: updated.id,
+      before: current,
+      after: updated,
+      metadata: {
+        changedFields
+      }
+    });
+
+    const { rows: withLeadRows } = await pool.query(
+      `SELECT t.*, l.case_id AS lead_case_id, l.full_name AS lead_full_name
+       FROM lead_tasks t
+       LEFT JOIN leads l ON l.id = t.related_lead_id
+       WHERE t.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    return res.json({
+      task: mapLeadTaskRow(withLeadRows[0] || updated),
+      message: 'Task actualizada correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al actualizar task:', error);
+    return res.status(500).json({ message: 'Error al actualizar task.' });
+  }
+});
+
+app.patch('/api/tasks/:id/complete', async (req, res) => {
+  const taskId = parsePositiveInteger(req.params.id);
+  if (!taskId) {
+    return res.status(400).json({ message: 'taskId invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'tasks.manage')) {
+    return res.status(403).json({ message: 'No tienes permisos para completar tareas.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: taskRows } = await client.query(
+      `SELECT *
+       FROM lead_tasks
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [taskId]
+    );
+    if (!taskRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Task no encontrada.' });
+    }
+
+    const task = taskRows[0];
+    if (!canAccessTaskByOwner(req.auth, task.owner_username)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'No tienes permisos para completar esta task.' });
+    }
+
+    if (task.completed_at || cleanText(task.status, 20).toLowerCase() === 'completed') {
+      await client.query('ROLLBACK');
+      const { rows: existingRows } = await pool.query(
+        `SELECT t.*, l.case_id AS lead_case_id, l.full_name AS lead_full_name
+         FROM lead_tasks t
+         LEFT JOIN leads l ON l.id = t.related_lead_id
+         WHERE t.id = $1
+         LIMIT 1`,
+        [taskId]
+      );
+      return res.json({
+        ok: true,
+        alreadyCompleted: true,
+        task: mapLeadTaskRow(existingRows[0] || task),
+        message: 'La task ya estaba completada.'
+      });
+    }
+
+    const completedAt = new Date().toISOString();
+    const { rows: updatedRows } = await client.query(
+      `UPDATE lead_tasks
+       SET status = 'completed',
+           completed_at = $2::timestamptz,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [taskId, completedAt]
+    );
+    const updated = updatedRows[0];
+
+    let recurringTask = null;
+    const recurrenceRule = cleanText(updated.recurrence_rule, 20).toLowerCase();
+    if (recurrenceRule && recurrenceRule !== 'none') {
+      recurringTask = await createNextRecurringTask(updated, { req, client });
+    }
+
+    if (cleanText(updated.task_type, 40).toLowerCase() === 'callback' && Number(updated.related_lead_id || 0) > 0) {
+      await client.query(
+        `UPDATE leads
+         SET callback_completed_at = COALESCE(callback_completed_at, $2::timestamptz),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [updated.related_lead_id, completedAt]
+      );
+    }
+
+    await writeAuditLog({
+      req,
+      action: 'task.complete',
+      entityType: 'task',
+      entityId: updated.id,
+      before: task,
+      after: updated,
+      metadata: {
+        recurringTaskId: recurringTask ? Number(recurringTask.id || 0) || null : null
+      },
+      client
+    });
+
+    await client.query('COMMIT');
+
+    const withLeadRows = await pool.query(
+      `SELECT t.*, l.case_id AS lead_case_id, l.full_name AS lead_full_name
+       FROM lead_tasks t
+       LEFT JOIN leads l ON l.id = t.related_lead_id
+       WHERE t.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    let recurringWithLead = null;
+    if (recurringTask?.id) {
+      const recurringRows = await pool.query(
+        `SELECT t.*, l.case_id AS lead_case_id, l.full_name AS lead_full_name
+         FROM lead_tasks t
+         LEFT JOIN leads l ON l.id = t.related_lead_id
+         WHERE t.id = $1
+         LIMIT 1`,
+        [recurringTask.id]
+      );
+      recurringWithLead = recurringRows.rows[0] || recurringTask;
+    }
+
+    return res.json({
+      ok: true,
+      task: mapLeadTaskRow(withLeadRows.rows[0] || updated),
+      recurringTask: recurringWithLead ? mapLeadTaskRow(recurringWithLead) : null,
+      message: 'Task completada correctamente.'
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_rollbackError) {
+      // ignore rollback secondary errors
+    }
+    console.error('Error al completar task:', error);
+    return res.status(500).json({ message: 'Error al completar task.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/tasks/escalation/run', async (req, res) => {
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'callbacks.view_all')) {
+    return res.status(403).json({ message: 'No tienes permisos para ejecutar escalamiento global.' });
+  }
+
+  const limit = parsePositiveInt(req.body?.limit || req.query.limit, 200, 1, 500);
+  const result = await runTaskEscalationSweep({ limit });
+  if (!result.ok) {
+    return res.status(500).json({ message: 'No se pudo ejecutar escalamiento automatico.' });
+  }
+  return res.json({
+    ok: true,
+    escalated: Number(result.escalated || 0),
+    skipped: Boolean(result.skipped)
+  });
 });
 
 app.get('/api/callbacks', async (req, res) => {
@@ -5514,7 +7676,11 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
     }
 
     const updatedLead = updatedRows[0];
-    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
+    applyLeadDerivedFields(updatedLead);
+
+    await markCallbackTaskCompletedByLeadId(updatedLead.id, updatedLead.callback_completed_at, pool).catch((error) => {
+      console.error('Error sincronizando callback task completada:', error);
+    });
 
     await writeAuditLog({
       req,
@@ -5529,7 +7695,7 @@ app.patch('/api/callbacks/:leadId/complete', async (req, res) => {
       }
     });
 
-    updatedLead.state_type = getStateTypeFromCode(updatedLead.state_code);
+    applyLeadDerivedFields(updatedLead);
     return res.json({
       ok: true,
       lead: updatedLead,
@@ -5577,6 +7743,12 @@ app.delete('/api/leads/:id', async (req, res) => {
       [leadId]
     );
 
+    const { rowCount: deletedTaskCount } = await client.query(
+      `DELETE FROM lead_tasks
+       WHERE related_lead_id = $1`,
+      [leadId]
+    );
+
     const { rowCount: clearedRelatedLeadCount } = await client.query(
       `UPDATE leads
        SET related_lead_id = NULL,
@@ -5592,7 +7764,7 @@ app.delete('/api/leads/:id', async (req, res) => {
       entityId: leadId,
       before: beforeLead,
       after: null,
-      metadata: { clearedRelatedLeadCount },
+      metadata: { clearedRelatedLeadCount, deletedTaskCount },
       client
     });
 
@@ -5850,6 +8022,18 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
             updateFields.push(`past_due = $${updateValues.length + 1}`);
             updateValues.push(incomingPastDue);
           }
+        }
+
+        // Actualizar credit_limit y high_credit si el incoming tiene valores y el existente no
+        const incomingCreditLimit = parseDbMoney(entry.credit_limit);
+        if (incomingCreditLimit > 0) {
+          updateFields.push(`credit_limit = $${updateValues.length + 1}`);
+          updateValues.push(incomingCreditLimit);
+        }
+        const incomingHighCredit = parseDbMoney(entry.high_credit);
+        if (incomingHighCredit > 0) {
+          updateFields.push(`high_credit = $${updateValues.length + 1}`);
+          updateValues.push(incomingHighCredit);
         }
 
         if (duplicate.id && updateFields.length > 0) {
@@ -6559,6 +8743,7 @@ async function startServer() {
   getJwtSecret();
   await runMigrations();
   await ensureBootstrapAdminSeed();
+  startTaskEscalationLoop();
 
   app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);
