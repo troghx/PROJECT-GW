@@ -704,7 +704,7 @@
       }
 
       return {
-        background: 'rgba(10, 16, 27, 0.96)',
+        background: 'rgba(14, 14, 16, 0.96)',
         border: '1px solid rgba(255, 255, 255, 0.14)',
         shadow: '0 14px 34px rgba(0, 0, 0, 0.35)',
         itemBorder: '1px solid rgba(255, 255, 255, 0.1)',

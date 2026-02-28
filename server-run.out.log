@@ -1,2 +1,6 @@
-[dotenv@17.3.1] injecting env (11) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+> project-gw@1.0.0 start
+> node server/index.js
+
+[dotenv@17.3.1] injecting env (11) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
 Servidor activo en http://localhost:3000

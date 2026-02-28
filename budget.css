@@ -409,17 +409,17 @@
 
 body.home-active.theme-light .budget-main-card {
   background: rgba(255, 255, 255, 0.7) !important;
-  border-color: rgba(15, 23, 42, 0.12);
+  border-color: rgba(20, 20, 22, 0.12);
 }
 
 body.home-active.theme-light .budget-subtab {
   background: transparent;
   border-color: transparent;
-  color: rgba(15, 23, 42, 0.75);
+  color: rgba(20, 20, 22, 0.75);
 }
 
 body.home-active.theme-light .budget-subtab:hover {
-  color: rgba(15, 23, 42, 0.95);
+  color: rgba(20, 20, 22, 0.95);
   background: transparent;
 }
 
@@ -430,32 +430,32 @@ body.home-active.theme-light .budget-subtab.active {
 }
 
 body.home-active.theme-light .budget-save-status {
-  color: rgba(15, 23, 42, 0.62);
+  color: rgba(20, 20, 22, 0.62);
 }
 
 body.home-active.theme-light .budget-details-column {
-  border-left-color: rgba(15, 23, 42, 0.12);
+  border-left-color: rgba(20, 20, 22, 0.12);
 }
 
 body.home-active.theme-light .budget-details-column h4,
 body.home-active.theme-light .budget-card-group h4 {
-  color: rgba(15, 23, 42, 0.74);
-  border-bottom-color: rgba(15, 23, 42, 0.1);
+  color: rgba(20, 20, 22, 0.74);
+  border-bottom-color: rgba(20, 20, 22, 0.1);
 }
 
 body.home-active.theme-light .budget-card-head {
-  border-bottom-color: rgba(15, 23, 42, 0.1);
+  border-bottom-color: rgba(20, 20, 22, 0.1);
 }
 
 body.home-active.theme-light .budget-inner-tab {
   background: transparent;
   border-color: transparent;
-  color: rgba(15, 23, 42, 0.76);
+  color: rgba(20, 20, 22, 0.76);
 }
 
 body.home-active.theme-light .budget-inner-tab:hover {
   background: transparent;
-  color: rgba(15, 23, 42, 0.94);
+  color: rgba(20, 20, 22, 0.94);
 }
 
 body.home-active.theme-light .budget-inner-tab.active {
@@ -469,25 +469,25 @@ body.home-active.theme-light .budget-category-block h5 {
 }
 
 body.home-active.theme-light .budget-field {
-  border-bottom-color: rgba(15, 23, 42, 0.08);
+  border-bottom-color: rgba(20, 20, 22, 0.08);
 }
 
 body.home-active.theme-light .budget-field label {
-  color: rgba(15, 23, 42, 0.68);
+  color: rgba(20, 20, 22, 0.68);
 }
 
 body.home-active.theme-light .budget-money input,
 body.home-active.theme-light .budget-select,
 body.home-active.theme-light .budget-textarea {
   background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(15, 23, 42, 0.12);
-  color: rgba(15, 23, 42, 0.9);
+  border-color: rgba(20, 20, 22, 0.12);
+  color: rgba(20, 20, 22, 0.9);
 }
 
 body.home-active.theme-light .budget-hardship-reason-select {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+  border-bottom: 1px solid rgba(20, 20, 22, 0.2);
 }
 
 body.home-active.theme-light .budget-hardship-reason-select:focus {
@@ -495,7 +495,7 @@ body.home-active.theme-light .budget-hardship-reason-select:focus {
 }
 
 body.home-active.theme-light .budget-money span {
-  color: rgba(15, 23, 42, 0.5);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.home-active.theme-light .budget-funds-row .info-row-value {
@@ -516,6 +516,6 @@ body.home-active.theme-light .budget-funds-row.is-negative .info-row-value::befo
 
 @media (max-width: 1080px) {
   body.home-active.theme-light .budget-details-column {
-    border-top-color: rgba(15, 23, 42, 0.12);
+    border-top-color: rgba(20, 20, 22, 0.12);
   }
 }
