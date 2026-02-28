@@ -884,6 +884,7 @@ function showLogin() {
   if (calendarView) calendarView.classList.add('hidden');
   if (emailsView) emailsView.classList.add('hidden');
   if (usersAdminView) usersAdminView.classList.add('hidden');
+  if (scheduleTaskModal) scheduleTaskModal.classList.add('hidden');
   authShell.classList.remove('hidden');
   document.body.classList.remove('home-active');
   applyLoginBackground(loginBackgroundIndex);
@@ -904,6 +905,20 @@ function showLogin() {
   scheduleTasksLoaded = false;
   scheduleOwnerKey = '';
   scheduleScope = 'mine';
+  scheduleOwnerFilter = '';
+  scheduleOwnerMembers = [];
+  scheduleOwnerMembersLoaded = false;
+  scheduleOwnerMembersPromise = null;
+  scheduleOwnerSearchTerm = '';
+  scheduleOwnerMenuOpen = false;
+  scheduleDeleteTaskInFlight = null;
+  scheduleCompleteLeadInFlight = null;
+  scheduleTaskModalOpen = false;
+  scheduleTaskDraftType = 'general';
+  scheduleTaskSubmitInFlight = false;
+  scheduleTaskLeadMatches = [];
+  scheduleTaskLeadActiveIndex = -1;
+  scheduleTaskLeadLoadPromise = null;
   scheduleNotes = [];
   allEmailsCache = [];
   emailsLoaded = false;
@@ -2051,9 +2066,27 @@ const calendarAgendaList = document.getElementById('calendarAgendaList');
 const calendarOverdueCount = document.getElementById('calendarOverdueCount');
 const calendarTodayCount = document.getElementById('calendarTodayCount');
 const calendarUpcomingCount = document.getElementById('calendarUpcomingCount');
+const calendarOwnerPicker = document.getElementById('calendarOwnerPicker');
 const calendarOwnerBadge = document.getElementById('calendarOwnerBadge');
+const calendarOwnerMenu = document.getElementById('calendarOwnerMenu');
+const calendarCreateTaskBtn = document.getElementById('calendarCreateTaskBtn');
+const calendarCreateCallbackBtn = document.getElementById('calendarCreateCallbackBtn');
 const calendarNotesBoard = document.getElementById('calendarNotesBoard');
 const calendarAddNoteBtn = document.getElementById('calendarAddNoteBtn');
+const scheduleTaskModal = document.getElementById('scheduleTaskModal');
+const scheduleTaskCloseBtn = document.getElementById('scheduleTaskCloseBtn');
+const scheduleTaskForm = document.getElementById('scheduleTaskForm');
+const scheduleTaskModalTitle = document.getElementById('scheduleTaskModalTitle');
+const scheduleTaskOwnerInput = document.getElementById('scheduleTaskOwnerInput');
+const scheduleTaskDateInput = document.getElementById('scheduleTaskDateInput');
+const scheduleTaskTitleInput = document.getElementById('scheduleTaskTitleInput');
+const scheduleTaskLeadSearchInput = document.getElementById('scheduleTaskLeadSearchInput');
+const scheduleTaskLeadIdInput = document.getElementById('scheduleTaskLeadIdInput');
+const scheduleTaskLeadSuggestions = document.getElementById('scheduleTaskLeadSuggestions');
+const scheduleTaskLeadLink = document.getElementById('scheduleTaskLeadLink');
+const scheduleTaskLeadHint = document.getElementById('scheduleTaskLeadHint');
+const scheduleTaskCancelBtn = document.getElementById('scheduleTaskCancelBtn');
+const scheduleTaskSubmitBtn = document.getElementById('scheduleTaskSubmitBtn');
 const emailsTableBody = document.getElementById('emailsTableBody');
 const emailsCount = document.getElementById('emailsCount');
 const emailsRoleHint = document.getElementById('emailsRoleHint');
@@ -2085,6 +2118,19 @@ let scheduleNotes = [];
 let scheduleInteractionsBound = false;
 let scheduleNoteDragState = null;
 let scheduleCompleteLeadInFlight = null;
+let scheduleDeleteTaskInFlight = null;
+let scheduleOwnerFilter = '';
+let scheduleOwnerMembers = [];
+let scheduleOwnerMembersLoaded = false;
+let scheduleOwnerMembersPromise = null;
+let scheduleOwnerSearchTerm = '';
+let scheduleOwnerMenuOpen = false;
+let scheduleTaskModalOpen = false;
+let scheduleTaskDraftType = 'general';
+let scheduleTaskSubmitInFlight = false;
+let scheduleTaskLeadMatches = [];
+let scheduleTaskLeadActiveIndex = -1;
+let scheduleTaskLeadLoadPromise = null;
 let allEmailsCache = [];
 let emailsLoaded = false;
 let emailsRequestInFlight = null;
@@ -2598,6 +2644,533 @@ function getScheduleOwner(sessionOverride = null) {
   return normalizePreferenceOwner(session?.username || session?.name || '');
 }
 
+function getScheduleNotesOwnerKey(sessionOverride = null) {
+  if (scheduleScope === 'team' && scheduleOwnerFilter) {
+    return normalizePreferenceOwner(scheduleOwnerFilter);
+  }
+  return getScheduleOwner(sessionOverride);
+}
+
+function normalizeScheduleOwnerUsername(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 120);
+}
+
+function getCurrentScheduleUsername(sessionOverride = null) {
+  const session = sessionOverride || getSession();
+  const identity = getSessionIdentity(session);
+  return normalizeScheduleOwnerUsername(identity.username || identity.displayName || session?.name || '');
+}
+
+function buildScheduleMemberLabel(member) {
+  const username = normalizeScheduleOwnerUsername(member?.username);
+  const displayName = String(member?.displayName || '').trim();
+  if (displayName && username && displayName.toLowerCase() !== username) {
+    return `${displayName} (@${username})`;
+  }
+  if (username) return `@${username}`;
+  if (displayName) return displayName;
+  return '@usuario';
+}
+
+function getScheduleOwnerScopeCacheKey(ownerKey) {
+  const teamFilterToken = scheduleScope === 'team'
+    ? (scheduleOwnerFilter || 'all')
+    : ownerKey;
+  return `${ownerKey}::${scheduleScope}::${teamFilterToken}`;
+}
+
+function getScheduleOwnerLabelByUsername(username) {
+  const normalized = normalizeScheduleOwnerUsername(username);
+  if (!normalized) return '';
+  const member = scheduleOwnerMembers.find((entry) => entry.username === normalized);
+  return buildScheduleMemberLabel({
+    username: normalized,
+    displayName: member?.displayName || normalized
+  });
+}
+
+async function loadScheduleOwnerMembers({ force = false } = {}) {
+  const identity = getSessionIdentity();
+  const ownUsername = getCurrentScheduleUsername();
+  const ownDisplayName = String(identity.displayName || identity.username || 'Usuario').trim();
+  if (!hasCurrentSessionPermission('callbacks.view_all')) {
+    scheduleOwnerMembers = ownUsername
+      ? [{ username: ownUsername, displayName: ownDisplayName }]
+      : [];
+    scheduleOwnerMembersLoaded = true;
+    return scheduleOwnerMembers;
+  }
+
+  if (!force && scheduleOwnerMembersLoaded) {
+    return scheduleOwnerMembers;
+  }
+  if (scheduleOwnerMembersPromise) {
+    return scheduleOwnerMembersPromise;
+  }
+
+  scheduleOwnerMembersPromise = (async () => {
+    const membersMap = new Map();
+    const pushMember = (usernameValue, displayNameValue = '') => {
+      const username = normalizeScheduleOwnerUsername(usernameValue);
+      if (!username) return;
+      if (!membersMap.has(username)) {
+        membersMap.set(username, {
+          username,
+          displayName: String(displayNameValue || '').trim() || username
+        });
+      }
+    };
+
+    try {
+      const data = await requestJson('/api/users', { cache: 'no-store' });
+      const members = Array.isArray(data?.members) ? data.members : [];
+      if (members.length) {
+        members.forEach((member) => {
+          pushMember(member?.username, member?.displayName || member?.display_name || member?.username);
+        });
+      } else {
+        const users = Array.isArray(data?.users) ? data.users : [];
+        users.forEach((entry) => {
+          const label = String(entry || '').trim();
+          if (!label) return;
+          pushMember(label, label);
+        });
+      }
+    } catch (_error) {
+      // Fallback al usuario actual cuando no se puede cargar catalogo
+    } finally {
+      pushMember(ownUsername, ownDisplayName);
+      scheduleOwnerMembers = Array.from(membersMap.values()).sort((a, b) =>
+        a.username.localeCompare(b.username, 'es', { sensitivity: 'base' })
+      );
+      scheduleOwnerMembersLoaded = true;
+      scheduleOwnerMembersPromise = null;
+    }
+
+    return scheduleOwnerMembers;
+  })();
+
+  return scheduleOwnerMembersPromise;
+}
+
+function getCurrentScheduleSelectionValue() {
+  if (scheduleScope === 'mine') return 'mine';
+  if (scheduleOwnerFilter) return `user:${normalizeScheduleOwnerUsername(scheduleOwnerFilter)}`;
+  return 'team';
+}
+
+function getCurrentScheduleSelectionLabel(sessionOverride = null) {
+  const session = sessionOverride || getSession();
+  const identity = getSessionIdentity(session);
+  const ownUsername = getCurrentScheduleUsername(session);
+  const ownLabel = getScheduleOwnerLabelByUsername(ownUsername)
+    || `@${String(identity.username || identity.displayName || 'usuario').trim()}`;
+
+  if (scheduleScope === 'mine') return `Mi agenda (${ownLabel})`;
+  if (scheduleOwnerFilter) {
+    const selectedLabel = getScheduleOwnerLabelByUsername(scheduleOwnerFilter)
+      || `@${normalizeScheduleOwnerUsername(scheduleOwnerFilter)}`;
+    return `Agenda de ${selectedLabel}`;
+  }
+  return 'Agenda de equipo';
+}
+
+function buildScheduleOwnerPickerOptions(query = '', sessionOverride = null) {
+  const session = sessionOverride || getSession();
+  const ownUsername = getCurrentScheduleUsername(session);
+  const canViewTeam = hasCurrentSessionPermission('callbacks.view_all');
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const ownLabel = getScheduleOwnerLabelByUsername(ownUsername) || `@${ownUsername || 'usuario'}`;
+  const options = [{
+    value: 'mine',
+    label: `Mi agenda (${ownLabel})`,
+    searchable: `mi agenda ${ownUsername}`
+  }];
+
+  if (!canViewTeam) {
+    return normalizedQuery
+      ? options.filter((entry) => entry.searchable.includes(normalizedQuery))
+      : options;
+  }
+
+  options.push({
+    value: 'team',
+    label: 'Agenda de equipo',
+    searchable: 'agenda equipo all'
+  });
+
+  scheduleOwnerMembers.forEach((member) => {
+    const username = normalizeScheduleOwnerUsername(member?.username);
+    if (!username || username === ownUsername) return;
+    const label = `Agenda de ${buildScheduleMemberLabel(member)}`;
+    options.push({
+      value: `user:${username}`,
+      label,
+      searchable: `${label.toLowerCase()} ${username} ${String(member?.displayName || '').trim().toLowerCase()}`
+    });
+  });
+
+  if (!normalizedQuery) return options;
+  return options.filter((entry) => entry.searchable.includes(normalizedQuery));
+}
+
+function renderScheduleOwnerMenu(sessionOverride = null) {
+  if (!calendarOwnerMenu) return;
+  if (!scheduleOwnerMenuOpen) {
+    calendarOwnerMenu.classList.add('hidden');
+    return;
+  }
+
+  const currentValue = getCurrentScheduleSelectionValue();
+  const options = buildScheduleOwnerPickerOptions(scheduleOwnerSearchTerm, sessionOverride);
+  if (!options.length) {
+    calendarOwnerMenu.innerHTML = '<div class="schedule-owner-empty">Sin coincidencias</div>';
+    calendarOwnerMenu.classList.remove('hidden');
+    return;
+  }
+
+  calendarOwnerMenu.innerHTML = options.map((entry) => {
+    const isActive = entry.value === currentValue;
+    return `
+      <button type="button" class="schedule-owner-option${isActive ? ' is-active' : ''}" data-owner-value="${escapeHtml(entry.value)}" role="option" aria-selected="${isActive ? 'true' : 'false'}">
+        ${escapeHtml(entry.label)}
+      </button>
+    `;
+  }).join('');
+  calendarOwnerMenu.classList.remove('hidden');
+}
+
+function closeScheduleOwnerMenu({ restoreSelection = true, sessionOverride = null } = {}) {
+  scheduleOwnerMenuOpen = false;
+  scheduleOwnerSearchTerm = '';
+  if (calendarOwnerPicker) calendarOwnerPicker.classList.remove('is-open');
+  if (calendarOwnerMenu) calendarOwnerMenu.classList.add('hidden');
+  if (restoreSelection && calendarOwnerBadge) {
+    calendarOwnerBadge.value = getCurrentScheduleSelectionLabel(sessionOverride);
+  }
+}
+
+function openScheduleOwnerMenu({ clearCurrent = false, sessionOverride = null } = {}) {
+  if (!calendarOwnerBadge || !calendarOwnerMenu) return;
+  if (!hasCurrentSessionPermission('callbacks.view_all')) {
+    closeScheduleOwnerMenu({ restoreSelection: true, sessionOverride });
+    return;
+  }
+
+  scheduleOwnerMenuOpen = true;
+  if (calendarOwnerPicker) calendarOwnerPicker.classList.add('is-open');
+  if (clearCurrent) {
+    calendarOwnerBadge.value = '';
+    scheduleOwnerSearchTerm = '';
+  } else {
+    scheduleOwnerSearchTerm = String(calendarOwnerBadge.value || '').trim();
+  }
+  renderScheduleOwnerMenu(sessionOverride);
+}
+
+function applyScheduleOwnerSelection(rawSelection) {
+  const nextSelection = String(rawSelection || '').trim();
+  if (!nextSelection || nextSelection === 'mine') {
+    scheduleScope = 'mine';
+    scheduleOwnerFilter = '';
+  } else if (nextSelection === 'team') {
+    scheduleScope = 'team';
+    scheduleOwnerFilter = '';
+  } else if (nextSelection.startsWith('user:')) {
+    const selectedOwner = normalizeScheduleOwnerUsername(nextSelection.slice(5));
+    if (!selectedOwner) return false;
+    scheduleScope = 'team';
+    scheduleOwnerFilter = selectedOwner;
+  } else {
+    return false;
+  }
+  scheduleTasksLoaded = false;
+  hydrateScheduleForCurrentUser({ forceTasks: true });
+  return true;
+}
+
+function syncScheduleOwnerSelector(sessionOverride = null, { preserveSearch = false } = {}) {
+  if (!calendarOwnerBadge) return;
+  const session = sessionOverride || getSession();
+  const canViewTeam = hasCurrentSessionPermission('callbacks.view_all');
+
+  calendarOwnerBadge.readOnly = !canViewTeam;
+  calendarOwnerBadge.setAttribute(
+    'title',
+    canViewTeam
+      ? 'Busca y selecciona la agenda que quieres administrar'
+      : 'Tu agenda personal'
+  );
+
+  if (!canViewTeam) {
+    closeScheduleOwnerMenu({ restoreSelection: true, sessionOverride: session });
+    return;
+  }
+
+  if (!preserveSearch || !scheduleOwnerMenuOpen) {
+    calendarOwnerBadge.value = getCurrentScheduleSelectionLabel(session);
+    scheduleOwnerSearchTerm = '';
+  }
+  if (scheduleOwnerMenuOpen) {
+    renderScheduleOwnerMenu(session);
+  }
+}
+
+function getScheduleCreationOwnerUsername() {
+  if (scheduleScope === 'team' && scheduleOwnerFilter) {
+    return normalizeScheduleOwnerUsername(scheduleOwnerFilter);
+  }
+  return getCurrentScheduleUsername();
+}
+
+function getScheduleCreationOwnerLabel() {
+  const ownerUsername = getScheduleCreationOwnerUsername();
+  if (!ownerUsername) return '';
+  return getScheduleOwnerLabelByUsername(ownerUsername) || `@${ownerUsername}`;
+}
+
+function formatScheduleLeadPrimaryLabel(lead) {
+  const name = String(lead?.full_name || lead?.name || '').trim() || 'Sin nombre';
+  const caseId = String(lead?.case_id || lead?.caseId || '').trim();
+  return caseId ? `${name} · Case #${caseId}` : name;
+}
+
+function setScheduleTaskLeadSelection(lead) {
+  if (!scheduleTaskLeadIdInput || !scheduleTaskLeadSearchInput || !scheduleTaskLeadHint || !scheduleTaskLeadLink) return;
+  const leadId = Number(lead?.id || 0);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    scheduleTaskLeadIdInput.value = '';
+    if (scheduleTaskLeadLink) {
+      scheduleTaskLeadLink.classList.add('hidden');
+      scheduleTaskLeadLink.removeAttribute('href');
+    }
+    scheduleTaskLeadHint.textContent = 'Sin lead seleccionado.';
+    return;
+  }
+
+  scheduleTaskLeadIdInput.value = String(leadId);
+  scheduleTaskLeadSearchInput.value = formatScheduleLeadPrimaryLabel(lead);
+  scheduleTaskLeadHint.textContent = `Lead seleccionado: ${formatScheduleLeadPrimaryLabel(lead)}`;
+  scheduleTaskLeadLink.href = `/client.html?id=${leadId}`;
+  scheduleTaskLeadLink.classList.remove('hidden');
+}
+
+function closeScheduleTaskLeadSuggestions() {
+  scheduleTaskLeadMatches = [];
+  scheduleTaskLeadActiveIndex = -1;
+  if (scheduleTaskLeadSuggestions) {
+    scheduleTaskLeadSuggestions.classList.add('hidden');
+    scheduleTaskLeadSuggestions.innerHTML = '';
+  }
+}
+
+function renderScheduleTaskLeadSuggestions(query = '') {
+  if (!scheduleTaskLeadSuggestions) return;
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const leadsPool = Array.isArray(allLeadsCache) ? allLeadsCache : [];
+
+  const matches = leadsPool
+    .filter((lead) => {
+      if (!normalizedQuery) return true;
+      const fullName = String(lead?.full_name || '').toLowerCase();
+      const caseId = String(lead?.case_id || '').toLowerCase();
+      const phone = String(lead?.phone || '').toLowerCase();
+      const email = String(lead?.email || '').toLowerCase();
+      return fullName.includes(normalizedQuery)
+        || caseId.includes(normalizedQuery)
+        || phone.includes(normalizedQuery)
+        || email.includes(normalizedQuery);
+    })
+    .slice(0, 12);
+
+  scheduleTaskLeadMatches = matches;
+  scheduleTaskLeadActiveIndex = matches.length ? 0 : -1;
+  if (!matches.length) {
+    scheduleTaskLeadSuggestions.innerHTML = '<div class="schedule-task-lead-empty">Sin coincidencias</div>';
+    scheduleTaskLeadSuggestions.classList.remove('hidden');
+    return;
+  }
+
+  scheduleTaskLeadSuggestions.innerHTML = matches.map((lead, index) => {
+    const leadId = Number(lead?.id || 0);
+    const label = formatScheduleLeadPrimaryLabel(lead);
+    const detail = [String(lead?.phone || '').trim(), String(lead?.email || '').trim()].filter(Boolean).join(' · ');
+    return `
+      <button type="button" class="schedule-task-lead-option${index === 0 ? ' is-active' : ''}" data-lead-index="${index}" data-lead-id="${leadId}">
+        <span>${escapeHtml(label)}</span>
+        <small>${escapeHtml(detail || `Lead #${leadId}`)}</small>
+      </button>
+    `;
+  }).join('');
+  scheduleTaskLeadSuggestions.classList.remove('hidden');
+}
+
+function setActiveScheduleTaskLeadSuggestion(nextIndex) {
+  if (!scheduleTaskLeadSuggestions) return;
+  if (!scheduleTaskLeadMatches.length) {
+    scheduleTaskLeadActiveIndex = -1;
+    return;
+  }
+  const clamped = Math.max(0, Math.min(scheduleTaskLeadMatches.length - 1, nextIndex));
+  scheduleTaskLeadActiveIndex = clamped;
+  const options = Array.from(scheduleTaskLeadSuggestions.querySelectorAll('.schedule-task-lead-option[data-lead-index]'));
+  options.forEach((optionEl, optionIndex) => {
+    optionEl.classList.toggle('is-active', optionIndex === clamped);
+    if (optionIndex === clamped) {
+      optionEl.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+function selectScheduleTaskLeadAt(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= scheduleTaskLeadMatches.length) return false;
+  const lead = scheduleTaskLeadMatches[index];
+  setScheduleTaskLeadSelection(lead);
+  closeScheduleTaskLeadSuggestions();
+  return true;
+}
+
+async function ensureScheduleTaskLeadPoolLoaded() {
+  if (Array.isArray(allLeadsCache) && allLeadsCache.length) return allLeadsCache;
+  if (scheduleTaskLeadLoadPromise) return scheduleTaskLeadLoadPromise;
+
+  scheduleTaskLeadLoadPromise = (async () => {
+    try {
+      const data = await requestJson('/api/leads', { cache: 'no-store' });
+      allLeadsCache = Array.isArray(data?.leads) ? data.leads : [];
+      leadSearchIndex = buildLeadsSearchIndex(allLeadsCache);
+      leadsLoaded = true;
+      return allLeadsCache;
+    } catch (error) {
+      console.error('Error cargando leads para modal de agenda:', error);
+      return [];
+    } finally {
+      scheduleTaskLeadLoadPromise = null;
+    }
+  })();
+
+  return scheduleTaskLeadLoadPromise;
+}
+
+function updateScheduleTaskSubmitUi() {
+  if (!scheduleTaskSubmitBtn || !scheduleTaskTitleInput || !scheduleTaskLeadSearchInput) return;
+  const actionLabel = scheduleTaskDraftType === 'callback' ? 'callback' : 'task';
+  scheduleTaskSubmitBtn.textContent = scheduleTaskSubmitInFlight ? 'Guardando...' : `Guardar ${actionLabel}`;
+  scheduleTaskSubmitBtn.disabled = scheduleTaskSubmitInFlight;
+  scheduleTaskTitleInput.disabled = scheduleTaskSubmitInFlight;
+  scheduleTaskLeadSearchInput.disabled = scheduleTaskSubmitInFlight;
+  if (scheduleTaskCancelBtn) scheduleTaskCancelBtn.disabled = scheduleTaskSubmitInFlight;
+}
+
+function closeScheduleTaskModal() {
+  if (!scheduleTaskModal) return;
+  scheduleTaskModal.classList.add('hidden');
+  scheduleTaskModalOpen = false;
+  scheduleTaskSubmitInFlight = false;
+  if (scheduleTaskForm) scheduleTaskForm.reset();
+  closeScheduleTaskLeadSuggestions();
+  setScheduleTaskLeadSelection(null);
+  updateScheduleTaskSubmitUi();
+}
+
+async function submitScheduleTaskModal(event) {
+  event.preventDefault();
+  if (!scheduleTaskForm || scheduleTaskSubmitInFlight) return;
+  if (!hasCurrentSessionPermission('tasks.manage')) {
+    showToast('No tienes permisos para crear tareas.', 'error');
+    return;
+  }
+
+  const targetOwner = getScheduleCreationOwnerUsername();
+  if (!targetOwner) {
+    showToast('No se pudo determinar el usuario dueno del evento.', 'error');
+    return;
+  }
+  if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
+    showToast('Selecciona una fecha valida en el calendario.', 'error');
+    return;
+  }
+
+  const title = String(scheduleTaskTitleInput?.value || '').trim();
+  if (!title) {
+    showToast('El titulo no puede quedar vacio.', 'error');
+    scheduleTaskTitleInput?.focus();
+    return;
+  }
+
+  const selectedLeadId = Number(scheduleTaskLeadIdInput?.value || 0);
+  scheduleTaskSubmitInFlight = true;
+  updateScheduleTaskSubmitUi();
+  try {
+    const payload = {
+      taskType: scheduleTaskDraftType,
+      title,
+      dueDate: scheduleSelectedDateKey,
+      ownerUsername: targetOwner,
+      priority: 'normal'
+    };
+    if (Number.isInteger(selectedLeadId) && selectedLeadId > 0) {
+      payload.relatedLeadId = selectedLeadId;
+    }
+
+    const result = await requestJson('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    closeScheduleTaskModal();
+    showToast(result?.message || 'Evento creado correctamente.', 'success');
+    await loadScheduleTasks({ force: true });
+  } catch (error) {
+    showToast(error.message || 'No se pudo crear el evento.', 'error');
+    scheduleTaskSubmitInFlight = false;
+    updateScheduleTaskSubmitUi();
+  }
+}
+
+async function openScheduleTaskModal(taskType = 'general') {
+  if (!scheduleTaskModal) return;
+  if (!hasCurrentSessionPermission('tasks.manage')) {
+    showToast('No tienes permisos para crear tareas.', 'error');
+    return;
+  }
+  if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
+    showToast('Selecciona una fecha valida en el calendario.', 'error');
+    return;
+  }
+  if (scheduleScope === 'team' && !scheduleOwnerFilter) {
+    showToast('Selecciona una agenda de usuario especifico para crearle un evento.', 'info');
+    return;
+  }
+
+  scheduleTaskDraftType = String(taskType || '').trim().toLowerCase() === 'callback' ? 'callback' : 'general';
+  scheduleTaskSubmitInFlight = false;
+  scheduleTaskModalOpen = true;
+  scheduleTaskModal.classList.remove('hidden');
+
+  const ownerLabel = getScheduleCreationOwnerLabel() || 'Sin usuario';
+  if (scheduleTaskModalTitle) {
+    scheduleTaskModalTitle.textContent = scheduleTaskDraftType === 'callback' ? 'Nuevo callback' : 'Nueva task';
+  }
+  if (scheduleTaskOwnerInput) scheduleTaskOwnerInput.value = ownerLabel;
+  if (scheduleTaskDateInput) scheduleTaskDateInput.value = formatScheduleDateLabel(scheduleSelectedDateKey);
+  if (scheduleTaskTitleInput) {
+    scheduleTaskTitleInput.value = '';
+    scheduleTaskTitleInput.placeholder = scheduleTaskDraftType === 'callback'
+      ? 'Ej. Callback con cliente'
+      : 'Ej. Seguimiento de documentos';
+  }
+  if (scheduleTaskLeadSearchInput) scheduleTaskLeadSearchInput.value = '';
+  setScheduleTaskLeadSelection(null);
+  closeScheduleTaskLeadSuggestions();
+  updateScheduleTaskSubmitUi();
+
+  await ensureScheduleTaskLeadPoolLoaded();
+  renderScheduleTaskLeadSuggestions('');
+  scheduleTaskLeadSearchInput?.focus();
+}
+
 function readStrictScopedPreference(baseKey, owner) {
   try {
     const normalizedOwner = resolvePreferenceOwner(owner);
@@ -2640,7 +3213,7 @@ function normalizeScheduleNotes(rawNotes) {
     .slice(0, 42);
 }
 
-function readScheduleNotes(owner = getScheduleOwner()) {
+function readScheduleNotes(owner = getScheduleNotesOwnerKey()) {
   const raw = readStrictScopedPreference(SCHEDULE_NOTES_KEY, owner);
   if (!raw) return [];
   try {
@@ -2650,7 +3223,7 @@ function readScheduleNotes(owner = getScheduleOwner()) {
   }
 }
 
-function persistScheduleNotes(owner = getScheduleOwner()) {
+function persistScheduleNotes(owner = getScheduleNotesOwnerKey()) {
   writeStrictScopedPreference(SCHEDULE_NOTES_KEY, JSON.stringify(scheduleNotes), owner);
 }
 
@@ -2790,6 +3363,7 @@ function normalizeScheduleTask(sourceTask) {
     taskId: Number.isFinite(taskId) && taskId > 0 ? taskId : null,
     taskType: String(sourceTask?.taskType || sourceTask?.task_type || 'callback').trim().toLowerCase(),
     leadId: Number.isFinite(leadId) && leadId > 0 ? leadId : null,
+    leadName: String(sourceTask?.leadName || sourceTask?.lead_full_name || sourceTask?.full_name || '').trim(),
     caseId: sourceTask?.leadCaseId || sourceTask?.lead_case_id || sourceTask?.caseId ? String(sourceTask?.leadCaseId || sourceTask?.lead_case_id || sourceTask?.caseId) : '',
     name: String(sourceTask?.title || sourceTask?.name || sourceTask?.leadName || '').trim() || `Task #${taskId || '-'}`,
     description: String(sourceTask?.description || '').trim(),
@@ -2942,23 +3516,61 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
     actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-task-id="${task.taskId}" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Guardando...' : 'Marcar completada'}</button>`);
   }
 
+  const canDeleteEvent = hasCurrentSessionPermission('callbacks.view_all')
+    && Number.isInteger(task.taskId)
+    && task.taskId > 0;
+  if (canDeleteEvent) {
+    const isDeleting = scheduleDeleteTaskInFlight === task.taskId;
+    actionButtons.push(`<button type="button" class="schedule-delete-btn" data-delete-task-id="${task.taskId}" ${isDeleting ? 'disabled' : ''}>${isDeleting ? 'Eliminando...' : 'Eliminar'}</button>`);
+  }
+
   const ownerMeta = scheduleScope === 'team' && taskOwnerLabel
     ? ` · @${escapeHtml(taskOwnerLabel)}`
     : '';
   const priorityMeta = priorityLabel ? ` · ${escapeHtml(priorityLabel.toUpperCase())}` : '';
+  const leadLinkLabel = task.leadName
+    ? `${task.caseId ? `Case #${escapeHtml(String(task.caseId))} · ` : ''}${escapeHtml(task.leadName)}`
+    : (task.caseId ? `Case #${escapeHtml(String(task.caseId))}` : '');
+  const leadLinkHtml = task.leadId
+    ? `<a class="schedule-task-lead-inline" href="/client.html?id=${task.leadId}" data-open-lead-id="${task.leadId}">${leadLinkLabel || `Lead #${task.leadId}`}</a>`
+    : '';
+  const menuItems = [`<span class="schedule-task-menu-status">${presentation.statusLabel}</span>`];
+  if (actionButtons.length) {
+    menuItems.push(...actionButtons);
+  }
 
   return `
     <article class="schedule-task-card ${presentation.statusClass}">
       <div class="schedule-task-main">
         <p class="schedule-task-title">${escapeHtml(task.name)}</p>
         <p class="schedule-task-meta">${typeLabel} · ${caseLabel} - ${escapeHtml(formatScheduleDateLabel(task.callbackDate))}${priorityMeta}${ownerMeta}</p>
+        ${leadLinkHtml ? `<p class="schedule-task-lead-row">${leadLinkHtml}</p>` : ''}
       </div>
       <div class="schedule-task-side">
-        <span class="schedule-task-status">${presentation.statusLabel}</span>
-        <div class="schedule-task-actions">${actionButtons.join('')}</div>
+        <div class="schedule-task-menu" data-task-menu>
+          <button type="button" class="schedule-task-menu-toggle" aria-label="Mas acciones" aria-expanded="false" data-task-menu-toggle>
+            <span class="schedule-task-menu-icon" aria-hidden="true">&#8942;</span>
+          </button>
+          <div class="schedule-task-menu-panel">
+            ${menuItems.join('')}
+          </div>
+        </div>
       </div>
     </article>
   `;
+}
+
+function closeScheduleTaskMenus(exceptMenu = null) {
+  if (!calendarAgendaList) return;
+  const menus = calendarAgendaList.querySelectorAll('[data-task-menu].is-open');
+  menus.forEach((menu) => {
+    if (exceptMenu && menu === exceptMenu) return;
+    menu.classList.remove('is-open');
+    const toggleBtn = menu.querySelector('[data-task-menu-toggle]');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
 }
 
 async function markScheduleTaskCompleted(taskId) {
@@ -2984,6 +3596,40 @@ async function markScheduleTaskCompleted(taskId) {
   }
 }
 
+async function deleteScheduleTask(taskId) {
+  const numericTaskId = Number(taskId);
+  if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) return;
+  if (!hasCurrentSessionPermission('callbacks.view_all')) {
+    showToast('Solo admin/sup puede eliminar eventos de agenda.', 'error');
+    return;
+  }
+  if (scheduleDeleteTaskInFlight) return;
+
+  const task = scheduleTasks.find((entry) => Number(entry.taskId) === numericTaskId);
+  const taskLabel = String(task?.name || `Task #${numericTaskId}`).trim() || `Task #${numericTaskId}`;
+  if (!window.confirm(`Eliminar evento "${taskLabel}"?`)) return;
+
+  scheduleDeleteTaskInFlight = numericTaskId;
+  renderScheduleAgenda();
+  try {
+    const result = await requestJson(`/api/tasks/${numericTaskId}`, {
+      method: 'DELETE'
+    });
+    showToast(result?.message || 'Evento eliminado correctamente.', 'success');
+    await loadScheduleTasks({ force: true });
+  } catch (error) {
+    showToast(error.message || 'No se pudo eliminar el evento.', 'error');
+  } finally {
+    scheduleDeleteTaskInFlight = null;
+    renderScheduleAgenda();
+    renderScheduleMonth();
+  }
+}
+
+async function createScheduleEvent(taskType = 'general') {
+  await openScheduleTaskModal(taskType);
+}
+
 function renderScheduleAgenda() {
   if (!calendarAgendaList) return;
 
@@ -2991,8 +3637,9 @@ function renderScheduleAgenda() {
   const sortedTasks = sortScheduleTasks(scheduleTasks.slice());
   const missedTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'missed');
   const pendingTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'pending');
-  const completedTasks = sortedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'completed');
-  const selected = sortedTasks.filter((task) => task.callbackDate === scheduleSelectedDateKey);
+  const selectedTasks = sortedTasks.filter((task) => task.callbackDate === scheduleSelectedDateKey);
+  const selectedOpenTasks = selectedTasks.filter((task) => getScheduleTaskState(task, todayKey) !== 'completed');
+  const selectedCompletedTasks = selectedTasks.filter((task) => getScheduleTaskState(task, todayKey) === 'completed');
   const todayPending = pendingTasks.filter((task) => task.callbackDate === todayKey);
   const upcomingPending = pendingTasks.filter((task) => task.callbackDate > todayKey);
 
@@ -3005,48 +3652,34 @@ function renderScheduleAgenda() {
   }
 
   if (!sortedTasks.length) {
+    const selectedOwnerLabel = getScheduleOwnerLabelByUsername(scheduleOwnerFilter);
     calendarAgendaList.innerHTML = scheduleScope === 'team'
-      ? '<p class="schedule-empty-message">Aun no hay tasks en la bandeja de equipo.</p>'
+      ? (
+        selectedOwnerLabel
+          ? `<p class="schedule-empty-message">Aun no hay tasks asignadas a ${escapeHtml(selectedOwnerLabel)}.</p>`
+          : '<p class="schedule-empty-message">Aun no hay tasks en la bandeja de equipo.</p>'
+      )
       : '<p class="schedule-empty-message">Aun no hay tasks asignadas para ti.</p>';
     return;
   }
 
   const sections = [];
 
-  if (missedTasks.length) {
-    sections.push(`
-      <section class="schedule-task-section">
-        <h4 class="schedule-task-section-title">No completadas</h4>
-        ${missedTasks.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
-      </section>
-    `);
-  }
-
-  if (selected.length) {
+  if (selectedOpenTasks.length) {
+    const canCompleteSelectedDate = scheduleSelectedDateKey === todayKey;
     sections.push(`
       <section class="schedule-task-section">
         <h4 class="schedule-task-section-title">Fecha seleccionada</h4>
-        ${selected.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
+        ${selectedOpenTasks.map((task) => buildScheduleTaskCard(task, { todayKey, showCompleteAction: canCompleteSelectedDate })).join('')}
       </section>
     `);
   }
 
-  if (pendingTasks.length) {
-    const nextItems = pendingTasks.slice(0, 10);
-    sections.push(`
-      <section class="schedule-task-section">
-        <h4 class="schedule-task-section-title">Siguientes tasks</h4>
-        ${nextItems.map((task) => buildScheduleTaskCard(task, { todayKey, showCompleteAction: true })).join('')}
-      </section>
-    `);
-  }
-
-  if (completedTasks.length) {
-    const recentCompleted = completedTasks.slice(-10).reverse();
+  if (selectedCompletedTasks.length) {
     sections.push(`
       <section class="schedule-task-section">
         <h4 class="schedule-task-section-title">Completadas</h4>
-        ${recentCompleted.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
+        ${selectedCompletedTasks.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
       </section>
     `);
   }
@@ -3060,7 +3693,8 @@ function renderScheduleAgenda() {
 }
 async function loadScheduleTasks({ force = false } = {}) {
   const ownerKey = getScheduleOwner();
-  const ownerScopeKey = `${ownerKey}::${scheduleScope}`;
+  const ownerScopeKey = getScheduleOwnerScopeCacheKey(ownerKey);
+  const selectedTeamOwnerKey = normalizePreferenceOwner(scheduleOwnerFilter);
   if (!ownerKey) {
     scheduleTasks = [];
     scheduleTasksLoaded = false;
@@ -3080,8 +3714,11 @@ async function loadScheduleTasks({ force = false } = {}) {
   try {
     const cacheBuster = force ? `&_=${Date.now()}` : '';
     const scopeParam = scheduleScope === 'team' ? 'team' : 'mine';
+    const ownerParam = scheduleScope === 'team' && scheduleOwnerFilter
+      ? `&owner=${encodeURIComponent(scheduleOwnerFilter)}`
+      : '';
     const data = await requestJson(
-      `/api/tasks?scope=${encodeURIComponent(scopeParam)}&from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}&includeCompleted=true${cacheBuster}`,
+      `/api/tasks?scope=${encodeURIComponent(scopeParam)}&from=${encodeURIComponent(SCHEDULE_CALLBACKS_FROM)}&includeCompleted=true${ownerParam}${cacheBuster}`,
       { cache: 'no-store' }
     );
     const incomingTasks = Array.isArray(data?.tasks) ? data.tasks : [];
@@ -3105,7 +3742,11 @@ async function loadScheduleTasks({ force = false } = {}) {
           .filter(Boolean)
           .filter((callback) => (
             scheduleScope === 'team'
-              ? true
+              ? (
+                selectedTeamOwnerKey
+                  ? normalizePreferenceOwner(callback.assignedTo) === selectedTeamOwnerKey
+                  : true
+              )
               : normalizePreferenceOwner(callback.assignedTo) === ownerKey
           ))
       );
@@ -3125,29 +3766,21 @@ async function loadScheduleTasks({ force = false } = {}) {
 function hydrateScheduleForCurrentUser({ forceTasks = false } = {}) {
   const session = getSession();
   const ownerKey = getScheduleOwner(session);
-  const ownerScopeKey = `${ownerKey}::${scheduleScope}`;
-  const ownerLabel = String(session?.username || session?.name || 'Sin usuario');
   const canViewTeam = hasCurrentSessionPermission('callbacks.view_all');
-  if (!canViewTeam && scheduleScope !== 'mine') {
+  if (!canViewTeam && (scheduleScope !== 'mine' || scheduleOwnerFilter)) {
     scheduleScope = 'mine';
+    scheduleOwnerFilter = '';
   }
 
-  if (calendarOwnerBadge) {
-    if (scheduleScope === 'team' && canViewTeam) {
-      calendarOwnerBadge.textContent = 'Equipo';
-      calendarOwnerBadge.setAttribute('title', 'Click para cambiar a tu bandeja');
-      calendarOwnerBadge.style.cursor = 'pointer';
-    } else {
-      calendarOwnerBadge.textContent = ownerLabel ? `@${ownerLabel}` : '-';
-      if (canViewTeam) {
-        calendarOwnerBadge.setAttribute('title', 'Click para cambiar a bandeja de equipo');
-        calendarOwnerBadge.style.cursor = 'pointer';
-      } else {
-        calendarOwnerBadge.removeAttribute('title');
-        calendarOwnerBadge.style.cursor = '';
-      }
-    }
+  syncScheduleOwnerSelector(session, { preserveSearch: true });
+  if (canViewTeam) {
+    void loadScheduleOwnerMembers().then(() => {
+      syncScheduleOwnerSelector(session, { preserveSearch: true });
+      renderScheduleAgenda();
+    });
   }
+
+  const ownerScopeKey = getScheduleOwnerScopeCacheKey(ownerKey);
 
   if (scheduleOwnerKey !== ownerScopeKey) {
     scheduleTasks = [];
@@ -3162,7 +3795,10 @@ function hydrateScheduleForCurrentUser({ forceTasks = false } = {}) {
   const selectedDate = parseIsoDateLocal(scheduleSelectedDateKey) || new Date();
   scheduleViewDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 
-  scheduleNotes = readScheduleNotes(ownerKey);
+  scheduleNotes = readScheduleNotes(getScheduleNotesOwnerKey(session));
+  const canCreateEvents = hasCurrentSessionPermission('tasks.manage');
+  if (calendarCreateTaskBtn) calendarCreateTaskBtn.classList.toggle('hidden', !canCreateEvents);
+  if (calendarCreateCallbackBtn) calendarCreateCallbackBtn.classList.toggle('hidden', !canCreateEvents);
   renderScheduleNotes();
   renderScheduleMonth();
   renderScheduleAgenda();
@@ -3654,11 +4290,34 @@ function initializeScheduleInteractions() {
       const target = event.target instanceof Element ? event.target : null;
       if (!target) return;
 
+      const menuToggle = target.closest('[data-task-menu-toggle]');
+      if (menuToggle) {
+        const menu = menuToggle.closest('[data-task-menu]');
+        if (!menu) return;
+        const shouldOpen = !menu.classList.contains('is-open');
+        closeScheduleTaskMenus();
+        if (shouldOpen) {
+          menu.classList.add('is-open');
+          menuToggle.setAttribute('aria-expanded', 'true');
+        }
+        return;
+      }
+
       const completeBtn = target.closest('[data-complete-task-id]');
       if (completeBtn) {
         const taskId = Number(completeBtn.dataset.completeTaskId);
         if (!Number.isFinite(taskId) || taskId <= 0) return;
+        closeScheduleTaskMenus();
         void markScheduleTaskCompleted(taskId);
+        return;
+      }
+
+      const deleteBtn = target.closest('[data-delete-task-id]');
+      if (deleteBtn) {
+        const taskId = Number(deleteBtn.dataset.deleteTaskId);
+        if (!Number.isFinite(taskId) || taskId <= 0) return;
+        closeScheduleTaskMenus();
+        void deleteScheduleTask(taskId);
         return;
       }
 
@@ -3666,16 +4325,190 @@ function initializeScheduleInteractions() {
       if (!openBtn) return;
       const leadId = Number(openBtn.dataset.openLeadId);
       if (!Number.isFinite(leadId) || leadId <= 0) return;
+      closeScheduleTaskMenus();
       window.location.href = `/client.html?id=${leadId}`;
     });
   }
 
   if (calendarOwnerBadge) {
-    calendarOwnerBadge.addEventListener('click', () => {
+    calendarOwnerBadge.addEventListener('focus', () => {
       if (!hasCurrentSessionPermission('callbacks.view_all')) return;
-      scheduleScope = scheduleScope === 'team' ? 'mine' : 'team';
-      scheduleTasksLoaded = false;
-      hydrateScheduleForCurrentUser({ forceTasks: true });
+      openScheduleOwnerMenu({ clearCurrent: true });
+    });
+
+    calendarOwnerBadge.addEventListener('input', () => {
+      if (!hasCurrentSessionPermission('callbacks.view_all')) return;
+      scheduleOwnerSearchTerm = String(calendarOwnerBadge.value || '').trim();
+      openScheduleOwnerMenu({ clearCurrent: false });
+    });
+
+    calendarOwnerBadge.addEventListener('keydown', (event) => {
+      if (!hasCurrentSessionPermission('callbacks.view_all')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeScheduleOwnerMenu({ restoreSelection: true });
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const query = String(calendarOwnerBadge.value || '').trim();
+        const options = buildScheduleOwnerPickerOptions(query);
+        if (!options.length) return;
+
+        const normalizedQuery = query.toLowerCase();
+        const exactMatch = options.find((option) =>
+          option.label.toLowerCase() === normalizedQuery
+          || option.label.toLowerCase().includes(normalizedQuery)
+        );
+        const chosen = exactMatch || options[0];
+        if (!chosen) return;
+
+        if (applyScheduleOwnerSelection(chosen.value)) {
+          closeScheduleOwnerMenu({ restoreSelection: true });
+        }
+      }
+    });
+  }
+
+  if (calendarOwnerMenu) {
+    calendarOwnerMenu.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+    });
+
+    calendarOwnerMenu.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const optionBtn = target.closest('.schedule-owner-option[data-owner-value]');
+      if (!optionBtn) return;
+      const nextValue = String(optionBtn.dataset.ownerValue || '');
+      if (!nextValue) return;
+      if (applyScheduleOwnerSelection(nextValue)) {
+        closeScheduleOwnerMenu({ restoreSelection: true });
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    if (scheduleOwnerMenuOpen && calendarOwnerPicker && !calendarOwnerPicker.contains(target)) {
+      closeScheduleOwnerMenu({ restoreSelection: true });
+    }
+
+    if (!target.closest('[data-task-menu]')) {
+      closeScheduleTaskMenus();
+    }
+
+    if (
+      scheduleTaskModalOpen
+      && scheduleTaskLeadSuggestions
+      && !scheduleTaskLeadSuggestions.classList.contains('hidden')
+      && scheduleTaskLeadSearchInput
+      && !scheduleTaskLeadSearchInput.contains(target)
+      && !scheduleTaskLeadSuggestions.contains(target)
+    ) {
+      closeScheduleTaskLeadSuggestions();
+    }
+  });
+
+  if (calendarCreateTaskBtn) {
+    calendarCreateTaskBtn.addEventListener('click', () => {
+      void createScheduleEvent('general');
+    });
+  }
+
+  if (calendarCreateCallbackBtn) {
+    calendarCreateCallbackBtn.addEventListener('click', () => {
+      void createScheduleEvent('callback');
+    });
+  }
+
+  if (scheduleTaskForm) {
+    scheduleTaskForm.addEventListener('submit', (event) => {
+      void submitScheduleTaskModal(event);
+    });
+  }
+
+  if (scheduleTaskCloseBtn) {
+    scheduleTaskCloseBtn.addEventListener('click', () => {
+      if (scheduleTaskSubmitInFlight) return;
+      closeScheduleTaskModal();
+    });
+  }
+
+  if (scheduleTaskCancelBtn) {
+    scheduleTaskCancelBtn.addEventListener('click', () => {
+      if (scheduleTaskSubmitInFlight) return;
+      closeScheduleTaskModal();
+    });
+  }
+
+  if (scheduleTaskModal) {
+    scheduleTaskModal.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || scheduleTaskSubmitInFlight) return;
+      if (target.matches('[data-schedule-task-close]')) {
+        closeScheduleTaskModal();
+      }
+    });
+  }
+
+  if (scheduleTaskLeadSuggestions) {
+    scheduleTaskLeadSuggestions.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+    });
+
+    scheduleTaskLeadSuggestions.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const option = target.closest('.schedule-task-lead-option[data-lead-index]');
+      if (!option) return;
+      const optionIndex = Number(option.dataset.leadIndex);
+      if (selectScheduleTaskLeadAt(optionIndex)) {
+        scheduleTaskLeadSearchInput?.focus();
+      }
+    });
+  }
+
+  if (scheduleTaskLeadSearchInput) {
+    scheduleTaskLeadSearchInput.addEventListener('focus', async () => {
+      if (!scheduleTaskModalOpen) return;
+      await ensureScheduleTaskLeadPoolLoaded();
+      renderScheduleTaskLeadSuggestions(scheduleTaskLeadSearchInput.value);
+    });
+
+    scheduleTaskLeadSearchInput.addEventListener('input', () => {
+      if (!scheduleTaskModalOpen) return;
+      setScheduleTaskLeadSelection(null);
+      renderScheduleTaskLeadSuggestions(scheduleTaskLeadSearchInput.value);
+    });
+
+    scheduleTaskLeadSearchInput.addEventListener('keydown', (event) => {
+      if (!scheduleTaskModalOpen) return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!scheduleTaskLeadMatches.length) return;
+        setActiveScheduleTaskLeadSuggestion(scheduleTaskLeadActiveIndex + 1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!scheduleTaskLeadMatches.length) return;
+        setActiveScheduleTaskLeadSuggestion(scheduleTaskLeadActiveIndex - 1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        if (scheduleTaskLeadMatches.length > 0 && scheduleTaskLeadActiveIndex >= 0) {
+          event.preventDefault();
+          selectScheduleTaskLeadAt(scheduleTaskLeadActiveIndex);
+        }
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeScheduleTaskLeadSuggestions();
+      }
     });
   }
 
@@ -4155,6 +4988,10 @@ if (newLeadModal) {
 
 // Cerrar con Escape
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && scheduleTaskModalOpen && !scheduleTaskSubmitInFlight) {
+    closeScheduleTaskModal();
+    return;
+  }
   if (event.key === 'Escape' && newLeadModal && !newLeadModal.classList.contains('hidden')) {
     closeModal();
   }

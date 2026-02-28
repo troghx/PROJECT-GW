@@ -4789,11 +4789,15 @@ app.get('/api/users', async (req, res) => {
   await hydrateAuthPermissions(req);
   const access = req.auth || {};
   if (!hasAuthPermission(access, 'leads.view_all')) {
-    const selfLabel = cleanText(access.displayName || access.username, 120)
-      || cleanText(access.username, 120)
-      || '';
-    const users = selfLabel ? [selfLabel] : [];
-    return res.json({ users });
+    const selfUsername = cleanText(access.username, 120).toLowerCase();
+    const selfDisplayName = cleanText(access.displayName, 120) || selfUsername;
+    const users = selfDisplayName ? [selfDisplayName] : [];
+    const members = selfUsername ? [{
+      username: selfUsername,
+      displayName: selfDisplayName || selfUsername,
+      role: normalizeRoleValue(access.role) || 'seller'
+    }] : [];
+    return res.json({ users, members });
   }
 
   try {
@@ -4806,13 +4810,14 @@ app.get('/api/users', async (req, res) => {
        LIMIT 500`
     );
     const { rows: appUsersRows } = await pool.query(
-      `SELECT username, display_name
+      `SELECT username, display_name, role
        FROM app_users
        WHERE is_active = TRUE
        ORDER BY username ASC`
     );
 
     const userMap = new Map();
+    const membersMap = new Map();
     const pushUser = (value) => {
       const normalized = cleanText(value, 120);
       if (!normalized) return;
@@ -4821,6 +4826,14 @@ app.get('/api/users', async (req, res) => {
     };
 
     appUsersRows.forEach((user) => {
+      const username = cleanText(user.username, 120).toLowerCase();
+      if (username && !membersMap.has(username)) {
+        membersMap.set(username, {
+          username,
+          displayName: cleanText(user.display_name, 120) || username,
+          role: normalizeRoleValue(user.role) || 'seller'
+        });
+      }
       pushUser(user.display_name);
       pushUser(user.username);
     });
@@ -4829,8 +4842,11 @@ app.get('/api/users', async (req, res) => {
     const users = Array.from(userMap.values()).sort((a, b) =>
       a.localeCompare(b, 'es', { sensitivity: 'base' })
     );
+    const members = Array.from(membersMap.values()).sort((a, b) =>
+      cleanText(a.username, 120).localeCompare(cleanText(b.username, 120), 'es', { sensitivity: 'base' })
+    );
 
-    return res.json({ users });
+    return res.json({ users, members });
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     return res.status(500).json({ message: 'No se pudieron cargar usuarios.' });
@@ -7490,6 +7506,95 @@ app.patch('/api/tasks/:id/complete', async (req, res) => {
     }
     console.error('Error al completar task:', error);
     return res.status(500).json({ message: 'Error al completar task.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/tasks/:id', async (req, res) => {
+  const taskId = parsePositiveInteger(req.params.id);
+  if (!taskId) {
+    return res.status(400).json({ message: 'taskId invalido.' });
+  }
+
+  await hydrateAuthPermissions(req);
+  if (!hasAuthPermission(req.auth, 'tasks.manage')) {
+    return res.status(403).json({ message: 'No tienes permisos para eliminar tareas.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: taskRows } = await client.query(
+      `SELECT *
+       FROM lead_tasks
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [taskId]
+    );
+    if (!taskRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Task no encontrada.' });
+    }
+
+    const task = taskRows[0];
+    if (!canAccessTaskByOwner(req.auth, task.owner_username)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'No tienes permisos para eliminar esta task.' });
+    }
+
+    await client.query(
+      `DELETE FROM lead_tasks
+       WHERE id = $1`,
+      [taskId]
+    );
+
+    const isCallbackTask = cleanText(task.task_type, 40).toLowerCase() === 'callback';
+    const relatedLeadId = Number(task.related_lead_id || 0) || null;
+    const callbackDate = normalizeDateOnlyForApi(task.due_date);
+    if (isCallbackTask && relatedLeadId && callbackDate) {
+      await client.query(
+        `UPDATE leads
+         SET callback_date = NULL,
+             callback_completed_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND callback_date = $2::date`,
+        [relatedLeadId, callbackDate]
+      );
+    }
+
+    await writeAuditLog({
+      req,
+      action: 'task.delete',
+      entityType: 'task',
+      entityId: taskId,
+      before: task,
+      after: null,
+      metadata: {
+        taskType: cleanText(task.task_type, 40).toLowerCase() || null,
+        ownerUsername: cleanText(task.owner_username, 120) || null,
+        relatedLeadId
+      },
+      client
+    });
+
+    await client.query('COMMIT');
+    return res.json({
+      ok: true,
+      deletedId: taskId,
+      message: 'Task eliminada correctamente.'
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_rollbackError) {
+      // ignore rollback secondary errors
+    }
+    console.error('Error al eliminar task:', error);
+    return res.status(500).json({ message: 'Error al eliminar task.' });
   } finally {
     client.release();
   }

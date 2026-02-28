@@ -1484,8 +1484,7 @@
   function setMenuPosition(x, y) {
     const safeX = Math.max(18, Math.min(globalScope.innerWidth - 18, x));
     const safeY = Math.max(18, Math.min(globalScope.innerHeight - 18, y));
-    radialMenu.style.left = `${safeX}px`;
-    radialMenu.style.top = `${safeY}px`;
+    radialMenu.style.transform = `translate3d(${safeX}px, ${safeY}px, 0)`;
   }
 
   function syncRadialVisibility() {

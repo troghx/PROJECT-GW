@@ -750,22 +750,33 @@
       return globalLeadSuggestionBox;
     }
 
+    let _repositionRequest = 0;
     function positionGlobalLeadSuggestionBox() {
       if (!globalLeadSuggestionBox || !globalLeadSuggestionShell) return;
-      const rect = globalLeadSuggestionShell.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
+      
+      if (_repositionRequest) return;
+      
+      _repositionRequest = window.requestAnimationFrame(() => {
+        const rect = globalLeadSuggestionShell.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          _repositionRequest = 0;
+          return;
+        }
 
-      const viewportPadding = 8;
-      const top = rect.bottom + 6;
-      const left = Math.max(viewportPadding, rect.left);
-      const availableWidth = Math.max(240, window.innerWidth - left - viewportPadding);
-      const width = Math.min(rect.width, availableWidth);
-      const availableHeight = Math.max(140, window.innerHeight - top - viewportPadding);
+        const viewportPadding = 8;
+        const top = rect.bottom + 6;
+        const left = Math.max(viewportPadding, rect.left);
+        const availableWidth = Math.max(240, window.innerWidth - left - viewportPadding);
+        const width = Math.min(rect.width, availableWidth);
+        const availableHeight = Math.max(140, window.innerHeight - top - viewportPadding);
 
-      globalLeadSuggestionBox.style.left = `${left}px`;
-      globalLeadSuggestionBox.style.top = `${top}px`;
-      globalLeadSuggestionBox.style.width = `${Math.max(240, width)}px`;
-      globalLeadSuggestionBox.style.maxHeight = `${Math.min(380, availableHeight)}px`;
+        globalLeadSuggestionBox.style.left = `${left}px`;
+        globalLeadSuggestionBox.style.top = `${top}px`;
+        globalLeadSuggestionBox.style.width = `${Math.max(240, width)}px`;
+        globalLeadSuggestionBox.style.maxHeight = `${Math.min(380, availableHeight)}px`;
+        
+        _repositionRequest = 0;
+      });
     }
 
     function hideGlobalLeadSuggestions() {

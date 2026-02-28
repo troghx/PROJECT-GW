@@ -3560,6 +3560,30 @@ body.home-active.theme-light .state-suggestions {
   border-color: rgba(0, 0, 0, 0.15);
 }
 
+body.home-active.theme-light .schedule-task-lead-suggestions {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body.home-active.theme-light .schedule-task-lead-option {
+  color: #0f172a;
+}
+
+body.home-active.theme-light .schedule-task-lead-option small,
+body.home-active.theme-light .schedule-task-lead-empty,
+body.home-active.theme-light .schedule-task-lead-hint {
+  color: rgba(15, 23, 42, 0.66);
+}
+
+body.home-active.theme-light .schedule-task-lead-option:hover,
+body.home-active.theme-light .schedule-task-lead-option.is-active {
+  background: rgba(57, 176, 255, 0.14);
+}
+
+body.home-active.theme-light .schedule-task-lead-link {
+  color: rgba(3, 105, 161, 0.9);
+}
+
 body.home-active.theme-light .state-suggestion-item {
   color: #1a1a1a;
 }
@@ -5389,14 +5413,87 @@ body.home-active.theme-light .bronze-card {
   background: rgba(57, 176, 255, 0.94);
 }
 
+.schedule-owner-picker {
+  position: relative;
+  min-width: clamp(160px, 20vw, 220px);
+  max-width: 320px;
+}
+
 .schedule-owner-badge {
+  width: 100%;
   font-size: 0.72rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 6px 12px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.schedule-owner-badge::placeholder {
+  color: rgba(226, 236, 248, 0.76);
+}
+
+.schedule-owner-badge:focus {
+  border-color: rgba(126, 234, 252, 0.8);
+  box-shadow: 0 0 0 2px rgba(126, 234, 252, 0.2);
+  background: rgba(22, 34, 51, 0.62);
+}
+
+.schedule-owner-picker.is-open .schedule-owner-badge {
+  border-color: rgba(126, 234, 252, 0.72);
+  box-shadow: 0 0 0 2px rgba(126, 234, 252, 0.16);
+}
+
+.schedule-owner-badge[readonly] {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.schedule-owner-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 20, 33, 0.96);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
+  z-index: 45;
+  padding: 6px;
+}
+
+.schedule-owner-option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(229, 241, 255, 0.94);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.schedule-owner-option:hover {
+  background: rgba(126, 234, 252, 0.16);
+}
+
+.schedule-owner-option.is-active {
+  background: rgba(126, 234, 252, 0.25);
+  color: #ffffff;
+}
+
+.schedule-owner-empty {
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  color: rgba(188, 205, 224, 0.86);
 }
 
 .schedule-metrics {
@@ -5429,6 +5526,9 @@ body.home-active.theme-light .bronze-card {
 
 .schedule-selected-date-wrap {
   padding: 0 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .schedule-selected-date-wrap h3 {
@@ -5438,6 +5538,34 @@ body.home-active.theme-light .bronze-card {
   text-transform: capitalize;
   color: rgba(255, 255, 255, 0.88);
   letter-spacing: 0.12px;
+}
+
+.schedule-date-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.schedule-create-btn {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.schedule-create-btn:hover {
+  background: rgba(126, 234, 252, 0.18);
+}
+
+.schedule-create-btn.callback {
+  border-color: rgba(236, 72, 153, 0.55);
+  background: rgba(236, 72, 153, 0.2);
+  color: rgba(255, 238, 249, 0.96);
 }
 
 .schedule-agenda-list {
@@ -5500,6 +5628,7 @@ body.home-active.theme-light .bronze-card {
 
 .schedule-task-main {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .schedule-task-title {
@@ -5507,9 +5636,11 @@ body.home-active.theme-light .bronze-card {
   font-size: 0.79rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.93);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
 }
 
 .schedule-task-meta {
@@ -5518,67 +5649,167 @@ body.home-active.theme-light .bronze-card {
   color: rgba(255, 255, 255, 0.63);
 }
 
+.schedule-task-lead-row {
+  margin: 5px 0 0;
+  font-size: 0.69rem;
+}
+
+.schedule-task-lead-inline {
+  color: rgba(186, 230, 253, 0.96);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.schedule-task-lead-inline:hover {
+  color: #ffffff;
+}
+
 .schedule-task-side {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 5px;
 }
 
-.schedule-task-status {
+.schedule-task-menu {
+  position: relative;
+}
+
+.schedule-task-menu-toggle {
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(226, 235, 245, 0.9);
+  border-radius: 6px;
+  width: 26px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.schedule-task-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 700;
+  color: inherit;
+  transform: translateY(-1px);
+}
+
+.schedule-task-menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.schedule-task-menu.is-open .schedule-task-menu-toggle {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(248, 252, 255, 0.96);
+}
+
+.schedule-task-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(160deg, rgba(33, 35, 40, 0.98) 0%, rgba(24, 26, 30, 0.98) 100%);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.38);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 30;
+}
+
+.schedule-task-menu.is-open .schedule-task-menu-panel {
+  display: flex;
+}
+
+.schedule-task-menu-status {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.83);
-  padding: 3px 7px;
-  font-size: 0.64rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(235, 242, 248, 0.9);
+  padding: 3px 8px;
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  text-align: center;
 }
 
 .schedule-task-actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
 }
 
 .schedule-open-lead-btn {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
-  border-radius: 7px;
-  padding: 4px 8px;
-  font-size: 0.68rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 244, 249, 0.92);
+  border-radius: 6px;
+  padding: 3px 8px;
+  width: 100%;
+  font-size: 0.64rem;
   font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .schedule-open-lead-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .schedule-complete-btn {
-  border: 1px solid rgba(245, 158, 11, 0.6);
-  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.18);
   color: rgba(255, 245, 222, 0.98);
-  border-radius: 7px;
-  padding: 4px 8px;
-  font-size: 0.68rem;
+  border-radius: 6px;
+  padding: 3px 8px;
+  width: 100%;
+  font-size: 0.64rem;
   font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .schedule-complete-btn:hover {
-  background: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.28);
 }
 
 .schedule-complete-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.schedule-delete-btn {
+  border: 1px solid rgba(239, 68, 68, 0.62);
+  background: rgba(239, 68, 68, 0.16);
+  color: rgba(255, 236, 236, 0.98);
+  border-radius: 6px;
+  padding: 3px 8px;
+  width: 100%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.schedule-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.27);
+}
+
+.schedule-delete-btn:disabled {
   opacity: 0.62;
   cursor: not-allowed;
 }
@@ -5610,9 +5841,10 @@ body.home-active.theme-light .schedule-empty-message {
 body.home-active.theme-light .schedule-note-add-btn,
 body.home-active.theme-light .schedule-month-btn,
 body.home-active.theme-light .schedule-complete-btn,
+body.home-active.theme-light .schedule-create-btn,
 body.home-active.theme-light .schedule-open-lead-btn,
 body.home-active.theme-light .schedule-owner-badge,
-body.home-active.theme-light .schedule-task-status,
+body.home-active.theme-light .schedule-task-menu-status,
 body.home-active.theme-light .schedule-today-btn {
   border-color: rgba(15, 23, 42, 0.16);
   background: rgba(15, 23, 42, 0.06);
@@ -5621,13 +5853,87 @@ body.home-active.theme-light .schedule-today-btn {
 
 body.home-active.theme-light .schedule-note-add-btn:hover,
 body.home-active.theme-light .schedule-complete-btn:hover,
+body.home-active.theme-light .schedule-create-btn:hover,
 body.home-active.theme-light .schedule-month-btn:hover,
-body.home-active.theme-light .schedule-open-lead-btn:hover {
+body.home-active.theme-light .schedule-open-lead-btn:hover,
+body.home-active.theme-light .schedule-task-menu-toggle:hover {
   background: rgba(57, 176, 255, 0.14);
+}
+
+body.home-active.theme-light .schedule-task-menu-panel {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+body.home-active.theme-light .schedule-task-menu-toggle {
+  border-color: transparent;
+  background: transparent;
+  color: rgba(30, 41, 59, 0.82);
+}
+
+body.home-active.theme-light .schedule-task-menu.is-open .schedule-task-menu-toggle {
+  background: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.home-active.theme-light .schedule-create-btn.callback {
+  border-color: rgba(190, 24, 93, 0.44);
+  background: rgba(236, 72, 153, 0.14);
+  color: rgba(131, 24, 67, 0.86);
+}
+
+body.home-active.theme-light .schedule-delete-btn {
+  border-color: rgba(220, 38, 38, 0.42);
+  background: rgba(239, 68, 68, 0.14);
+  color: rgba(127, 29, 29, 0.88);
+}
+
+body.home-active.theme-light .schedule-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.24);
 }
 
 body.home-active.theme-light .schedule-day.has-missed .schedule-day-dot {
   background: rgba(220, 38, 38, 0.92);
+}
+
+body.home-active.theme-light .schedule-owner-badge {
+  border-color: rgba(15, 23, 42, 0.2);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.home-active.theme-light .schedule-owner-badge::placeholder {
+  color: rgba(51, 65, 85, 0.68);
+}
+
+body.home-active.theme-light .schedule-owner-badge:focus {
+  border-color: rgba(14, 116, 144, 0.58);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+body.home-active.theme-light .schedule-owner-menu {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+body.home-active.theme-light .schedule-owner-option {
+  color: rgba(15, 23, 42, 0.9);
+}
+
+body.home-active.theme-light .schedule-owner-option:hover {
+  background: rgba(14, 165, 233, 0.14);
+}
+
+body.home-active.theme-light .schedule-owner-option.is-active {
+  background: rgba(14, 165, 233, 0.2);
+  color: rgba(12, 74, 110, 0.96);
+}
+
+body.home-active.theme-light .schedule-owner-empty {
+  color: rgba(51, 65, 85, 0.76);
 }
 
 body.home-active.theme-light .schedule-day.has-pending .schedule-day-dot {
@@ -5664,8 +5970,17 @@ body.home-active.theme-light .schedule-notes-board {
 body.home-active.theme-light .schedule-notes-empty,
 body.home-active.theme-light .schedule-metric span,
 body.home-active.theme-light .schedule-selected-date-wrap h3,
-body.home-active.theme-light .schedule-task-meta {
+body.home-active.theme-light .schedule-task-meta,
+body.home-active.theme-light .schedule-task-lead-row {
   color: rgba(15, 23, 42, 0.62);
+}
+
+body.home-active.theme-light .schedule-task-lead-inline {
+  color: rgba(3, 105, 161, 0.9);
+}
+
+body.home-active.theme-light .schedule-task-lead-inline:hover {
+  color: rgba(2, 132, 199, 1);
 }
 
 body.home-active.theme-light .schedule-month-label,
@@ -7072,6 +7387,10 @@ body.home-active.theme-light .email-no-actions {
   animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.schedule-task-modal-content {
+  max-width: 560px;
+}
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;
@@ -7316,6 +7635,78 @@ body.home-active.theme-light .email-no-actions {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.schedule-task-form {
+  gap: 16px;
+}
+
+.schedule-task-lead-picker {
+  position: relative;
+}
+
+.schedule-task-lead-suggestions {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 0 0 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  background: rgba(18, 20, 26, 0.98);
+  z-index: 22;
+}
+
+.schedule-task-lead-option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.schedule-task-lead-option small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.74rem;
+}
+
+.schedule-task-lead-option:hover,
+.schedule-task-lead-option.is-active {
+  background: rgba(57, 176, 255, 0.2);
+}
+
+.schedule-task-lead-empty {
+  padding: 10px 12px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.85rem;
+}
+
+.schedule-task-lead-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  color: rgba(125, 211, 252, 0.95);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.schedule-task-lead-link:hover {
+  color: #ffffff;
+}
+
+.schedule-task-lead-hint {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.8rem;
 }
 
 .form-group {
@@ -7981,9 +8372,9 @@ body.home-active.theme-light .email-no-actions {
   height: 0;
   z-index: 2200;
   pointer-events: none;
-  transform: translate(-50%, -50%);
   opacity: 1;
   transition: opacity 0.18s ease;
+  will-change: transform;
 }
 
 /* Anillo de órbita sutil */
@@ -9845,3 +10236,36 @@ body.theme-light .notif-panel .notif-time { color: rgba(0,0,0,0.35); }
 .quote-container.quote-meow::after {
   transform: translate(30px, 16px);
 }
+
+/* --- OPTIMIZATION SECTION: LIQUID GLASS & PERFORMANCE --- */
+:root {
+  --glass-reflect: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 100%);
+  --glass-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-shadow);
+  border-radius: 20px;
+  will-change: transform, opacity;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* High-performance transitions */
+.fast-ease {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+.lead-suggestion-box {
+  will-change: opacity, transform, left, top;
+  contain: layout style;
+}
+

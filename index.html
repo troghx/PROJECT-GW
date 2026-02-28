@@ -645,7 +645,18 @@
           <aside class="schedule-panel schedule-agenda-panel">
             <div class="schedule-panel-head">
               <h2>Agenda</h2>
-              <span id="calendarOwnerBadge" class="schedule-owner-badge">-</span>
+              <div id="calendarOwnerPicker" class="schedule-owner-picker">
+                <input
+                  id="calendarOwnerBadge"
+                  class="schedule-owner-badge"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Buscar o seleccionar agenda"
+                  placeholder="Buscar agenda..."
+                />
+                <div id="calendarOwnerMenu" class="schedule-owner-menu hidden" role="listbox" aria-label="Opciones de agenda"></div>
+              </div>
             </div>
             <div class="schedule-metrics">
               <div class="schedule-metric metric-overdue">
@@ -663,11 +674,51 @@
             </div>
             <div class="schedule-selected-date-wrap">
               <h3 id="calendarSelectedDateLabel">Sin fecha seleccionada</h3>
+              <div class="schedule-date-actions">
+                <button id="calendarCreateTaskBtn" class="schedule-create-btn" type="button">Nueva task</button>
+                <button id="calendarCreateCallbackBtn" class="schedule-create-btn callback" type="button">Nuevo callback</button>
+              </div>
             </div>
             <div id="calendarAgendaList" class="schedule-agenda-list">
               <p class="schedule-empty-message">Aun no hay tasks para mostrar.</p>
             </div>
           </aside>
+        </div>
+      </div>
+
+      <div id="scheduleTaskModal" class="modal hidden">
+        <div class="modal-backdrop" data-schedule-task-close></div>
+        <div class="modal-content schedule-task-modal-content">
+          <button class="modal-close-mac" id="scheduleTaskCloseBtn" type="button" title="Cerrar"></button>
+          <div class="modal-header">
+            <h3 id="scheduleTaskModalTitle">Nueva task</h3>
+          </div>
+          <form id="scheduleTaskForm" class="modal-form schedule-task-form">
+            <div class="form-group">
+              <label for="scheduleTaskOwnerInput">Agenda destino</label>
+              <input id="scheduleTaskOwnerInput" type="text" readonly />
+            </div>
+            <div class="form-group">
+              <label for="scheduleTaskDateInput">Fecha</label>
+              <input id="scheduleTaskDateInput" type="text" readonly />
+            </div>
+            <div class="form-group">
+              <label for="scheduleTaskTitleInput">Titulo</label>
+              <input id="scheduleTaskTitleInput" type="text" maxlength="180" required placeholder="Ej. Seguimiento de documentos" />
+            </div>
+            <div class="form-group schedule-task-lead-picker">
+              <label for="scheduleTaskLeadSearchInput">Cliente / Lead (opcional)</label>
+              <input id="scheduleTaskLeadSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar por nombre, case, telefono..." />
+              <input id="scheduleTaskLeadIdInput" type="hidden" />
+              <div id="scheduleTaskLeadSuggestions" class="schedule-task-lead-suggestions hidden"></div>
+              <a id="scheduleTaskLeadLink" class="schedule-task-lead-link hidden" href="#">Abrir lead seleccionado</a>
+              <p id="scheduleTaskLeadHint" class="schedule-task-lead-hint">Sin lead seleccionado.</p>
+            </div>
+            <div class="form-actions">
+              <button id="scheduleTaskCancelBtn" type="button" class="btn-cancel">Cancelar</button>
+              <button id="scheduleTaskSubmitBtn" type="submit" class="btn-create">Guardar</button>
+            </div>
+          </form>
         </div>
       </div>
 
