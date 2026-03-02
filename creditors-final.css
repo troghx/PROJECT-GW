@@ -192,15 +192,15 @@ body.theme-light .summary-badge.party-coapp-fico { background: linear-gradient(1
 }
 
 body.theme-light .creditors-sort-toggle {
-  color: rgba(15, 23, 42, 0.48);
+  color: rgba(20, 20, 22, 0.48);
 }
 
 body.theme-light .creditors-sort-toggle:hover {
-  color: rgba(15, 23, 42, 0.85);
+  color: rgba(20, 20, 22, 0.85);
 }
 
 body.theme-light .creditors-sort-toggle:focus-visible {
-  outline-color: rgba(15, 23, 42, 0.35);
+  outline-color: rgba(20, 20, 22, 0.35);
 }
 
 #creditorsSavedTable { table-layout: fixed !important; width: 100% !important; border-collapse: collapse !important; }

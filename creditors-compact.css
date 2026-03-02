@@ -742,11 +742,11 @@ body.theme-light .creditors-header-glass,
 body.theme-light .creditors-import-area,
 body.theme-light .creditors-table-container {
   background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(15, 23, 42, 0.08);
+  border-color: rgba(20, 20, 22, 0.08);
 }
 
 body.theme-light .creditor-name {
-  color: rgba(15, 23, 42, 0.9);
+  color: rgba(20, 20, 22, 0.9);
 }
 
 body.theme-light .creditor-unacceptable-flag {
@@ -759,25 +759,25 @@ body.theme-light .col-debt {
 
 body.theme-light .creditors-table th {
   background: rgba(241, 245, 249, 0.9);
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(20, 20, 22, 0.6);
 }
 
 body.theme-light .creditors-table td {
-  color: rgba(15, 23, 42, 0.8);
-  border-bottom-color: rgba(15, 23, 42, 0.06);
+  color: rgba(20, 20, 22, 0.8);
+  border-bottom-color: rgba(20, 20, 22, 0.06);
 }
 
 body.theme-light .col-account,
 body.theme-light .col-num {
-  color: rgba(15, 23, 42, 0.5);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.theme-light .col-utilization {
-  color: rgba(15, 23, 42, 0.7);
+  color: rgba(20, 20, 22, 0.7);
 }
 
 body.theme-light .import-tab {
-  color: rgba(15, 23, 42, 0.55);
+  color: rgba(20, 20, 22, 0.55);
 }
 
 body.theme-light .import-tab.active {
@@ -788,8 +788,8 @@ body.theme-light .form-field input,
 body.theme-light .form-field select,
 body.theme-light .creditors-textarea {
   background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(15, 23, 42, 0.1);
-  color: rgba(15, 23, 42, 0.85);
+  border-color: rgba(20, 20, 22, 0.1);
+  color: rgba(20, 20, 22, 0.85);
 }
 
 body.theme-light .upload-zone {
@@ -798,17 +798,17 @@ body.theme-light .upload-zone {
 }
 
 body.theme-light .btn-secondary {
-  background: rgba(15, 23, 42, 0.05);
-  color: rgba(15, 23, 42, 0.75);
-  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(20, 20, 22, 0.05);
+  color: rgba(20, 20, 22, 0.75);
+  border-color: rgba(20, 20, 22, 0.1);
 }
 
 body.theme-light .btn-ghost {
-  color: rgba(15, 23, 42, 0.5);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.theme-light .status-text {
-  color: rgba(15, 23, 42, 0.62);
+  color: rgba(20, 20, 22, 0.62);
 }
 
 /* ===== BADGES - Light Mode Contraste ===== */
@@ -874,12 +874,12 @@ body.theme-light #creditorsSelectAllBtn:hover {
 }
 
 body.theme-light .btn-small {
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(20, 20, 22, 0.6);
 }
 
 body.theme-light .btn-small:hover {
-  background: rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.9);
+  background: rgba(20, 20, 22, 0.08);
+  color: rgba(20, 20, 22, 0.9);
 }
 
 body.theme-light .btn-delete:hover {
@@ -888,11 +888,11 @@ body.theme-light .btn-delete:hover {
 
 /* ===== SUMMARY CARDS - Light Mode Contraste ===== */
 body.theme-light .summary-label {
-  color: rgba(15, 23, 42, 0.55);
+  color: rgba(20, 20, 22, 0.55);
 }
 
 body.theme-light .summary-value {
-  color: rgba(15, 23, 42, 0.95);
+  color: rgba(20, 20, 22, 0.95);
 }
 
 body.theme-light .creditor-summary-card.debt-total .summary-value {
@@ -942,15 +942,15 @@ body.theme-light .creditor-summary-card.past-due {
 
 /* Botones header - light mode */
 body.theme-light .btn-header-icon {
-  border-color: rgba(15, 23, 42, 0.15);
-  background: rgba(15, 23, 42, 0.05);
-  color: rgba(15, 23, 42, 0.5);
+  border-color: rgba(20, 20, 22, 0.15);
+  background: rgba(20, 20, 22, 0.05);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.theme-light .btn-header-icon:hover {
-  background: rgba(15, 23, 42, 0.1);
-  color: rgba(15, 23, 42, 0.8);
-  border-color: rgba(15, 23, 42, 0.25);
+  background: rgba(20, 20, 22, 0.1);
+  color: rgba(20, 20, 22, 0.8);
+  border-color: rgba(20, 20, 22, 0.25);
 }
 
 body.theme-light .btn-delete-icon:hover {
@@ -962,11 +962,11 @@ body.theme-light .btn-delete-icon:hover {
 /* Preview/Saved headers en light mode */
 body.theme-light .preview-header h4,
 body.theme-light .saved-header h4 {
-  color: rgba(15, 23, 42, 0.8);
+  color: rgba(20, 20, 22, 0.8);
 }
 
 body.theme-light .select-all-toggle {
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(20, 20, 22, 0.6);
 }
 
 

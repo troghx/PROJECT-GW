@@ -1,5 +1,5 @@
 # Tablero - Ejecucion CRM
-Fecha: 2026-02-27
+Fecha: 2026-02-28
 Estado: En curso
 
 ## Sesion actual
@@ -24,16 +24,21 @@ Estado: En curso
 - [x] Ejecutar Fase 4 backend: API de tareas (crear/listar/actualizar/completar) con SLA/recurrencia.
 - [x] Ejecutar Fase 4 backend: escalamiento automatico por vencimiento.
 - [x] Ejecutar Fase 4 frontend: calendario conectado a `/api/tasks` con vista owner/equipo.
+- [x] Auditar estado tecnico post-pull (codigo + backend + docs) y actualizar vault Obsidian.
 
 ## Siguiente bloque sugerido
 1. Ejecutar Fase 5 (compliance PII):
    - enmascarado/cifrado de SSN y cuenta bancaria en lectura/serializacion,
    - politica de acceso/export de PII,
    - endurecer redaccion de logs fuera de auditoria.
-2. Extender Fase 3 a UI de dashboard:
+2. Ejecutar Fase 07 (Pull Credit real):
+   - endpoint backend de soft pull para `applicant/coapp`,
+   - consentimiento explicito y trazabilidad por request,
+   - persistencia de resultado y score por lead.
+3. Extender Fase 3 a UI de dashboard:
    - vista KPI consumiendo `/api/kpi/pipeline`,
    - visualizacion de stage-history en lead.
-3. Ejecutar Fase 6 (observabilidad y QA minima):
+4. Ejecutar Fase 6 (observabilidad y QA minima):
    - logging estructurado y alertas,
    - smoke tests automatizados + CI.
 
@@ -45,6 +50,20 @@ Estado: En curso
 - Fase 4: implementada (motor de tareas general + escalamiento + bandeja owner/equipo).
 - Fase 5: parcial (redaccion en `audit_log`, sin cifrado/mascarado integral de PII en dominio).
 - Fase 6: parcial (request-id + `/api/health`, sin logging estructurado, monitoreo, backup/restore probado, tests/CI).
+
+## Hallazgos de auditoria (2026-02-28)
+- Pull Credit sigue sin integracion backend real:
+  - `client.js` muestra: "Integracion API pendiente" al disparar Pull Credit.
+  - En backend no existe endpoint `/api/...` para ejecutar soft pull; solo analisis de reporte (`/api/creditors/analyze-report`) y CRUD de creditors.
+- Riesgo PII aun abierto:
+  - `LEAD_SELECT_COLUMNS` incluye `ssn` y `co_applicant_ssn`.
+  - `/api/leads/:id/banking` retorna `routing_number`, `account_number`, `ss_number` en claro.
+  - Es necesario definir mascara/cifrado + politica por permiso para salida/export.
+- QA/CI sigue pendiente:
+  - `package.json` no tiene script `test`.
+  - No existe `.github/workflows` en repo.
+- Dependencia operativa externa:
+  - Analisis IA de reporte depende de `GEMINI_API_KEY`; sin clave responde `503` ("IA no configurada").
 
 ## Nota de control
 No se agrega boton adicional por ahora; el tracking se mantiene con checklist en estas notas.

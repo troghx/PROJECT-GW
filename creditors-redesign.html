@@ -201,11 +201,11 @@
       <div class="saved-header">
         <h4>Creditors guardados</h4>
         <div class="saved-actions">
-          <button class="btn-ghost" id="creditorsApplyTotalBtn">
+          <button class="btn-ghost" id="creditorsAddDebtBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 2v20M2 12h20"/>
             </svg>
-            Aplicar a Calculadora
+            Agregar deuda manualmente
           </button>
         </div>
       </div>
@@ -222,5 +222,115 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Modal: Agregar Deuda Manualmente -->
+<div class="modal hidden" id="manualDebtModal">
+  <div class="modal-backdrop" id="manualDebtModalBackdrop"></div>
+  <div class="manual-debt-modal-content" role="dialog" aria-labelledby="manualDebtModalTitle">
+    <div class="manual-debt-modal-header">
+      <h3 id="manualDebtModalTitle">Agregar Deuda Manual</h3>
+      <button class="modal-close-btn" id="manualDebtModalClose" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="manual-debt-modal-body">
+      <!-- Auto Upload Zone -->
+      <div class="manual-debt-upload-zone" id="manualDebtUploadZone">
+        <div class="upload-zone-content" id="manualDebtUploadContent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p>Subir Automatico</p>
+          <span>Arrastra un PDF o imagen del estado de cuenta, o haz clic para seleccionar</span>
+        </div>
+        <div class="upload-zone-progress hidden" id="manualDebtUploadProgress">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="manualDebtProgressFill"></div>
+          </div>
+          <span class="progress-text" id="manualDebtProgressText">Procesando...</span>
+        </div>
+        <input type="file" id="manualDebtFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden>
+      </div>
+
+      <!-- Formulario -->
+      <form id="manualDebtModalForm" autocomplete="off">
+        <div class="mdm-form-row">
+          <div class="mdm-form-field">
+            <label for="mdm_creditorName">Nombre del Acreedor *</label>
+            <input type="text" id="mdm_creditorName" placeholder="Ej: CAPITAL ONE BANK" required>
+          </div>
+          <div class="mdm-form-field">
+            <label for="mdm_accountNumber">Numero de Cuenta</label>
+            <input type="text" id="mdm_accountNumber" placeholder="XXXX1234">
+          </div>
+        </div>
+        <div class="mdm-form-row">
+          <div class="mdm-form-field">
+            <label for="mdm_debtAmount">Deuda (Balance) *</label>
+            <input type="text" id="mdm_debtAmount" placeholder="0.00" required>
+          </div>
+          <div class="mdm-form-field">
+            <label for="mdm_accountStatus">Estado de Cuenta</label>
+            <select id="mdm_accountStatus">
+              <option value="">Seleccionar...</option>
+              <option value="Open">Open</option>
+              <option value="Closed">Closed</option>
+              <option value="Charge Off">Charge Off</option>
+              <option value="Collection">Collection</option>
+              <option value="Good Standing">Good Standing</option>
+              <option value="Past Due">Past Due</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+        </div>
+        <div class="mdm-form-row">
+          <div class="mdm-form-field">
+            <label for="mdm_accountType">Tipo de Cuenta</label>
+            <input type="text" id="mdm_accountType" placeholder="Ej: Credit Card, Personal Loan">
+          </div>
+          <div class="mdm-form-field">
+            <label for="mdm_responsibility">Responsabilidad</label>
+            <select id="mdm_responsibility">
+              <option value="Individual">Individual</option>
+              <option value="Joint">Joint</option>
+              <option value="Authorized User">Authorized User</option>
+            </select>
+          </div>
+        </div>
+        <div class="mdm-form-row">
+          <div class="mdm-form-field">
+            <label for="mdm_monthsReviewed">Months Reviewed</label>
+            <input type="number" id="mdm_monthsReviewed" placeholder="Ej: 23" min="0" max="999">
+          </div>
+          <div class="mdm-form-field">
+            <label for="mdm_pastDue">Vencido (Past Due)</label>
+            <input type="text" id="mdm_pastDue" placeholder="0.00">
+          </div>
+        </div>
+        <!-- Campos extra informativos del documento -->
+        <div class="mdm-form-row mdm-extra-fields hidden" id="mdmExtraFields">
+          <div class="mdm-form-field">
+            <label for="mdm_servicer">Servicer / Quien cobra</label>
+            <input type="text" id="mdm_servicer" placeholder="Agencia de cobro (si aplica)" readonly>
+          </div>
+          <div class="mdm-form-field">
+            <label for="mdm_paymentStructure">Estructura de Pagos</label>
+            <input type="text" id="mdm_paymentStructure" placeholder="Ej: $200 Mensual" readonly>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="manual-debt-modal-footer">
+      <button type="button" class="btn-secondary" id="manualDebtCancelBtn">Cancelar</button>
+      <button type="button" class="btn-primary" id="manualDebtSaveBtn">Guardar Deuda</button>
+    </div>
   </div>
 </div>

@@ -694,12 +694,12 @@
       if (isLight) {
         return {
           background: 'rgba(255, 255, 255, 0.97)',
-          border: '1px solid rgba(15, 23, 42, 0.12)',
-          shadow: '0 14px 34px rgba(15, 23, 42, 0.16)',
-          itemBorder: '1px solid rgba(15, 23, 42, 0.08)',
+          border: '1px solid rgba(20, 20, 22, 0.12)',
+          shadow: '0 14px 34px rgba(20, 20, 22, 0.16)',
+          itemBorder: '1px solid rgba(20, 20, 22, 0.08)',
           itemHover: 'rgba(59, 130, 246, 0.12)',
-          textPrimary: 'rgba(15, 23, 42, 0.95)',
-          textSecondary: 'rgba(15, 23, 42, 0.62)'
+          textPrimary: 'rgba(20, 20, 22, 0.95)',
+          textSecondary: 'rgba(20, 20, 22, 0.62)'
         };
       }
 
@@ -2348,16 +2348,34 @@
     }
 
     function normalizeCreditorName(name) {
-      return String(name || '')
+      let cleaned = String(name || '')
         .replace(/\bFINANCI\b/gi, 'FINANCIAL')
+        .replace(/\bBY\s*MAIL\s*ONLY\b/gi, '')
+        .replace(/\bBYMAILONLY\b/gi, '')
+        .replace(/\bBY\s*PHONE\s*ONLY\b/gi, '')
+        .replace(/\bDO\s*NOT\s*CONTACT\b/gi, '')
+        .replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '')
+        .replace(/^(?:Auto\s+loans?\s+|Credit\s+cards?\s+|Student\s+loans?\s+|Personal\s+loans?\s+|Installment\s+loans?\s+|Mortgages?\s+|Collections?\s+|Other\s+accounts?\s+)/i, '')
         .replace(/\s+/g, ' ')
         .trim();
+      // Dedup última palabra repetida
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      if (words.length >= 2) {
+        const last = words[words.length - 1].toLowerCase();
+        const prev = words[words.length - 2].toLowerCase();
+        if (last === prev || (prev.startsWith(last) && last.length >= 3) || (last.startsWith(prev) && prev.length >= 3)) {
+          const keep = words[words.length - 1].length >= words[words.length - 2].length ? words[words.length - 1] : words[words.length - 2];
+          words.splice(words.length - 2, 2, keep);
+          cleaned = words.join(' ');
+        }
+      }
+      return cleaned;
     }
 
     function isWeakCreditorName(nameValue) {
       const name = normalizeCreditorName(nameValue);
       if (!name) return true;
-      return /^(you(?:'re| are)?\b|hide details\b|no data available\b|n\/a\b|overview\b|account details\b|auto loans\b|total count\b|times 30\/60\/90\b|terms count\b|remarks?\b|finan\b|closed\b)/i.test(name);
+      return /^(you(?:'re| are)?\b|hide details\b|no data available\b|n\/a\b|overview\b|account details\b|auto loans?\b|student loans?\b|personal loans?\b|credit cards?\b|collections?\b|other accounts?\b|total count\b|times 30\/60\/90\b|terms count\b|remarks?\b|finan\b|closed\b|bymailonly\b|by mail only\b)/i.test(name);
     }
 
     function normalizeAccountToken(value) {
@@ -2413,7 +2431,7 @@
 
     function mergeParsedCreditor(base, incoming) {
       const merged = { ...base };
-      const textKeys = ['creditorName', 'originalCreditor', 'accountNumber', 'accountStatus', 'accountType', 'sourceReport'];
+      const textKeys = ['creditorName', 'originalCreditor', 'accountNumber', 'accountStatus', 'accountType', 'sourceReport', 'dateLastPayment'];
       textKeys.forEach((key) => {
         const baseValue = String(merged[key] || '');
         const nextValue = String(incoming[key] || '');
@@ -2589,6 +2607,79 @@
       return mergedOptions[0] || base;
     }
 
+    function normalizeLastPaymentDateText(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+
+      const normalized = raw
+        .replace(/\u00a0/g, ' ')
+        .replace(/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b[:\s-]*/ig, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!normalized) return '';
+
+      function toUsDate(month, day, year) {
+        const mm = Number(month);
+        const dd = Number(day);
+        let yy = Number(year);
+        if (!Number.isInteger(mm) || mm < 1 || mm > 12) return '';
+        if (!Number.isInteger(dd) || dd < 1 || dd > 31) return '';
+        if (!Number.isInteger(yy)) return '';
+        if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+        if (yy < 1900 || yy > 2100) return '';
+        const check = new Date(yy, mm - 1, dd);
+        if (
+          Number.isNaN(check.getTime()) ||
+          check.getFullYear() !== yy ||
+          check.getMonth() !== (mm - 1) ||
+          check.getDate() !== dd
+        ) {
+          return '';
+        }
+        return `${String(mm).padStart(2, '0')}/${String(dd).padStart(2, '0')}/${String(yy)}`;
+      }
+
+      function toMonthYear(month, year) {
+        const mm = Number(month);
+        let yy = Number(year);
+        if (!Number.isInteger(mm) || mm < 1 || mm > 12) return '';
+        if (!Number.isInteger(yy)) return '';
+        if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+        if (yy < 1900 || yy > 2100) return '';
+        return `${String(mm).padStart(2, '0')}/${String(yy)}`;
+      }
+
+      const isoMatch = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+      if (isoMatch) return toUsDate(isoMatch[2], isoMatch[3], isoMatch[1]);
+
+      const usMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+      if (usMatch) return toUsDate(usMatch[1], usMatch[2], usMatch[3]);
+
+      const monthYearMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{2,4})\b/);
+      if (monthYearMatch) return toMonthYear(monthYearMatch[1], monthYearMatch[2]);
+
+      const monthNameMatch = normalized.match(/\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})\b/);
+      if (monthNameMatch) {
+        const parsed = new Date(`${monthNameMatch[1]} ${monthNameMatch[2]}, ${monthNameMatch[3]}`);
+        if (!Number.isNaN(parsed.getTime())) {
+          const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+          const dd = String(parsed.getDate()).padStart(2, '0');
+          const yy = String(parsed.getFullYear());
+          return `${mm}/${dd}/${yy}`;
+        }
+      }
+
+      return '';
+    }
+
+    function extractLastPaymentDateFromLine(line) {
+      const source = String(line || '');
+      if (!/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b/i.test(source)) {
+        return '';
+      }
+      return normalizeLastPaymentDateText(source);
+    }
+
     function parseCreditReportText(rawText, sourceReport = 'Reporte') {
       const text = String(rawText || '')
         .replace(/\u00a0/g, ' ')
@@ -2604,6 +2695,7 @@
       let recentHeaderLine = -9999;
       let waitingCreditorInfo = false;
       let pendingCreditorInfoName = '';
+      let waitingLastPaymentDate = false;
 
       function createEmptyEntry() {
         return {
@@ -2619,6 +2711,7 @@
           unpaidBalance: 0,
           creditLimit: 0,
           highCredit: 0,
+          dateLastPayment: '',
           debtAmount: 0,
           isIncluded: true
         };
@@ -2725,6 +2818,25 @@
         const originalCreditorMatch = line.match(/^Original\s*Creditor\s*:?\s*(.+)$/i);
         if (originalCreditorMatch) {
           current.originalCreditor = normalizeCreditorName(originalCreditorMatch[1]);
+        }
+
+        const explicitLastPaymentDate = extractLastPaymentDateFromLine(line);
+        if (explicitLastPaymentDate) {
+          current.dateLastPayment = explicitLastPaymentDate;
+          waitingLastPaymentDate = false;
+        } else if (/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b/i.test(line)) {
+          waitingLastPaymentDate = true;
+        } else if (waitingLastPaymentDate) {
+          const adjacentDate = normalizeLastPaymentDateText(line);
+          if (adjacentDate) {
+            current.dateLastPayment = adjacentDate;
+            waitingLastPaymentDate = false;
+          } else if (
+            /\b(?:open\s+date|last\s+activity|date\s+closed|payment\s+history|terms?\s+count|amount\s+past\s+due)\b/i.test(line) ||
+            /Account\s*(?:Number|#)/i.test(line)
+          ) {
+            waitingLastPaymentDate = false;
+          }
         }
 
         if (hasBalanceLine) {
@@ -2873,6 +2985,7 @@
         accountNumber: normalizeCreditorName(entry.accountNumber),
         accountStatus: normalizeCreditorName(entry.accountStatus),
         accountType: normalizeCreditorName(entry.accountType),
+        dateLastPayment: normalizeLastPaymentDateText(entry.dateLastPayment || entry.date_last_payment || ''),
         monthlyPayment: normalizeMoneyValue(entry.monthlyPayment),
         balance: normalizeMoneyValue(entry.balance),
         pastDue: normalizeMoneyValue(entry.pastDue),
@@ -2893,6 +3006,7 @@
         accountNumber: creditor.account_number || '',
         accountStatus: creditor.account_status || '',
         accountType: creditor.account_type || '',
+        dateLastPayment: normalizeLastPaymentDateText(creditor.date_last_payment || ''),
         monthlyPayment: normalizeMoneyValue(creditor.monthly_payment),
         balance: normalizeMoneyValue(creditor.balance),
         pastDue: normalizeMoneyValue(creditor.past_due),
@@ -3264,7 +3378,6 @@
       const analyzeBtn = document.getElementById('creditorsAnalyzeTextBtn');
       const importBtn = document.getElementById('creditorsImportBtn');
       const addManualBtn = document.getElementById('creditorsAddManualBtn');
-      const applyTotalBtn = document.getElementById('creditorsApplyTotalBtn');
       const previewBody = document.getElementById('creditorsPreviewBody');
       const previewSelectAll = document.getElementById('creditorsPreviewSelectAll');
       const manualForm = document.getElementById('creditorsManualForm');
@@ -3336,12 +3449,6 @@
       if (manualSaveBtn) {
         manualSaveBtn.addEventListener('click', () => {
           saveManualCreditor();
-        });
-      }
-
-      if (applyTotalBtn) {
-        applyTotalBtn.addEventListener('click', () => {
-          applyCreditorsTotalToCalculator({ persist: true, toast: true });
         });
       }
 
@@ -8452,6 +8559,25 @@
       return data;
     }
 
+    async function generateLeadContractPdf() {
+      const leadId = Number(currentLeadId || currentLeadData?.id || 0);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        throw new Error('No hay lead activo para generar contrato.');
+      }
+
+      const response = await fetch(`/api/leads/${leadId}/contracts/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || 'No se pudo generar el contrato.');
+      }
+      return data;
+    }
+
     function initEmailPanel() {
       const emailBtn = document.getElementById('emailBtn');
       const emailPanel = document.getElementById('emailPanel');
@@ -8478,14 +8604,22 @@
       const contractContactEmail = document.getElementById('contractContactEmail');
       const contractEmailSubject = document.getElementById('contractEmailSubject');
       const contractEmailIntro = document.getElementById('contractEmailIntro');
-      const contractPreviewBody = document.getElementById('contractPreviewBody');
-      const contractCopyPreviewBtn = document.getElementById('contractCopyPreviewBtn');
+      const contractPdfFrame = document.getElementById('contractPdfFrame');
+      const contractPdfState = document.getElementById('contractPdfState');
+      const contractPdfStateText = document.getElementById('contractPdfStateText');
       const contractSendEmailBtn = document.getElementById('contractSendEmailBtn');
+      const contractRegenerateBtn = document.getElementById('contractRegenerateBtn');
+      const emailSendContractBtnTitle = document.getElementById('emailSendContractBtnTitle');
+      const emailSendContractBtnSubtitle = document.getElementById('emailSendContractBtnSubtitle');
 
       if (!emailBtn || !emailPanel) return;
 
       let sendingComposerEmail = false;
       let sendingContractEmail = false;
+      let activeContractPdfObjectUrl = '';
+      const defaultContractPanelBtnTitle = String(emailSendContractBtnTitle?.textContent || 'Generar contrato').trim() || 'Generar contrato';
+      const defaultContractPanelBtnSubtitle = String(emailSendContractBtnSubtitle?.textContent || 'Crear PDF del contrato en Files').trim() || 'Crear PDF del contrato en Files';
+      const contractStateByLead = new Map();
 
       function setEmailPanelOpen(nextOpen) {
         const open = Boolean(nextOpen);
@@ -8535,13 +8669,193 @@
         }, 0);
       }
 
-      function openContractComposerModal() {
+      function getActiveLeadId() {
+        const leadId = Number(currentLeadId || currentLeadData?.id || 0);
+        return Number.isInteger(leadId) && leadId > 0 ? leadId : 0;
+      }
+
+      function getOrCreateContractState(leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) {
+          return {
+            dataUrl: '',
+            fileId: null,
+            isGenerating: false,
+            updatedAt: ''
+          };
+        }
+        if (!contractStateByLead.has(normalizedLeadId)) {
+          contractStateByLead.set(normalizedLeadId, {
+            dataUrl: '',
+            fileId: null,
+            isGenerating: false,
+            updatedAt: ''
+          });
+        }
+        return contractStateByLead.get(normalizedLeadId);
+      }
+
+      function revokeActiveContractPdfObjectUrl() {
+        if (!activeContractPdfObjectUrl) return;
+        try {
+          URL.revokeObjectURL(activeContractPdfObjectUrl);
+        } catch (_error) {
+          // no-op
+        }
+        activeContractPdfObjectUrl = '';
+      }
+
+      function buildContractPdfPreviewUrl(dataUrl) {
+        const normalized = String(dataUrl || '').trim();
+        if (!normalized) return '';
+        if (!normalized.startsWith('data:')) return normalized;
+
+        const dataMatch = normalized.match(/^data:([^;]+);base64,(.+)$/);
+        if (!dataMatch) return normalized;
+
+        try {
+          const mimeType = dataMatch[1] || 'application/pdf';
+          const base64Payload = dataMatch[2] || '';
+          const binary = atob(base64Payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let idx = 0; idx < binary.length; idx += 1) {
+            bytes[idx] = binary.charCodeAt(idx);
+          }
+          const blob = new Blob([bytes], { type: mimeType });
+          activeContractPdfObjectUrl = URL.createObjectURL(blob);
+          return activeContractPdfObjectUrl;
+        } catch (_error) {
+          return normalized;
+        }
+      }
+
+      function setContractPdfFrameSrc(dataUrl) {
+        if (!contractPdfFrame) return;
+        revokeActiveContractPdfObjectUrl();
+        contractPdfFrame.removeAttribute('src');
+        if (dataUrl) {
+          contractPdfFrame.src = buildContractPdfPreviewUrl(dataUrl);
+        }
+      }
+
+      function setContractPreviewState(message, mode = 'loading') {
+        if (!contractPdfState || !contractPdfStateText) return;
+        const normalizedMode = String(mode || '').toLowerCase();
+        if (normalizedMode === 'hidden') {
+          contractPdfState.classList.add('hidden');
+          contractPdfState.classList.remove('error');
+          contractPdfStateText.textContent = '';
+          return;
+        }
+        contractPdfState.classList.remove('hidden');
+        contractPdfState.classList.toggle('error', normalizedMode === 'error');
+        contractPdfStateText.textContent = String(message || '').trim();
+      }
+
+      function syncContractActionButtons(leadId = getActiveLeadId()) {
+        const state = getOrCreateContractState(leadId);
+        const hasContract = Boolean(state.dataUrl);
+
+        if (emailSendContractBtn) {
+          emailSendContractBtn.disabled = Boolean(state.isGenerating);
+          if (state.isGenerating) {
+            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = 'Generando contrato...';
+            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = 'Creando PDF en Files';
+          } else if (hasContract) {
+            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = 'Abrir contrato';
+            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = 'Ver vista previa del contrato';
+          } else {
+            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = defaultContractPanelBtnTitle;
+            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = defaultContractPanelBtnSubtitle;
+          }
+        }
+
+        if (contractRegenerateBtn) {
+          contractRegenerateBtn.disabled = Boolean(state.isGenerating);
+          contractRegenerateBtn.textContent = state.isGenerating ? 'Regenerando...' : 'Regenerar contrato';
+        }
+
+        if (contractSendEmailBtn && !sendingContractEmail) {
+          contractSendEmailBtn.disabled = Boolean(state.isGenerating) || !hasContract;
+          contractSendEmailBtn.textContent = 'Enviar contrato';
+        }
+      }
+
+      async function fetchLeadFileDataUrlForContract(leadId, fileId) {
+        const normalizedLeadId = Number(leadId || 0);
+        const normalizedFileId = Number(fileId || 0);
+        if (!normalizedLeadId || !normalizedFileId) return '';
+
+        const response = await fetch(`/api/leads/${normalizedLeadId}/files/${normalizedFileId}/content`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || 'No se pudo cargar el PDF del contrato.');
+        }
+        return String(data?.dataUrl || '');
+      }
+
+      async function hydrateContractFromLatestStoredFile(leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        if (!normalizedLeadId) return false;
+
+        let files = [];
+        if (typeof window.getLeadFilesMetadata === 'function') {
+          files = window.getLeadFilesMetadata(normalizedLeadId);
+        }
+        if (!Array.isArray(files) || !files.length) {
+          return false;
+        }
+
+        const candidates = files
+          .filter((entry) => String(entry?.documentCategory || '').toLowerCase() === 'contract')
+          .sort((a, b) => {
+            const dateA = new Date(a?.uploadedAt || a?.updatedAt || 0).getTime();
+            const dateB = new Date(b?.uploadedAt || b?.updatedAt || 0).getTime();
+            if (dateA !== dateB) return dateB - dateA;
+            return Number(b?.id || 0) - Number(a?.id || 0);
+          });
+
+        const latest = candidates[0];
+        if (!latest) return false;
+
+        const dataUrl = await fetchLeadFileDataUrlForContract(normalizedLeadId, latest.id);
+        if (!dataUrl) return false;
+
+        const state = getOrCreateContractState(normalizedLeadId);
+        state.dataUrl = dataUrl;
+        state.fileId = Number(latest.id) || null;
+        state.updatedAt = latest.uploadedAt || latest.updatedAt || new Date().toISOString();
+        return true;
+      }
+
+      async function resolveGeneratedContractData(result, leadId) {
+        const normalizedLeadId = Number(leadId || 0);
+        const fileId = Number(result?.file?.id || 0) || null;
+        let dataUrl = String(result?.dataUrl || '');
+
+        if (!dataUrl && fileId) {
+          dataUrl = await fetchLeadFileDataUrlForContract(normalizedLeadId, fileId);
+        }
+
+        return {
+          dataUrl: String(dataUrl || ''),
+          fileId
+        };
+      }
+
+      function openContractComposerModal(options = {}) {
+        const {
+          dataUrl = '',
+          loadingMessage = '',
+          errorMessage = '',
+          keepCurrentPreview = false
+        } = options;
+
         const recipientEmail = getPrimaryLeadEmail();
         const recipientPhone = getPrimaryLeadPhone();
         const caseLabel = getLeadCaseLabel();
         const leadName = getLeadDisplayName();
         const subject = `Contrato ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
-        const previewText = buildContractPreviewText();
 
         if (contractContactPhone) contractContactPhone.textContent = recipientPhone || 'No disponible';
         if (contractContactEmail) contractContactEmail.textContent = recipientEmail || 'No disponible';
@@ -8550,21 +8864,126 @@
           contractEmailIntro.value = [
             `Hola ${leadName},`,
             '',
-            `Te comparto tu resumen de contrato ${caseLabel || ''}.`,
+            `Te comparto tu contrato ${caseLabel || ''}.`,
             'Por favor revisalo y respondeme con cualquier duda.',
             '',
             'Saludos,'
           ].join('\n').trim();
         }
-        if (contractPreviewBody) contractPreviewBody.textContent = previewText;
-        if (contractSendEmailBtn) {
-          contractSendEmailBtn.disabled = !isValidEmailFormat(recipientEmail);
-          contractSendEmailBtn.textContent = 'Enviar contrato';
+
+        if (dataUrl) {
+          setContractPdfFrameSrc(dataUrl);
+          setContractPreviewState('', 'hidden');
+        } else if (errorMessage) {
+          if (!keepCurrentPreview) setContractPdfFrameSrc('');
+          setContractPreviewState(errorMessage, 'error');
+        } else if (loadingMessage) {
+          if (!keepCurrentPreview) setContractPdfFrameSrc('');
+          setContractPreviewState(loadingMessage, 'loading');
+        } else {
+          if (!keepCurrentPreview) setContractPdfFrameSrc('');
+          setContractPreviewState('Aun no hay contrato para mostrar.', 'error');
         }
 
         setEmailPanelOpen(false);
         setComposerModalOpen(false);
         setContractModalOpen(true);
+        syncContractActionButtons();
+      }
+
+      async function startContractGeneration(options = {}) {
+        const { force = false } = options;
+        const leadId = getActiveLeadId();
+        if (!leadId) {
+          showToast('No hay lead activo para generar contrato.', 'error');
+          return;
+        }
+
+        const state = getOrCreateContractState(leadId);
+        if (state.isGenerating) {
+          openContractComposerModal({
+            loadingMessage: 'Generando contrato, espera un momento...',
+            keepCurrentPreview: Boolean(state.dataUrl)
+          });
+          return;
+        }
+
+        if (!force && state.dataUrl) {
+          openContractComposerModal({ dataUrl: state.dataUrl });
+          return;
+        }
+
+        state.isGenerating = true;
+        syncContractActionButtons(leadId);
+        openContractComposerModal({
+          loadingMessage: 'Generando contrato, espera un momento...',
+          keepCurrentPreview: Boolean(state.dataUrl)
+        });
+        showToast('Generando contrato...', 'info');
+
+        try {
+          const result = await generateLeadContractPdf();
+          if (typeof window.syncLeadFilesFromServer === 'function') {
+            await window.syncLeadFilesFromServer(leadId, { silent: true });
+          }
+          const resolved = await resolveGeneratedContractData(result, leadId);
+          if (!resolved.dataUrl) {
+            throw new Error('El contrato se genero, pero no se pudo cargar la vista previa.');
+          }
+
+          state.dataUrl = resolved.dataUrl;
+          state.fileId = resolved.fileId;
+          state.updatedAt = new Date().toISOString();
+
+          openContractComposerModal({ dataUrl: state.dataUrl });
+          showToast('Contrato generado correctamente.', 'success');
+        } catch (error) {
+          openContractComposerModal({
+            errorMessage: error.message || 'No se pudo generar el contrato.',
+            keepCurrentPreview: Boolean(state.dataUrl)
+          });
+          showToast(error.message || 'No se pudo generar el contrato.', 'error');
+        } finally {
+          state.isGenerating = false;
+          syncContractActionButtons(leadId);
+        }
+      }
+
+      async function openExistingOrGenerateContract() {
+        const leadId = getActiveLeadId();
+        if (!leadId) {
+          showToast('No hay lead activo para generar contrato.', 'error');
+          return;
+        }
+
+        const state = getOrCreateContractState(leadId);
+        if (state.isGenerating) {
+          openContractComposerModal({
+            loadingMessage: 'Generando contrato, espera un momento...',
+            keepCurrentPreview: Boolean(state.dataUrl)
+          });
+          return;
+        }
+
+        if (state.dataUrl) {
+          openContractComposerModal({ dataUrl: state.dataUrl });
+          return;
+        }
+
+        let hydrated = false;
+        try {
+          hydrated = await hydrateContractFromLatestStoredFile(leadId);
+        } catch (_error) {
+          hydrated = false;
+        }
+
+        if (hydrated) {
+          syncContractActionButtons(leadId);
+          openContractComposerModal({ dataUrl: state.dataUrl });
+          return;
+        }
+
+        await startContractGeneration({ force: true });
       }
 
       emailBtn.addEventListener('click', (event) => {
@@ -8577,6 +8996,7 @@
           filesBtn?.setAttribute('aria-expanded', 'false');
           setNotesPanelOpen(false);
           closeAllEmailModals();
+          syncContractActionButtons();
         }
 
         setEmailPanelOpen(shouldOpen);
@@ -8593,15 +9013,24 @@
         openCreateComposerModal();
       });
 
-      emailSendContractBtn?.addEventListener('click', (event) => {
+      emailSendContractBtn?.addEventListener('click', async (event) => {
         event.preventDefault();
-        openContractComposerModal();
+        await openExistingOrGenerateContract();
       });
 
       emailComposerCloseBtn?.addEventListener('click', () => setComposerModalOpen(false));
       emailComposerCancelBtn?.addEventListener('click', () => setComposerModalOpen(false));
-      contractComposerCloseBtn?.addEventListener('click', () => setContractModalOpen(false));
-      contractComposerCancelBtn?.addEventListener('click', () => setContractModalOpen(false));
+      contractComposerCloseBtn?.addEventListener('click', () => {
+        setContractModalOpen(false);
+        setContractPdfFrameSrc('');
+      });
+      contractComposerCancelBtn?.addEventListener('click', () => {
+        setContractModalOpen(false);
+        setContractPdfFrameSrc('');
+      });
+      contractRegenerateBtn?.addEventListener('click', async () => {
+        await startContractGeneration({ force: true });
+      });
 
       emailComposerModal?.addEventListener('click', (event) => {
         const closeBtn = event.target instanceof Element ? event.target.closest('[data-close-email-modal="composer"]') : null;
@@ -8610,7 +9039,10 @@
 
       contractComposerModal?.addEventListener('click', (event) => {
         const closeBtn = event.target instanceof Element ? event.target.closest('[data-close-email-modal="contract"]') : null;
-        if (closeBtn) setContractModalOpen(false);
+        if (closeBtn) {
+          setContractModalOpen(false);
+          setContractPdfFrameSrc('');
+        }
       });
 
       emailComposerForm?.addEventListener('submit', async (event) => {
@@ -8670,40 +9102,11 @@
         }
       });
 
-      contractCopyPreviewBtn?.addEventListener('click', async () => {
-        const preview = String(contractPreviewBody?.textContent || '').trim();
-        if (!preview) {
-          showToast('No hay vista previa para copiar.', 'info');
-          return;
-        }
-        try {
-          await navigator.clipboard.writeText(preview);
-          showToast('Vista previa copiada.', 'success');
-        } catch (_error) {
-          showToast('No se pudo copiar la vista previa.', 'error');
-        }
-      });
-
       contractSendEmailBtn?.addEventListener('click', async () => {
         if (sendingContractEmail) return;
-
-        const toEmail = getPrimaryLeadEmail().toLowerCase();
-        const subject = String(contractEmailSubject?.value || '').trim();
-        const intro = String(contractEmailIntro?.value || '').trim();
-        const preview = String(contractPreviewBody?.textContent || '').trim();
-        const body = [intro, preview].filter(Boolean).join('\n\n');
-
-        if (!isValidEmailFormat(toEmail)) {
-          showToast('Este lead no tiene un email valido para contrato.', 'error');
-          return;
-        }
-        if (!subject) {
-          showToast('Debes escribir un asunto para contrato.', 'error');
-          contractEmailSubject?.focus();
-          return;
-        }
-        if (!body) {
-          showToast('No hay contenido para enviar el contrato.', 'error');
+        const recipientEmail = getPrimaryLeadEmail();
+        if (!recipientEmail) {
+          showToast('El cliente no tiene email registrado.', 'error');
           return;
         }
 
@@ -8712,21 +9115,23 @@
         contractSendEmailBtn.textContent = 'Enviando...';
 
         try {
-          await registerLeadEmailSend({
-            toEmail,
-            ccEmails: [],
-            subject,
-            body,
-            provider: 'contract'
-          });
-          showToast('Contrato enviado por correo.', 'success');
+          const subject = String(contractEmailSubject?.value || '').trim();
+          if (contractEmailSubject && !subject) {
+            showToast('Agrega un asunto para el correo.', 'error');
+            contractEmailSubject?.focus();
+            return;
+          }
+
+          showToast('Contrato guardado en Files. Envio por email pendiente de integrar.', 'info');
           setContractModalOpen(false);
         } catch (error) {
           showToast(error.message || 'No se pudo enviar el contrato.', 'error');
         } finally {
           sendingContractEmail = false;
-          contractSendEmailBtn.disabled = false;
-          contractSendEmailBtn.textContent = 'Enviar contrato';
+          if (contractSendEmailBtn) {
+            contractSendEmailBtn.disabled = false;
+            contractSendEmailBtn.textContent = 'Enviar contrato';
+          }
         }
       });
 
@@ -8744,6 +9149,7 @@
         if (event.key !== 'Escape') return;
         if (contractComposerModal && !contractComposerModal.classList.contains('hidden')) {
           setContractModalOpen(false);
+          setContractPdfFrameSrc('');
           return;
         }
         if (emailComposerModal && !emailComposerModal.classList.contains('hidden')) {
@@ -8752,6 +9158,8 @@
         }
         setEmailPanelOpen(false);
       });
+
+      syncContractActionButtons();
     }
 
     // Cargar datos

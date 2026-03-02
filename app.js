@@ -2382,12 +2382,12 @@ function getLeadSearchSuggestionPalette() {
   if (isLight) {
     return {
       background: 'rgba(255, 255, 255, 0.97)',
-      border: '1px solid rgba(15, 23, 42, 0.12)',
-      shadow: '0 14px 34px rgba(15, 23, 42, 0.16)',
-      itemBorder: '1px solid rgba(15, 23, 42, 0.08)',
+      border: '1px solid rgba(20, 20, 22, 0.12)',
+      shadow: '0 14px 34px rgba(20, 20, 22, 0.16)',
+      itemBorder: '1px solid rgba(20, 20, 22, 0.08)',
       itemHover: 'rgba(59, 130, 246, 0.12)',
-      textPrimary: 'rgba(15, 23, 42, 0.95)',
-      textSecondary: 'rgba(15, 23, 42, 0.62)'
+      textPrimary: 'rgba(20, 20, 22, 0.95)',
+      textSecondary: 'rgba(20, 20, 22, 0.62)'
     };
   }
 

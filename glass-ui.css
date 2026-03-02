@@ -38,7 +38,7 @@
   gap: 20px;
   padding: 24px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(35, 40, 55, 0.7) 0%, rgba(20, 25, 35, 0.8) 100%);
+  background: linear-gradient(135deg, rgba(30, 30, 32, 0.7) 0%, rgba(22, 22, 24, 0.8) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(24px);
   box-shadow: 0 20px 50px rgba(0,0,0,0.3);

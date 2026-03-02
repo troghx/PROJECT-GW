@@ -1,6 +1,8 @@
 const path = require('path');
+const os = require('os');
 const fs = require('fs/promises');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -210,6 +212,10 @@ const FILE_ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]);
 const FILE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const CONTRACT_TEMPLATE_PATH = path.join(ROOT_DIR, 'reference', 'contrato ejemplo.pdf');
+const CONTRACT_GENERATOR_SCRIPT_PATH = path.join(ROOT_DIR, 'scripts', 'generate_contract_pdf.py');
+const CONTRACT_MAX_CREDITORS = 36;
+const CONTRACT_LEGAL_MONTHLY_FEE = 24.99;
 let sentEmailsSchemaReady = false;
 let sentEmailsSchemaPromise = null;
 const PERMISSION_CATALOG = [
@@ -3416,13 +3422,89 @@ function computeCreditorDebtAmount({ debtAmount, unpaidBalance, pastDue, balance
 
 function normalizeMonthsReviewed(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
-    return { ok: true, value: null };
+    return { ok: true, value: null, provided: false };
   }
   const num = Number(value);
   if (!Number.isInteger(num) || num < 0 || num > 999) {
     return { ok: false, message: 'monthsReviewed debe ser un entero entre 0 y 999.' };
   }
-  return { ok: true, value: num };
+  return { ok: true, value: num, provided: true };
+}
+
+function normalizeLastPaymentDateText(value) {
+  if (value === undefined || value === null) return { ok: true, value: null };
+
+  const raw = String(value).trim();
+  if (!raw) return { ok: true, value: null };
+
+  function toMonthYear(month, year) {
+    const mm = Number(month);
+    let yy = Number(year);
+    if (!Number.isInteger(mm) || mm < 1 || mm > 12) return null;
+    if (!Number.isInteger(yy)) return null;
+    if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+    if (yy < 1900 || yy > 2100) return null;
+    return `${String(mm).padStart(2, '0')}/${String(yy)}`;
+  }
+
+  function toUsDate(month, day, year) {
+    const mm = Number(month);
+    const dd = Number(day);
+    let yy = Number(year);
+    if (!Number.isInteger(mm) || mm < 1 || mm > 12) return null;
+    if (!Number.isInteger(dd) || dd < 1 || dd > 31) return null;
+    if (!Number.isInteger(yy)) return null;
+    if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+    if (yy < 1900 || yy > 2100) return null;
+
+    const candidateIso = `${String(yy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+    if (!isValidISODate(candidateIso)) return null;
+    return `${String(mm).padStart(2, '0')}/${String(dd).padStart(2, '0')}/${String(yy)}`;
+  }
+
+  const normalized = raw
+    .replace(/\u00a0/g, ' ')
+    .replace(/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b[:\s-]*/ig, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const isoMatch = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) {
+    const formatted = toUsDate(isoMatch[2], isoMatch[3], isoMatch[1]);
+    if (formatted) return { ok: true, value: formatted };
+  }
+
+  const fullUsMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (fullUsMatch) {
+    const formatted = toUsDate(fullUsMatch[1], fullUsMatch[2], fullUsMatch[3]);
+    if (formatted) return { ok: true, value: formatted };
+  }
+
+  const monthYearMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{2,4})\b/);
+  if (monthYearMatch) {
+    const formatted = toMonthYear(monthYearMatch[1], monthYearMatch[2]);
+    if (formatted) return { ok: true, value: formatted };
+  }
+
+  const monthNameMatch = normalized.match(/\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})\b/);
+  if (monthNameMatch) {
+    const parsed = new Date(`${monthNameMatch[1]} ${monthNameMatch[2]}, ${monthNameMatch[3]}`);
+    if (!Number.isNaN(parsed.getTime())) {
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const dd = String(parsed.getDate()).padStart(2, '0');
+      const yy = String(parsed.getFullYear());
+      return { ok: true, value: `${mm}/${dd}/${yy}` };
+    }
+  }
+
+  return { ok: true, value: null };
+}
+
+function normalizeOptionalLastPaymentDateText(value) {
+  if (value === undefined) return { ok: true, provided: false, value: null };
+  const normalized = normalizeLastPaymentDateText(value);
+  if (!normalized.ok) return normalized;
+  return { ok: true, provided: true, value: normalized.value };
 }
 
 function normalizeResponsibility(value) {
@@ -3518,6 +3600,29 @@ function cleanCreditorNameFromAddress(name) {
   cleaned = cleaned.replace(/^\d+\s+[A-Z\s]+(ST|AVE|BLVD|DR|RD|LN|CT|WAY)\s*/i, '');
   // Remover ZIP codes sueltos
   cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();
+  // Remover etiquetas de contacto comunes del PDF (BYMAILONLY, BY MAIL ONLY, etc.)
+  cleaned = cleaned.replace(/\bBY\s*MAIL\s*ONLY\b/gi, '').trim();
+  cleaned = cleaned.replace(/\bBYMAILONLY\b/gi, '').trim();
+  cleaned = cleaned.replace(/\bBY\s*PHONE\s*ONLY\b/gi, '').trim();
+  cleaned = cleaned.replace(/\bDO\s*NOT\s*CONTACT\b/gi, '').trim();
+  // Remover prefijos de sección del PDF (Auto loans, Credit cards, Student loans, etc.)
+  cleaned = cleaned.replace(/^(?:Auto\s+loans?|Credit\s+cards?|Student\s+loans?|Personal\s+loans?|Installment\s+loans?|Mortgages?|Collections?|Other\s+accounts?)\s+/i, '').trim();
+  // Remover números de teléfono
+  cleaned = cleaned.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '').trim();
+  // Remover estados sueltos de 2 letras al inicio/final si están aislados
+  cleaned = cleaned.replace(/\b(?:OLD BETHPAGE|BETHPAGE|JORDAN GTW?|COLUMBUS|WILMINGTON|SIOUX FALLS|SALT LAKE CITY|DALLAS|FORT WORTH|OMAHA|PHOENIX|JACKSONVILLE|RICHMOND)[,\s]*(?:[A-Z]{2})?\s*/gi, '').trim();
+  // Dedup: si el nombre tiene sufijo duplicado (ej: "FINAN FINAN") remover la repetición
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const last = words[words.length - 1].toLowerCase();
+    const prev = words[words.length - 2].toLowerCase();
+    if (last === prev || (prev.startsWith(last) && last.length >= 3) || (last.startsWith(prev) && prev.length >= 3)) {
+      // Mantener el más largo
+      const keep = words[words.length - 1].length >= words[words.length - 2].length ? words[words.length - 1] : words[words.length - 2];
+      words.splice(words.length - 2, 2, keep);
+      cleaned = words.join(' ');
+    }
+  }
   return cleaned || name;
 }
 
@@ -3584,6 +3689,9 @@ function normalizeAiCreditorEntry(entry, sourceReport) {
     sourceReport,
     creditorName,
     accountNumber: toNullableText(pickFirstDefined(entry, ['accountNumber', 'account', 'accountNo', 'account_number']), 80),
+    dateLastPayment: normalizeLastPaymentDateText(
+      pickFirstDefined(entry, ['dateLastPayment', 'date_last_payment', 'lastPaymentDate', 'last_payment_date', 'lastActivity', 'last_activity', 'activityDate', 'activity_date'])
+    ).value,
     accountStatus: cleanAccountStatus(
       pickFirstDefined(entry, ['accountStatus', 'status', 'account_status'])
     ),
@@ -3598,6 +3706,82 @@ function normalizeAiCreditorEntry(entry, sourceReport) {
   };
 }
 
+const GEMINI_FALLBACK_MODELS = ['gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+
+async function geminiRequestWithRetry(apiKey, model, prompt, { timeoutMs = 25000, maxRetries = 4 } = {}) {
+  const modelsToTry = [model, ...GEMINI_FALLBACK_MODELS.filter(m => m !== model)];
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0 }
+  });
+
+  for (const currentModel of modelsToTry) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(currentModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal: controller.signal
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          const err = new Error('Tiempo de espera agotado en solicitud a IA.');
+          err.code = 'AI_TIMEOUT';
+          throw err;
+        }
+        throw fetchError;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (response.status === 429 && attempt < maxRetries) {
+        const retryAfter = parseInt(response.headers.get('retry-after') || '0', 10);
+        const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(5000 * Math.pow(2, attempt), 60000);
+        console.warn(`[Gemini][${currentModel}] 429 rate limit, reintento ${attempt + 1}/${maxRetries} en ${delayMs}ms...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+
+      if (response.status === 429 && attempt >= maxRetries) {
+        console.warn(`[Gemini][${currentModel}] 429 persistente tras ${maxRetries} reintentos, probando siguiente modelo...`);
+        break;
+      }
+
+      if (response.status === 404) {
+        console.warn(`[Gemini][${currentModel}] modelo no encontrado (404), probando siguiente...`);
+        break;
+      }
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload) {
+        const detail = payload?.error?.message || `HTTP ${response.status}`;
+        const err = new Error(`Gemini API error: ${detail}`);
+        err.httpStatus = response.status;
+        throw err;
+      }
+
+      if (currentModel !== model) {
+        console.log(`[Gemini] Exito con modelo fallback: ${currentModel}`);
+      }
+      return payload;
+    }
+  }
+
+  const err = new Error('Limite de peticiones de IA alcanzado en todos los modelos. Intenta de nuevo en 1 minuto.');
+  err.code = 'AI_RATE_LIMIT';
+  err.httpStatus = 429;
+  throw err;
+}
+
 async function analyzeCreditReportWithGemini({ text, sourceReport }) {
   const apiKey = toNullableText(process.env.GEMINI_API_KEY, 300);
   if (!apiKey) {
@@ -3610,14 +3794,15 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
   const prompt = [
     'Extrae cuentas de un reporte de credito y responde SOLO JSON valido.',
     'Devuelve este formato exacto:',
-    '{"creditors":[{"creditorName":"","debtAmount":0,"accountNumber":"","accountStatus":"","accountType":"","responsibility":"","monthsReviewed":null,"pastDue":0,"creditLimit":0,"highCredit":0}]}',
+    '{"creditors":[{"creditorName":"","debtAmount":0,"accountNumber":"","dateLastPayment":"","accountStatus":"","accountType":"","responsibility":"","monthsReviewed":null,"pastDue":0,"creditLimit":0,"highCredit":0}]}',
     '',
     'Reglas:',
     '- No inventes datos. Si falta algo usa null o 0.',
-    '- creditorName = SOLO el nombre del acreedor/banco/empresa (ej: "TBOM/MILESTONE", "CAPITAL ONE", "JPMCB CARD"). NUNCA incluir direcciones, ciudades, estados, ZIP codes ni PO BOX en el nombre.',
+    '- creditorName = SOLO el nombre del acreedor/banco/empresa (ej: "TBOM/MILESTONE", "CAPITAL ONE", "JPMCB CARD"). NUNCA incluir: direcciones, ciudades, estados, ZIP codes, PO BOX, números de teléfono, etiquetas de contacto como "BYMAILONLY"/"BY MAIL ONLY"/"BY PHONE ONLY", ni prefijos de sección del reporte como "Auto loans"/"Credit cards"/"Student loans"/"Collections".',
     '- debtAmount = deuda mas reciente/actual para esa cuenta (current balance, unpaid balance, amount due o equivalente).',
     '- creditLimit = limite de credito de la cuenta (Credit Limit, Credit Line). Si no existe (prestamos, auto loans, etc.) usar 0.',
     '- highCredit = credito mas alto usado (High Credit, Highest Balance). Si no existe usar 0.',
+    '- dateLastPayment = fecha del ultimo pago de esa cuenta, si aparece (Date of Last Payment, Last Payment Date, Date Last Payment). Si no aparece literal, usar Last Activity/Activity Date como fallback. Formato preferido MM/DD/YYYY. Si no existe usar "".',
     '- monthsReviewed: si hay multiples valores posibles para la misma cuenta, usar SIEMPRE el menor entero.',
     '- Debe salir una fila por cuenta detectada.',
     '- accountType = SOLO el tipo de cuenta limpio: "Credit Card", "Auto Loan", "Mortgage", "Personal Loan", "Student Loan", "Installment", "Revolving", "Unsecured", "Secured", "Collection", "Charge Account". NO incluir la palabra "Type" ni otros campos.',
@@ -3631,40 +3816,7 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
     '--- END CREDIT REPORT TEXT ---'
   ].join('\n');
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(CREDIT_REPORT_AI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CREDIT_REPORT_AI_TIMEOUT_MS);
-
-  let response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0
-        }
-      }),
-      signal: controller.signal
-    });
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      const timeoutError = new Error('La solicitud a IA excedio el tiempo limite.');
-      timeoutError.code = 'AI_TIMEOUT';
-      throw timeoutError;
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const details = payload?.error?.message || `HTTP ${response.status}`;
-    throw new Error(`Fallo IA: ${details}`);
-  }
+  const payload = await geminiRequestWithRetry(apiKey, CREDIT_REPORT_AI_MODEL, prompt, { timeoutMs: CREDIT_REPORT_AI_TIMEOUT_MS });
 
   const candidateText = (payload?.candidates || [])
     .flatMap((candidate) => candidate?.content?.parts || [])
@@ -3812,6 +3964,11 @@ function normalizeCreditorPayload(body = {}) {
   const debtSourceRank = normalizeDebtSourceRank(pickFirstDefined(body, ['debtSourceRank', 'debt_source_rank']));
   if (!debtSourceRank.ok) return debtSourceRank;
 
+  const dateLastPayment = normalizeLastPaymentDateText(
+    pickFirstDefined(body, ['dateLastPayment', 'date_last_payment', 'lastPaymentDate', 'last_payment_date'])
+  );
+  if (!dateLastPayment.ok) return dateLastPayment;
+
   return {
     ok: true,
     value: {
@@ -3819,6 +3976,7 @@ function normalizeCreditorPayload(body = {}) {
       creditor_name: creditorName,
       original_creditor: toNullableText(pickFirstDefined(body, ['originalCreditor', 'original_creditor']), 180),
       account_number: toNullableText(pickFirstDefined(body, ['accountNumber', 'account_number']), 80),
+      date_last_payment: dateLastPayment.value,
       account_status: toNullableText(pickFirstDefined(body, ['accountStatus', 'account_status']), 80),
       account_type: toNullableText(pickFirstDefined(body, ['accountType', 'account_type']), 80),
       debtor_party: debtorParty.value,
@@ -3850,6 +4008,305 @@ function parseDbMoney(value) {
   return Number(normalized.toFixed(2));
 }
 
+function formatContractCurrency(value) {
+  const amount = parseDbMoney(value);
+  return `$${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+function formatContractDate(value) {
+  const fallback = new Date().toISOString().slice(0, 10);
+  const iso = typeof value === 'string' && isValidISODate(value) ? value : fallback;
+  const dateValue = new Date(`${iso}T00:00:00`);
+  const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+  const day = String(dateValue.getDate()).padStart(2, '0');
+  const year = String(dateValue.getFullYear());
+  return `${month}/${day}/${year}`;
+}
+
+function normalizeDateInputToIso(value) {
+  if (value === undefined || value === null) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  const isoDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoDate && isValidISODate(isoDate[1])) return isoDate[1];
+
+  const usDate = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (usDate) {
+    const month = Number(usDate[1]);
+    const day = Number(usDate[2]);
+    let year = Number(usDate[3]);
+    if (Number.isInteger(year) && year < 100) year += year >= 70 ? 1900 : 2000;
+    const candidate = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (isValidISODate(candidate)) return candidate;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return '';
+}
+
+function formatPersonDateToIso(value) {
+  return normalizeDateInputToIso(value);
+}
+
+function normalizeContractSsn(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length !== 9) return '';
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+function normalizeContractPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return cleanText(value, 40);
+}
+
+function readContractBooleanFlag(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
+
+function resolveLeadBestPhone(lead = {}) {
+  return cleanText(lead.cell_phone, 40) || cleanText(lead.home_phone, 40) || cleanText(lead.phone, 40);
+}
+
+function buildContractAddressLine(lead = {}) {
+  const street = cleanText(lead.address_street, 180);
+  const city = cleanText(lead.city, 120);
+  const stateCode = cleanText(lead.state_code, 12);
+  const zipCode = cleanText(lead.zip_code, 12);
+  const cityStateZip = [city, stateCode, zipCode].filter(Boolean).join(' ').trim();
+  if (street && cityStateZip) return `${street}, ${cityStateZip}`;
+  return street || cityStateZip;
+}
+
+function computeContractMonthlyPayment(lead = {}) {
+  const totalDebt = Math.max(0, parseDbMoney(lead.calc_total_debt));
+  const settlementPercent = Math.max(0, Math.min(100, parseDbMoney(lead.calc_settlement_percent)));
+  const programFeePercent = Math.max(0, Math.min(100, parseDbMoney(lead.calc_program_fee_percent)));
+  const monthlyBankFee = Math.max(0, parseDbMoney(lead.calc_bank_fee));
+  const months = Math.max(1, parsePositiveInt(lead.calc_months, 48, 1, 240));
+  const legalPlanEnabled = Boolean(lead.calc_legal_plan_enabled);
+
+  const estimatedSettlement = totalDebt * (settlementPercent / 100);
+  const programFees = totalDebt * (programFeePercent / 100);
+  const totalLegalFees = legalPlanEnabled ? CONTRACT_LEGAL_MONTHLY_FEE * months : 0;
+  const totalBankFees = (monthlyBankFee * months) + monthlyBankFee;
+  const totalProgram = estimatedSettlement + programFees + totalLegalFees + totalBankFees;
+  return parseDbMoney(totalProgram / months);
+}
+
+function buildContractGeneratorPayload(lead = {}, creditors = [], budgetData = null, bankingInfo = null) {
+  const includeCoapp = readContractBooleanFlag(lead.include_coapp_in_contract);
+  const primaryPhone = resolveLeadBestPhone(lead);
+  const coApplicantPhone = cleanText(lead.co_applicant_cell_phone, 40)
+    || cleanText(lead.co_applicant_home_phone, 40)
+    || '';
+  const applicantDobIso = formatPersonDateToIso(lead.dob);
+  const coApplicantDobIso = includeCoapp ? formatPersonDateToIso(lead.co_applicant_dob) : '';
+  const firstDepositDateIso = formatPersonDateToIso(lead.first_deposit_date);
+  const contractDate = formatContractDate(new Date().toISOString().slice(0, 10));
+  const months = Math.max(1, parsePositiveInt(lead.calc_months, 48, 1, 240));
+  const creditorsPayload = [];
+
+  for (let index = 0; index < CONTRACT_MAX_CREDITORS; index += 1) {
+    const creditor = creditors[index] || {};
+    const creditorName = cleanText(creditor.creditor_name, 180);
+    const accountNumber = cleanText(creditor.account_number, 80);
+    const normalizedDateLastPayment = normalizeLastPaymentDateText(creditor.date_last_payment).value || '';
+    const debtAmount = Math.max(
+      parseDbMoney(creditor.debt_amount),
+      parseDbMoney(creditor.balance),
+      parseDbMoney(creditor.unpaid_balance),
+      parseDbMoney(creditor.past_due)
+    );
+    const hasCreditorData = Boolean(creditorName || accountNumber || debtAmount > 0 || normalizedDateLastPayment);
+    creditorsPayload.push({
+      name: creditorName,
+      account_number: accountNumber,
+      balance: hasCreditorData ? parseDbMoney(debtAmount) : null,
+      date_last_payment: hasCreditorData ? normalizedDateLastPayment : ''
+    });
+  }
+
+  const totalDebt = Math.max(0, parseDbMoney(lead.calc_total_debt));
+  const settlementPercent = Math.max(0, Math.min(100, parseDbMoney(lead.calc_settlement_percent)));
+  const programFeePercent = Math.max(0, Math.min(100, parseDbMoney(lead.calc_program_fee_percent)));
+  const monthlyBankFee = Math.max(0, parseDbMoney(lead.calc_bank_fee));
+  const legalPlanEnabled = Boolean(lead.calc_legal_plan_enabled);
+
+  const estimatedSettlement = totalDebt * (settlementPercent / 100);
+  const programFees = totalDebt * (programFeePercent / 100);
+  const totalLegalFees = legalPlanEnabled ? CONTRACT_LEGAL_MONTHLY_FEE * months : 0;
+  const totalBankFees = (monthlyBankFee * months) + monthlyBankFee;
+  const totalProgramCost = estimatedSettlement + programFees + totalLegalFees + totalBankFees;
+
+  const budget = budgetData ? normalizeBudgetData(budgetData) : createDefaultBudgetData();
+  const bi = budget.budgetItems || {};
+  const housing = bi.housing || {};
+  const transport = bi.transportation || {};
+  const food = bi.food || {};
+  const utilities = bi.utilities || {};
+
+  const totalHousing = parseDbMoney(housing.housingPayment) + parseDbMoney(housing.homeOwnersInsurance) + parseDbMoney(housing.secondaryHousePayment);
+  const totalTransport = parseDbMoney(transport.autoPayments) + parseDbMoney(transport.autoInsurance) + parseDbMoney(transport.repairsMaintenance) + parseDbMoney(transport.gasoline) + parseDbMoney(transport.parking) + parseDbMoney(transport.commuting);
+  const totalFood = parseDbMoney(food.groceries) + parseDbMoney(food.eatingOut);
+  const totalUtilities = parseDbMoney(utilities.averageEnergy) + parseDbMoney(utilities.averagePhone) + parseDbMoney(utilities.averageWater) + parseDbMoney(utilities.averageInternet);
+  const otherExpenses = parseDbMoney(bi.otherExpenses);
+  const totalMonthlyExpenses = totalHousing + totalTransport + totalFood + totalUtilities + otherExpenses;
+
+  const incomeApp = budget.income?.applicant || {};
+  const incomeCoapp = budget.income?.coapp || {};
+  const totalIncomeApplicant = parseDbMoney(incomeApp.netMonthlyIncome) + parseDbMoney(incomeApp.socialSecurity) + parseDbMoney(incomeApp.alimony) + parseDbMoney(incomeApp.retirement) + parseDbMoney(incomeApp.totalHouseholdIncome) + parseDbMoney(incomeApp.fixedIncome) + parseDbMoney(incomeApp.unemployment) + parseDbMoney(incomeApp.childSupport) + parseDbMoney(incomeApp.other);
+  const totalIncomeCoapp = parseDbMoney(incomeCoapp.netMonthlyIncome) + parseDbMoney(incomeCoapp.socialSecurity) + parseDbMoney(incomeCoapp.alimony) + parseDbMoney(incomeCoapp.retirement) + parseDbMoney(incomeCoapp.totalHouseholdIncome) + parseDbMoney(incomeCoapp.fixedIncome) + parseDbMoney(incomeCoapp.unemployment) + parseDbMoney(incomeCoapp.childSupport) + parseDbMoney(incomeCoapp.other);
+  const totalMonthlyIncome = totalIncomeApplicant + totalIncomeCoapp;
+  const monthlyPayment = computeContractMonthlyPayment(lead);
+  const remaining = totalMonthlyIncome - totalMonthlyExpenses - monthlyPayment;
+  const banking = bankingInfo || {};
+  const normalizedBankAccountType = cleanText(banking.account_type, 30);
+  const normalizedBankRelationship = cleanText(banking.relationship_to_customer, 60).toLowerCase();
+  const bankAccountTypeLower = normalizedBankAccountType.toLowerCase();
+  const bankAddressLine1 = cleanText(banking.address, 180);
+  const bankAddressLine2 = cleanText(banking.address2, 180);
+
+  return {
+    lead: {
+      full_name: cleanText(lead.full_name, 120),
+      dob: applicantDobIso,
+      ssn: normalizeContractSsn(lead.ssn),
+      email: cleanText(lead.email, 160),
+      address_street: cleanText(lead.address_street, 180),
+      city: cleanText(lead.city, 120),
+      state_code: cleanText(lead.state_code, 12),
+      zip_code: cleanText(lead.zip_code, 12),
+      first_deposit_date: firstDepositDateIso,
+      phone: normalizeContractPhone(primaryPhone),
+      cell_phone: normalizeContractPhone(lead.cell_phone),
+      home_phone: normalizeContractPhone(lead.home_phone),
+      include_coapp_in_contract: includeCoapp,
+      co_applicant_name: includeCoapp ? cleanText(lead.co_applicant_name, 120) : '',
+      co_applicant_dob: coApplicantDobIso,
+      co_applicant_ssn: includeCoapp ? normalizeContractSsn(lead.co_applicant_ssn) : '',
+      co_applicant_email: includeCoapp ? cleanText(lead.co_applicant_email, 160) : '',
+      co_applicant_phone: includeCoapp ? normalizeContractPhone(coApplicantPhone) : ''
+    },
+    program: {
+      program_length: String(months),
+      monthly_payment: monthlyPayment,
+      total_debt_enrolled: totalDebt,
+      date_short: contractDate,
+      settlement_percent: settlementPercent,
+      program_fee_percent: programFeePercent,
+      settlement_fee: parseDbMoney(programFees),
+      estimated_settlement: parseDbMoney(estimatedSettlement),
+      total_legal_fees: parseDbMoney(totalLegalFees),
+      total_bank_fees: parseDbMoney(totalBankFees),
+      total_program_cost: parseDbMoney(totalProgramCost)
+    },
+    banking: {
+      bank_name: cleanText(banking.bank_name, 120),
+      routing_number: cleanText(banking.routing_number, 32),
+      account_number: cleanText(banking.account_number, 50),
+      account_type: normalizedBankAccountType,
+      name_on_account: cleanText(banking.name_on_account, 120),
+      address: [bankAddressLine1, bankAddressLine2].filter(Boolean).join(' ').trim(),
+      city: cleanText(lead.city, 120) || cleanText(banking.bank_city, 120),
+      state: cleanText(lead.state_code, 12) || cleanText(banking.bank_state, 12),
+      zip_code: cleanText(lead.zip_code, 12) || cleanText(banking.bank_zip, 12),
+      initial_payment_amount: parseDbMoney(banking.initial_payment_amount),
+      payment_day_of_month: parsePositiveInt(banking.payment_day_of_month, 0, 0, 31),
+      is_checking: bankAccountTypeLower.includes('check') || bankAccountTypeLower.includes('monet'),
+      is_savings: bankAccountTypeLower.includes('sav') || bankAccountTypeLower.includes('ahorro'),
+      is_commercial: normalizedBankRelationship.includes('commer') || normalizedBankRelationship.includes('business'),
+      is_personal: !(normalizedBankRelationship.includes('commer') || normalizedBankRelationship.includes('business'))
+    },
+    creditors: creditorsPayload,
+    budget: {
+      income: budget.income,
+      totalMonthlyIncome: parseDbMoney(totalMonthlyIncome),
+      expenses: {
+        housing: parseDbMoney(totalHousing),
+        transportation: parseDbMoney(totalTransport),
+        food: parseDbMoney(totalFood),
+        utilities: parseDbMoney(totalUtilities),
+        other: parseDbMoney(otherExpenses)
+      },
+      totalMonthlyExpenses: parseDbMoney(totalMonthlyExpenses),
+      remaining: parseDbMoney(remaining),
+      hardship: budget.hardship,
+      housingType: housing.housingType || ''
+    }
+  };
+}
+
+async function runContractPdfGenerator({ payload }) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'project-gw-contract-'));
+  const payloadPath = path.join(tempDir, 'payload.json');
+  const outputPath = path.join(tempDir, 'contract.pdf');
+  const pythonBin = cleanText(process.env.PYTHON_BIN, 120) || 'python';
+
+  try {
+    await fs.access(CONTRACT_GENERATOR_SCRIPT_PATH);
+    await fs.access(CONTRACT_TEMPLATE_PATH);
+    await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf-8');
+
+    await new Promise((resolve, reject) => {
+      const child = spawn(
+        pythonBin,
+        [
+          CONTRACT_GENERATOR_SCRIPT_PATH,
+          '--template',
+          CONTRACT_TEMPLATE_PATH,
+          '--payload',
+          payloadPath,
+          '--output',
+          outputPath
+        ],
+        {
+          cwd: ROOT_DIR,
+          windowsHide: true
+        }
+      );
+
+      let stderr = '';
+      child.stderr.on('data', (chunk) => {
+        stderr += String(chunk || '');
+      });
+
+      child.on('error', (error) => {
+        reject(error);
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) return resolve();
+        const details = cleanText(stderr, 2000);
+        reject(new Error(details || `El generador de contrato fallo (exit ${code}).`));
+      });
+    });
+
+    const pdfBuffer = await fs.readFile(outputPath);
+    return pdfBuffer;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 function mapCreditorRow(row) {
   if (!row) return row;
   return {
@@ -3864,7 +4321,8 @@ function mapCreditorRow(row) {
     is_included: Boolean(row.is_included),
     debtor_party: normalizeDebtorParty(row.debtor_party).value,
     responsibility: row.responsibility || null,
-    months_reviewed: row.months_reviewed !== null ? parseInt(row.months_reviewed, 10) : null
+    months_reviewed: row.months_reviewed !== null ? parseInt(row.months_reviewed, 10) : null,
+    date_last_payment: row.date_last_payment || null
   };
 }
 
@@ -4536,6 +4994,122 @@ app.post('/api/leads/:id/files', async (req, res) => {
   } catch (error) {
     console.error('Error al guardar archivo del lead:', error);
     return res.status(500).json({ message: 'No se pudo guardar el archivo.' });
+  }
+});
+
+app.post('/api/leads/:id/contracts/generate', async (req, res) => {
+  const leadId = Number(req.params.id);
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    return res.status(400).json({ message: 'ID de lead invalido.' });
+  }
+
+  try {
+    const { rows: leadRows } = await pool.query(
+      `SELECT ${LEAD_SELECT_COLUMNS}
+       FROM leads
+       WHERE id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+
+    if (!leadRows.length) {
+      return res.status(404).json({ message: 'Lead no encontrado.' });
+    }
+
+    const lead = leadRows[0];
+    const [{ rows: creditorRows }, { rows: budgetRows }, { rows: bankingRows }] = await Promise.all([
+      pool.query(
+        `SELECT
+           id,
+           creditor_name,
+           account_number,
+           date_last_payment,
+           debt_amount,
+           balance,
+           past_due,
+           unpaid_balance
+         FROM lead_creditors
+         WHERE lead_id = $1
+           AND is_included = TRUE
+         ORDER BY id ASC
+         LIMIT $2`,
+        [leadId, CONTRACT_MAX_CREDITORS]
+      ),
+      pool.query(
+        `SELECT data FROM lead_budgets WHERE lead_id = $1 LIMIT 1`,
+        [leadId]
+      ),
+      pool.query(
+        `SELECT
+           routing_number,
+           account_number,
+           account_type,
+           bank_name,
+           bank_city,
+           bank_state,
+           bank_zip,
+           name_on_account,
+           relationship_to_customer,
+           address,
+           address2,
+           initial_payment_amount,
+           payment_day_of_month
+         FROM banking_info
+         WHERE lead_id = $1
+         LIMIT 1`,
+        [leadId]
+      )
+    ]);
+
+    const budgetData = budgetRows.length > 0 ? budgetRows[0].data : null;
+    const bankingData = bankingRows.length > 0 ? bankingRows[0] : null;
+    const payload = buildContractGeneratorPayload(lead, creditorRows, budgetData, bankingData);
+    const pdfBuffer = await runContractPdfGenerator({ payload });
+    const normalizedSize = normalizeFileSize(pdfBuffer.length);
+    if (!normalizedSize.ok) {
+      return res.status(400).json({ message: normalizedSize.message });
+    }
+
+    const caseLabel = lead.case_id ? `case-${lead.case_id}` : `lead-${lead.id}`;
+    const timeLabel = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+    const fileName = `contract-${caseLabel}-${timeLabel}.pdf`;
+    const dataUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
+    const uploadedBy = resolveRequestUsername(req, 'Sistema');
+
+    const { rows } = await pool.query(
+      `INSERT INTO lead_files (
+         lead_id, file_name, mime_type, file_size, document_category, credit_report_party, file_data_url, uploaded_by
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, lead_id, file_name, mime_type, file_size, document_category, credit_report_party, created_at, updated_at`,
+      [
+        leadId,
+        fileName,
+        'application/pdf',
+        normalizedSize.value,
+        'contract',
+        null,
+        dataUrl,
+        cleanText(uploadedBy, 120) || 'Sistema'
+      ]
+    );
+
+    await pool.query(
+      `UPDATE leads
+       SET updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [leadId]
+    );
+
+    return res.status(201).json({
+      ok: true,
+      file: mapLeadFileRow(rows[0]),
+      dataUrl,
+      message: 'Contrato generado y guardado correctamente.'
+    });
+  } catch (error) {
+    console.error('Error al generar contrato del lead:', error);
+    return res.status(500).json({ message: 'No se pudo generar el contrato.' });
   }
 });
 
@@ -7918,6 +8492,9 @@ app.post('/api/creditors/analyze-report', async (req, res) => {
     if (error.code === 'AI_TIMEOUT') {
       return res.status(504).json({ message: error.message || 'Tiempo de espera agotado en analisis IA.' });
     }
+    if (error.code === 'AI_RATE_LIMIT' || error.httpStatus === 429) {
+      return res.status(429).json({ message: 'Limite de peticiones alcanzado. Intenta de nuevo en unos segundos.' });
+    }
 
     console.error('Error analizando reporte de credito con IA:', error);
     return res.status(500).json({ message: error.message || 'Error analizando reporte con IA.' });
@@ -7943,7 +8520,7 @@ app.get('/api/leads/:id/creditors', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
          id, lead_id, source_report, creditor_name, original_creditor, account_number,
-         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
          monthly_payment, balance, past_due, unpaid_balance,
          credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
          created_at, updated_at
@@ -7982,18 +8559,18 @@ app.post('/api/leads/:id/creditors', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO lead_creditors (
          lead_id, source_report, creditor_name, original_creditor, account_number,
-         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
          monthly_payment, balance, past_due, unpaid_balance,
          credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
        ) VALUES (
          $1, $2, $3, $4, $5,
-         $6, $7, $8, $9, $10,
-         $11, $12, $13, $14,
-         $15, $16, $17, $18, $19, $20
+         $6, $7, $8, $9, $10, $11,
+         $12, $13, $14, $15,
+         $16, $17, $18, $19, $20, $21
        )
        RETURNING
          id, lead_id, source_report, creditor_name, original_creditor, account_number,
-         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
          monthly_payment, balance, past_due, unpaid_balance,
          credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
          created_at, updated_at`,
@@ -8003,6 +8580,7 @@ app.post('/api/leads/:id/creditors', async (req, res) => {
         payload.creditor_name,
         payload.original_creditor,
         payload.account_number,
+        payload.date_last_payment,
         payload.account_status,
         payload.account_type,
         payload.debtor_party,
@@ -8073,7 +8651,7 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
     const existingEntries = [];
     if (!replaceExisting) {
       const { rows: existingRows } = await pool.query(
-        `SELECT id, creditor_name, account_number, account_status, debt_amount, debtor_party
+        `SELECT id, creditor_name, account_number, account_status, debt_amount, debtor_party, date_last_payment
          FROM lead_creditors
          WHERE lead_id = $1`,
         [leadId]
@@ -8141,6 +8719,14 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
           updateValues.push(incomingHighCredit);
         }
 
+        const normalizedLastPayment = normalizeLastPaymentDateText(entry.date_last_payment).value;
+        const existingLastPayment = normalizeLastPaymentDateText(duplicate.date_last_payment).value;
+        if (normalizedLastPayment && (!existingLastPayment || existingLastPayment !== normalizedLastPayment)) {
+          updateFields.push(`date_last_payment = $${updateValues.length + 1}`);
+          updateValues.push(normalizedLastPayment);
+          duplicate.date_last_payment = normalizedLastPayment;
+        }
+
         if (duplicate.id && updateFields.length > 0) {
           updateFields.push('updated_at = CURRENT_TIMESTAMP');
           updateValues.push(duplicate.id);
@@ -8158,18 +8744,18 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
       const { rows } = await pool.query(
         `INSERT INTO lead_creditors (
            lead_id, source_report, creditor_name, original_creditor, account_number,
-           account_status, account_type, debtor_party, responsibility, months_reviewed,
+           date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
            monthly_payment, balance, past_due, unpaid_balance,
            credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
          ) VALUES (
            $1, $2, $3, $4, $5,
-           $6, $7, $8, $9, $10,
-           $11, $12, $13, $14,
-           $15, $16, $17, $18, $19, $20
+           $6, $7, $8, $9, $10, $11,
+           $12, $13, $14, $15,
+           $16, $17, $18, $19, $20, $21
          )
          RETURNING
            id, lead_id, source_report, creditor_name, original_creditor, account_number,
-           account_status, account_type, debtor_party, responsibility, months_reviewed,
+           date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
            monthly_payment, balance, past_due, unpaid_balance,
            credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
            created_at, updated_at`,
@@ -8179,6 +8765,7 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
           entry.creditor_name,
           entry.original_creditor,
           entry.account_number,
+          entry.date_last_payment,
           entry.account_status,
           entry.account_type,
           entry.debtor_party,
@@ -8233,7 +8820,7 @@ app.patch('/api/leads/:id/creditors/:creditorId', async (req, res) => {
     const { rows: existingRows } = await pool.query(
       `SELECT
          id, lead_id, source_report, creditor_name, original_creditor, account_number,
-         account_status, account_type, debtor_party, monthly_payment, balance, past_due, unpaid_balance,
+         date_last_payment, account_status, account_type, debtor_party, monthly_payment, balance, past_due, unpaid_balance,
          credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot
        FROM lead_creditors
        WHERE id = $1 AND lead_id = $2
@@ -8276,6 +8863,16 @@ app.patch('/api/leads/:id/creditors/:creditorId', async (req, res) => {
         }
         pushUpdate(mapping.column, normalizedValue);
       }
+    }
+
+    const dateLastPaymentInput = normalizeOptionalLastPaymentDateText(
+      pickFirstDefined(body, ['dateLastPayment', 'date_last_payment', 'lastPaymentDate', 'last_payment_date'])
+    );
+    if (!dateLastPaymentInput.ok) {
+      return res.status(400).json({ message: dateLastPaymentInput.message });
+    }
+    if (dateLastPaymentInput.provided) {
+      pushUpdate('date_last_payment', dateLastPaymentInput.value);
     }
 
     const debtorPartyRaw = pickFirstDefined(body, ['debtorParty', 'debtor_party']);
@@ -8364,7 +8961,7 @@ app.patch('/api/leads/:id/creditors/:creditorId', async (req, res) => {
        WHERE id = $${values.length - 1} AND lead_id = $${values.length}
        RETURNING
          id, lead_id, source_report, creditor_name, original_creditor, account_number,
-         account_status, account_type, debtor_party, responsibility, months_reviewed,
+         date_last_payment, account_status, account_type, debtor_party, responsibility, months_reviewed,
          monthly_payment, balance, past_due, unpaid_balance,
          credit_limit, high_credit, debt_amount, is_included, notes, raw_snapshot,
          created_at, updated_at`,

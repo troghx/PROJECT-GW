@@ -1,6 +1,6 @@
 # Faltantes Criticos - CRM
-Fecha: 2026-02-27
-Estado: Aprobado para ejecucion
+Fecha: 2026-02-28
+Estado: En ejecucion
 Alcance: Este plan excluye integracion API de correo y API de reportes de credito.
 
 ## Resumen Ejecutivo
@@ -60,6 +60,13 @@ El CRM ya tiene base funcional fuerte, pero faltan bloques criticos para cerrar 
 - [ ] Pipeline CI para validacion automatica.
 - [ ] Checklist de release y rollback.
 
+9. Pull Credit real (Fase 07 operativa)
+- [ ] Endpoint backend para ejecutar soft pull por parte (`applicant` / `coapp`).
+- [ ] Integracion con proveedor real (credenciales por entorno y contratos vigentes).
+- [ ] Evidencia de consentimiento + permissible purpose antes del pull.
+- [ ] Auditoria completa del pull (`actor`, `lead_id`, `party`, `request_id`, `resultado`).
+- [ ] Manejo de errores operativos (timeout, proveedor caido, datos incompletos).
+
 ## Plan de Ataque por Bloques
 1. Bloque A (inmediato): Seguridad base + RBAC inicial. (completado)
 2. Bloque B: Auditoria + Tareas operativas. (completado)
@@ -68,6 +75,20 @@ El CRM ya tiene base funcional fuerte, pero faltan bloques criticos para cerrar 
 
 ## Regla de ejecucion
 No avanzar al siguiente bloque si quedan pendientes criticos del bloque actual.
+
+## Actualizacion de auditoria (2026-02-28)
+- Pull Credit:
+  - `client.js` ya habilita UX de seleccion applicant/coapp pero muestra "Integracion API pendiente".
+  - No existe endpoint backend dedicado para ejecutar pull credit; solo existe analisis IA de texto de reporte y CRUD de creditors.
+- Compliance PII:
+  - `LEAD_SELECT_COLUMNS` expone `ssn` y `co_applicant_ssn`.
+  - `/api/leads/:id/banking` retorna `routing_number`, `account_number`, `ss_number` sin mascara/cifrado.
+  - Sigue faltando politica de salida/export por permiso y criterio minimo de datos.
+- QA/CI:
+  - Sin script `test` en `package.json`.
+  - Sin pipeline `.github/workflows`.
+- Dependencias externas:
+  - Analisis IA de creditors depende de `GEMINI_API_KEY`; sin clave la API responde `503`.
 
 ## Avance de implementacion (2026-02-26)
 - Hardening backend aplicado:

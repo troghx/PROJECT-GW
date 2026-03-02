@@ -49,6 +49,26 @@
       cleaned = cleaned.replace(/^\d+\s+[A-Z\s]+(ST|AVE|BLVD|DR|RD|LN|CT|WAY)\s*/i, '');
       // Remover ZIP codes sueltos
       cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();
+      // Remover etiquetas de contacto del PDF
+      cleaned = cleaned.replace(/\bBY\s*MAIL\s*ONLY\b/gi, '').trim();
+      cleaned = cleaned.replace(/\bBYMAILONLY\b/gi, '').trim();
+      cleaned = cleaned.replace(/\bBY\s*PHONE\s*ONLY\b/gi, '').trim();
+      cleaned = cleaned.replace(/\bDO\s*NOT\s*CONTACT\b/gi, '').trim();
+      // Remover teléfonos
+      cleaned = cleaned.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '').trim();
+      // Remover prefijos de sección del PDF
+      cleaned = cleaned.replace(/^(?:Auto\s+loans?\s+|Credit\s+cards?\s+|Student\s+loans?\s+|Personal\s+loans?\s+|Installment\s+loans?\s+|Mortgages?\s+|Collections?\s+|Other\s+accounts?\s+)/i, '').trim();
+      // Dedup última palabra repetida
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      if (words.length >= 2) {
+        const last = words[words.length - 1].toLowerCase();
+        const prev = words[words.length - 2].toLowerCase();
+        if (last === prev || (prev.startsWith(last) && last.length >= 3) || (last.startsWith(prev) && prev.length >= 3)) {
+          const keep = words[words.length - 1].length >= words[words.length - 2].length ? words[words.length - 1] : words[words.length - 2];
+          words.splice(words.length - 2, 2, keep);
+          cleaned = words.join(' ');
+        }
+      }
       return cleaned.trim() || name;
     },
 
@@ -564,6 +584,7 @@
             creditorName: creditor.creditorName,
             originalCreditor: creditor.originalCreditor || creditor.creditorName,
             accountNumber: creditor.accountNumber || '',
+            dateLastPayment: creditor.dateLastPayment || creditor.date_last_payment || creditor.lastPaymentDate || creditor.last_activity || '',
             accountStatus: creditor.accountStatus || 'Open',
             accountType: creditor.accountType || '',
             responsibility: creditor.responsibility || 'Individual',

@@ -829,30 +829,30 @@ body.theme-light .creditors-saved-section,
 body.theme-light .creditor-card,
 body.theme-light .creditors-status-bar {
   background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(15, 23, 42, 0.08);
+  border-color: rgba(20, 20, 22, 0.08);
 }
 
 body.theme-light .creditors-title,
 body.theme-light .creditor-name {
-  color: rgba(15, 23, 42, 0.9);
+  color: rgba(20, 20, 22, 0.9);
 }
 
 body.theme-light .creditors-subtitle,
 body.theme-light .amount-label,
 body.theme-light .creditor-account {
-  color: rgba(15, 23, 42, 0.5);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.theme-light .summary-label {
-  color: rgba(15, 23, 42, 0.5);
+  color: rgba(20, 20, 22, 0.5);
 }
 
 body.theme-light .summary-value {
-  color: rgba(15, 23, 42, 0.95);
+  color: rgba(20, 20, 22, 0.95);
 }
 
 body.theme-light .import-tab {
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(20, 20, 22, 0.6);
 }
 
 body.theme-light .import-tab.active {
@@ -863,8 +863,8 @@ body.theme-light .form-field input,
 body.theme-light .form-field select,
 body.theme-light .creditors-textarea {
   background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(15, 23, 42, 0.12);
-  color: rgba(15, 23, 42, 0.9);
+  border-color: rgba(20, 20, 22, 0.12);
+  color: rgba(20, 20, 22, 0.9);
 }
 
 body.theme-light .upload-zone {
@@ -873,21 +873,21 @@ body.theme-light .upload-zone {
 }
 
 body.theme-light .btn-secondary {
-  background: rgba(15, 23, 42, 0.06);
-  color: rgba(15, 23, 42, 0.8);
-  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(20, 20, 22, 0.06);
+  color: rgba(20, 20, 22, 0.8);
+  border-color: rgba(20, 20, 22, 0.12);
 }
 
 body.theme-light .btn-ghost {
-  color: rgba(15, 23, 42, 0.55);
+  color: rgba(20, 20, 22, 0.55);
 }
 
 body.theme-light .empty-state {
-  color: rgba(15, 23, 42, 0.4);
+  color: rgba(20, 20, 22, 0.4);
 }
 
 body.theme-light .empty-state p {
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(20, 20, 22, 0.6);
 }
 
 /* BADGES - Light Mode Contraste */
@@ -928,11 +928,11 @@ body.theme-light .badge-months {
 
 /* Amounts section - Light Mode */
 body.theme-light .creditor-amounts {
-  background: rgba(15, 23, 42, 0.06);
+  background: rgba(20, 20, 22, 0.06);
 }
 
 body.theme-light .amount-value {
-  color: rgba(15, 23, 42, 0.95);
+  color: rgba(20, 20, 22, 0.95);
 }
 
 body.theme-light .amount-value.debt {
@@ -945,7 +945,7 @@ body.theme-light .amount-value.past-due {
 
 /* Card toggle switch - Light Mode */
 body.theme-light .toggle-switch {
-  background: rgba(15, 23, 42, 0.2);
+  background: rgba(20, 20, 22, 0.2);
 }
 
 body.theme-light .toggle-switch.active {
@@ -954,14 +954,14 @@ body.theme-light .toggle-switch.active {
 
 /* Button card - Light Mode */
 body.theme-light .btn-card {
-  background: rgba(15, 23, 42, 0.05);
-  border-color: rgba(15, 23, 42, 0.1);
-  color: rgba(15, 23, 42, 0.7);
+  background: rgba(20, 20, 22, 0.05);
+  border-color: rgba(20, 20, 22, 0.1);
+  color: rgba(20, 20, 22, 0.7);
 }
 
 body.theme-light .btn-card:hover {
-  background: rgba(15, 23, 42, 0.1);
-  border-color: rgba(15, 23, 42, 0.2);
+  background: rgba(20, 20, 22, 0.1);
+  border-color: rgba(20, 20, 22, 0.2);
 }
 
 body.theme-light .btn-card.delete {
@@ -980,4 +980,386 @@ body.theme-light .status-text.error {
 
 body.theme-light .status-text.loading {
   color: #0284c7;
+}
+
+/* ============================================
+   MODAL: AGREGAR DEUDA MANUALMENTE
+   ============================================ */
+
+#manualDebtModal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#manualDebtModal.hidden {
+  display: none;
+}
+
+#manualDebtModal .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.manual-debt-modal-content {
+  position: relative;
+  width: min(96vw, 620px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(155deg, rgba(28, 28, 30, 0.92) 0%, rgba(22, 22, 24, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(40px) saturate(140%);
+  overflow: hidden;
+}
+
+.manual-debt-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.manual-debt-modal-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.modal-close-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.manual-debt-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Form Layout */
+.mdm-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mdm-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mdm-form-field label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mdm-form-field input,
+.mdm-form-field select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.9);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.mdm-form-field input:focus,
+.mdm-form-field select:focus {
+  border-color: rgba(57, 176, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(57, 176, 255, 0.08);
+}
+
+.mdm-form-field input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.mdm-form-field select option {
+  background: #1c1c1e;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mdm-form-field input[readonly] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mdm-extra-fields.hidden {
+  display: none;
+}
+
+/* Footer */
+.manual-debt-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Light Theme ---- */
+body.theme-light .manual-debt-modal-content {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border-color: rgba(20, 20, 22, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
+}
+
+body.theme-light .manual-debt-modal-header {
+  border-bottom-color: rgba(20, 20, 22, 0.08);
+}
+
+body.theme-light .manual-debt-modal-header h3 {
+  color: rgba(20, 20, 22, 0.92);
+}
+
+body.theme-light .modal-close-btn {
+  color: rgba(20, 20, 22, 0.4);
+}
+
+body.theme-light .modal-close-btn:hover {
+  color: rgba(20, 20, 22, 0.8);
+  background: rgba(20, 20, 22, 0.06);
+}
+
+body.theme-light .mdm-form-field label {
+  color: rgba(20, 20, 22, 0.55);
+}
+
+body.theme-light .mdm-form-field input,
+body.theme-light .mdm-form-field select {
+  background: rgba(20, 20, 22, 0.03);
+  border-color: rgba(20, 20, 22, 0.12);
+  color: rgba(20, 20, 22, 0.9);
+}
+
+body.theme-light .mdm-form-field input::placeholder {
+  color: rgba(20, 20, 22, 0.25);
+}
+
+body.theme-light .mdm-form-field select option {
+  background: #fff;
+  color: rgba(20, 20, 22, 0.9);
+}
+
+body.theme-light .manual-debt-modal-footer {
+  border-top-color: rgba(20, 20, 22, 0.08);
+}
+
+/* ============================================
+   EDIT CREDITOR - Botón + Popover
+   ============================================ */
+
+.btn-edit-creditor {
+  padding: 3px 6px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(57, 176, 255, 0.12);
+  color: rgba(57, 176, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-right: 4px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.btn-edit-creditor:hover {
+  background: rgba(57, 176, 255, 0.22);
+  color: #39b0ff;
+}
+
+.edit-creditor-popover {
+  width: 280px;
+  background: rgba(28, 28, 30, 0.92);
+  backdrop-filter: blur(40px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: ecpFadeIn 0.15s ease;
+}
+
+@keyframes ecpFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ecp-header {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+
+.ecp-label {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 8px;
+  letter-spacing: 0.03em;
+}
+
+.ecp-input {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.ecp-input:focus {
+  border-color: rgba(57, 176, 255, 0.4);
+}
+
+select.ecp-input {
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+select.ecp-input option {
+  background: #1c1c1e;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ecp-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ecp-btn {
+  padding: 5px 14px;
+  font-size: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.ecp-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ecp-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ecp-save {
+  background: rgba(57, 176, 255, 0.2);
+  color: #39b0ff;
+}
+
+.ecp-save:hover {
+  background: rgba(57, 176, 255, 0.3);
+}
+
+.ecp-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Light theme */
+body.theme-light .btn-edit-creditor {
+  background: rgba(57, 176, 255, 0.08);
+  color: rgba(30, 120, 200, 0.7);
+}
+
+body.theme-light .btn-edit-creditor:hover {
+  background: rgba(57, 176, 255, 0.15);
+  color: #1a7fc4;
+}
+
+body.theme-light .edit-creditor-popover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(20, 20, 22, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+body.theme-light .ecp-header {
+  color: rgba(20, 20, 22, 0.88);
+}
+
+body.theme-light .ecp-label {
+  color: rgba(20, 20, 22, 0.5);
+}
+
+body.theme-light .ecp-input {
+  color: rgba(20, 20, 22, 0.88);
+  background: rgba(20, 20, 22, 0.03);
+  border-color: rgba(20, 20, 22, 0.1);
+}
+
+body.theme-light select.ecp-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(20,20,22,0.35)'/%3E%3C/svg%3E");
+}
+
+body.theme-light select.ecp-input option {
+  background: #fff;
+  color: rgba(20, 20, 22, 0.88);
+}
+
+body.theme-light .ecp-input:focus {
+  border-color: rgba(57, 176, 255, 0.5);
+}
+
+body.theme-light .ecp-cancel {
+  background: rgba(20, 20, 22, 0.05);
+  color: rgba(20, 20, 22, 0.5);
+}
+
+body.theme-light .ecp-cancel:hover {
+  background: rgba(20, 20, 22, 0.08);
+  color: rgba(20, 20, 22, 0.7);
+}
+
+body.theme-light .ecp-save {
+  background: rgba(57, 176, 255, 0.12);
+  color: #1a7fc4;
+}
+
+body.theme-light .ecp-save:hover {
+  background: rgba(57, 176, 255, 0.2);
 }

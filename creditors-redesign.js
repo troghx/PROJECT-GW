@@ -48,7 +48,11 @@
     'public records', 'personal info', 'employment info',
     'report date', 'vantage score', 'credit report',
     'download pdf', 'all bureaus', 'bureau',
-    'credit cards', 'total count', 'credit limit'
+    'credit cards', 'total count', 'credit limit',
+    'auto loans', 'student loans', 'personal loans',
+    'installment loans', 'other accounts', 'mortgages',
+    'bymailonly', 'by mail only', 'by phone only',
+    'do not contact', 'account id:', 'creditor information'
   ];
 
   const OCR_MIN_PAGE_TEXT_LENGTH = 40;
@@ -361,13 +365,25 @@
       normalized === 'payment history' ||
       normalized === 'creditor information' ||
       normalized === 'credit cards' ||
+      normalized === 'auto loans' ||
+      normalized === 'student loans' ||
+      normalized === 'personal loans' ||
+      normalized === 'installment loans' ||
+      normalized === 'other accounts' ||
+      normalized === 'mortgages' ||
+      normalized === 'collections' ||
       normalized === 'other' ||
       normalized === 'bureau' ||
       normalized === 'account summary' ||
+      normalized === 'bymailonly' ||
+      normalized === 'by mail only' ||
+      normalized === 'by phone only' ||
+      normalized === 'do not contact' ||
       normalized.startsWith('you\'re currently using') ||
       normalized.startsWith('you have ') ||
       normalized.startsWith('report date') ||
-      normalized.startsWith('personal info')
+      normalized.startsWith('personal info') ||
+      normalized.startsWith('account id')
     );
   }
 
@@ -378,6 +394,15 @@
     normalized = normalized.replace(/\s+\$[0-9,].*$/i, '').trim();
     normalized = normalized.replace(/\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b[\s\S]*$/i, '').trim();
     normalized = normalized.replace(/\s+(?:in good standing|closed|charge off|collection\/charge-off)\b[\s\S]*$/i, '').trim();
+    // Remover etiquetas de contacto del PDF
+    normalized = normalized.replace(/\bBY\s*MAIL\s*ONLY\b/gi, '').trim();
+    normalized = normalized.replace(/\bBYMAILONLY\b/gi, '').trim();
+    normalized = normalized.replace(/\bBY\s*PHONE\s*ONLY\b/gi, '').trim();
+    normalized = normalized.replace(/\bDO\s*NOT\s*CONTACT\b/gi, '').trim();
+    // Remover teléfonos
+    normalized = normalized.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '').trim();
+    // Remover prefijos de sección del PDF
+    normalized = normalized.replace(/^(?:Auto\s+loans?\s+|Credit\s+cards?\s+|Student\s+loans?\s+|Personal\s+loans?\s+|Installment\s+loans?\s+|Mortgages?\s+|Collections?\s+|Other\s+accounts?\s+)/i, '').trim();
 
     const words = normalized.split(/\s+/).filter(Boolean);
     if (words.length >= 4 && words.length % 2 === 0) {
@@ -401,6 +426,18 @@
 
     if (/^CAPITAL ONE AUTO(?:\s+FIN(?:AN)?)?$/i.test(normalized)) {
       return 'CAPITAL ONE AUTO FINAN';
+    }
+
+    // Dedup última palabra repetida (ej: "CAPITAL ONE AUTO FINAN FINAN" → "CAPITAL ONE AUTO FINAN")
+    const finalWords = normalized.split(/\s+/).filter(Boolean);
+    if (finalWords.length >= 2) {
+      const last = finalWords[finalWords.length - 1].toLowerCase();
+      const prev = finalWords[finalWords.length - 2].toLowerCase();
+      if (last === prev || (prev.startsWith(last) && last.length >= 3) || (last.startsWith(prev) && prev.length >= 3)) {
+        const keep = finalWords[finalWords.length - 1].length >= finalWords[finalWords.length - 2].length ? finalWords[finalWords.length - 1] : finalWords[finalWords.length - 2];
+        finalWords.splice(finalWords.length - 2, 2, keep);
+        normalized = finalWords.join(' ');
+      }
     }
 
     normalized = normalized.replace(/\bFINANCI$/i, 'FINANCIAL');
@@ -609,6 +646,85 @@
   function extractMonthsReviewed(line) {
     const match = line.match(/Month(?:'s|s)?\s*Reviewed[:\s]*(\d+)/i);
     return match ? parseInt(match[1], 10) : null;
+  }
+
+  function normalizeLastPaymentDate(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    const normalized = raw
+      .replace(/\u00a0/g, ' ')
+      .replace(/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b[:\s-]*/ig, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!normalized) return '';
+
+    function toUsDate(month, day, year) {
+      const mm = Number(month);
+      const dd = Number(day);
+      let yy = Number(year);
+      if (!Number.isInteger(mm) || mm < 1 || mm > 12) return '';
+      if (!Number.isInteger(dd) || dd < 1 || dd > 31) return '';
+      if (!Number.isInteger(yy)) return '';
+      if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+      if (yy < 1900 || yy > 2100) return '';
+      const check = new Date(yy, mm - 1, dd);
+      if (
+        Number.isNaN(check.getTime()) ||
+        check.getFullYear() !== yy ||
+        check.getMonth() !== (mm - 1) ||
+        check.getDate() !== dd
+      ) {
+        return '';
+      }
+      return `${String(mm).padStart(2, '0')}/${String(dd).padStart(2, '0')}/${String(yy)}`;
+    }
+
+    function toMonthYear(month, year) {
+      const mm = Number(month);
+      let yy = Number(year);
+      if (!Number.isInteger(mm) || mm < 1 || mm > 12) return '';
+      if (!Number.isInteger(yy)) return '';
+      if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+      if (yy < 1900 || yy > 2100) return '';
+      return `${String(mm).padStart(2, '0')}/${String(yy)}`;
+    }
+
+    const isoMatch = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+    if (isoMatch) {
+      return toUsDate(isoMatch[2], isoMatch[3], isoMatch[1]);
+    }
+
+    const usMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+    if (usMatch) {
+      return toUsDate(usMatch[1], usMatch[2], usMatch[3]);
+    }
+
+    const monthYearMatch = normalized.match(/\b(\d{1,2})[\/\-](\d{2,4})\b/);
+    if (monthYearMatch) {
+      return toMonthYear(monthYearMatch[1], monthYearMatch[2]);
+    }
+
+    const monthNameMatch = normalized.match(/\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})\b/);
+    if (monthNameMatch) {
+      const parsed = new Date(`${monthNameMatch[1]} ${monthNameMatch[2]}, ${monthNameMatch[3]}`);
+      if (!Number.isNaN(parsed.getTime())) {
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+        const dd = String(parsed.getDate()).padStart(2, '0');
+        const yy = String(parsed.getFullYear());
+        return `${mm}/${dd}/${yy}`;
+      }
+    }
+
+    return '';
+  }
+
+  function extractLastPaymentDate(line) {
+    const source = String(line || '');
+    if (!/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b/i.test(source)) {
+      return '';
+    }
+    return normalizeLastPaymentDate(source);
   }
 
   function extractBalance(line) {
@@ -1200,6 +1316,7 @@
         sourceReport: source,
         creditorName,
         accountNumber,
+        dateLastPayment: '',
         accountStatus: '',
         accountType: '',
         responsibility: '',
@@ -1216,6 +1333,7 @@
       let waitingBalanceValues = false;
       let waitingBalanceMode = 'balance';
       let hasExplicitDebtSignal = false;
+      let waitingLastPayment = false;
 
       for (let cursor = accountIndex; cursor <= blockEnd; cursor += 1) {
         const line = lines[cursor];
@@ -1249,6 +1367,25 @@
           creditor.monthsReviewed = creditor.monthsReviewed === null
             ? months
             : Math.min(creditor.monthsReviewed, months);
+        }
+
+        const explicitLastPaymentDate = extractLastPaymentDate(line);
+        if (explicitLastPaymentDate) {
+          creditor.dateLastPayment = explicitLastPaymentDate;
+          waitingLastPayment = false;
+        } else if (/\b(?:date\s+of\s+last\s+payment|last\s+payment\s+date|date\s+last\s+payment|last\s+payment|last\s+activity|activity\s+date)\b/i.test(line)) {
+          waitingLastPayment = true;
+        } else if (waitingLastPayment) {
+          const adjacentDate = normalizeLastPaymentDate(line);
+          if (adjacentDate) {
+            creditor.dateLastPayment = adjacentDate;
+            waitingLastPayment = false;
+          } else if (
+            /\b(?:open\s+date|last\s+activity|date\s+closed|payment\s+history|terms?\s+count|amount\s+past\s+due)\b/i.test(line) ||
+            /Account\s*(?:Number|#)/i.test(line)
+          ) {
+            waitingLastPayment = false;
+          }
         }
 
         const pastDue = extractPastDue(line);
@@ -1350,6 +1487,9 @@
             ? creditor.monthsReviewed
             : Math.min(prev.monthsReviewed, creditor.monthsReviewed);
         }
+        if (!prev.dateLastPayment && creditor.dateLastPayment) {
+          prev.dateLastPayment = creditor.dateLastPayment;
+        }
         prev.pastDue = Math.max(normalizeMoney(prev.pastDue), normalizeMoney(creditor.pastDue));
         if (!prev.creditLimit && creditor.creditLimit) prev.creditLimit = creditor.creditLimit;
         if (!prev.highCredit && creditor.highCredit) prev.highCredit = creditor.highCredit;
@@ -1402,6 +1542,9 @@
     const accountStatus = String(entry.accountStatus || entry.account_status || '').trim();
     const currentPaymentStatus = String(entry.currentPaymentStatus || entry.current_payment_status || '').trim();
     const accountType = cleanAccountTypeValue(String(entry.accountType || entry.account_type || '').trim());
+    const dateLastPayment = normalizeLastPaymentDate(
+      entry.dateLastPayment || entry.date_last_payment || entry.lastPaymentDate || entry.last_payment_date
+    );
     let responsibility = String(entry.responsibility || entry.responsability || '').trim();
     if (responsibility) {
       const lowered = responsibility.toLowerCase();
@@ -1420,6 +1563,7 @@
       sourceReport: entry.sourceReport || entry.source_report || sourceName,
       creditorName: String(entry.creditorName || entry.creditor_name || entry.creditor || entry.name || '').trim(),
       accountNumber: String(entry.accountNumber || entry.account_number || '').trim(),
+      dateLastPayment,
       accountStatus: accountStatus || currentPaymentStatus,
       accountType,
       responsibility,
@@ -1746,6 +1890,10 @@
     tbody.querySelectorAll('.btn-delete').forEach((button) => {
       button.addEventListener('click', handleDelete);
     });
+
+    tbody.querySelectorAll('.btn-edit-creditor').forEach((button) => {
+      button.addEventListener('click', () => openEditCreditorPopover(button));
+    });
   }
 
   function renderRowOrdered(entry, index, includedActiveDebtTotal = 0) {
@@ -1763,6 +1911,7 @@
       ? `<span class="debt-share-pill" title="${debtShareLabel} del total activo">${debtShareLabel}</span>`
       : '';
     const checkbox = `<button type="button" class="row-checkbox ${isIncluded ? 'is-checked' : ''}" data-id="${entry.id}" aria-label="${isActive ? 'Incluir deuda' : 'Cuenta coapp desactivada'}" aria-pressed="${isIncluded ? 'true' : 'false'}" ${isActive ? '' : 'disabled'}></button>`;
+    const editBtn = `<button class="btn-edit-creditor" data-id="${entry.id}" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>`;
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}" ${isActive ? '' : 'disabled title="Cuenta coapp desactivada por toggle"'}>×</button>`;
     const rawCreditorName = entry.creditor_name || entry.creditorName || '';
     const truncatedCreditorName = escapeHtml(truncate(rawCreditorName || '-', 28));
@@ -1795,7 +1944,7 @@
         }
         return '<td class="col-utilization">-</td>';
       })(),
-      actions: `<td class="col-actions">${deleteBtn}</td>`
+      actions: `<td class="col-actions">${editBtn}${deleteBtn}</td>`
     };
     
     return `<tr class="${isIncluded ? 'included' : 'excluded'} ${isActive ? '' : 'coapp-inactive'}">${columnOrder.map(key => cells[key]).join('')}</tr>`;
@@ -2116,6 +2265,120 @@
     updateSummary();
   }
 
+  // --- Edit Creditor Popover ---
+  let _editPopover = null;
+
+  function closeEditPopover() {
+    if (_editPopover) {
+      _editPopover.remove();
+      _editPopover = null;
+    }
+    document.removeEventListener('keydown', _editPopoverEsc);
+    document.removeEventListener('mousedown', _editPopoverOutside);
+  }
+
+  function _editPopoverEsc(e) { if (e.key === 'Escape') closeEditPopover(); }
+  function _editPopoverOutside(e) {
+    if (_editPopover && !_editPopover.contains(e.target)) closeEditPopover();
+  }
+
+  function openEditCreditorPopover(btn) {
+    closeEditPopover();
+    const creditorId = btn.dataset.id;
+    const entry = currentCreditors.find(c => String(c.id) === String(creditorId));
+    if (!entry) return;
+
+    const pop = document.createElement('div');
+    pop.className = 'edit-creditor-popover';
+    pop.innerHTML = `
+      <div class="ecp-header">Editar Acreedor</div>
+      <label class="ecp-label">Nombre
+        <input type="text" class="ecp-input" id="ecp_name" value="${escapeHtml(entry.creditor_name || entry.creditorName || '')}" />
+      </label>
+      <label class="ecp-label">Monto de deuda
+        <input type="number" class="ecp-input" id="ecp_debt" step="0.01" value="${normalizeMoney(entry.debt_amount || entry.debtAmount) || ''}" />
+      </label>
+      <label class="ecp-label">Cuenta #
+        <input type="text" class="ecp-input" id="ecp_account" value="${escapeHtml(entry.account_number || entry.accountNumber || '')}" />
+      </label>
+      <label class="ecp-label">Tipo
+        <select class="ecp-input" id="ecp_type">
+          <option value="">-</option>
+          ${['Credit Card','Personal Loan','Auto Loan','Student Loan','Medical','Installment','Revolving','Collection','Charge Account','Mortgage'].map(t =>
+            `<option value="${t}" ${(entry.account_type || entry.accountType || '') === t ? 'selected' : ''}>${t}</option>`
+          ).join('')}
+        </select>
+      </label>
+      <label class="ecp-label">Status
+        <select class="ecp-input" id="ecp_status">
+          <option value="">-</option>
+          ${['Open','Closed','Good Standing','Charge Off','Collection','Past Due','Paid'].map(s =>
+            `<option value="${s}" ${(entry.account_status || entry.accountStatus || '') === s ? 'selected' : ''}>${s}</option>`
+          ).join('')}
+        </select>
+      </label>
+      <div class="ecp-footer">
+        <button class="ecp-btn ecp-cancel">Cancelar</button>
+        <button class="ecp-btn ecp-save">Guardar</button>
+      </div>
+    `;
+
+    // Posicionar cerca del botón
+    const rect = btn.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 400)}px`;
+    pop.style.right = `${window.innerWidth - rect.right}px`;
+    pop.style.zIndex = '9999';
+
+    document.body.appendChild(pop);
+    _editPopover = pop;
+
+    pop.querySelector('.ecp-cancel').addEventListener('click', closeEditPopover);
+    pop.querySelector('.ecp-save').addEventListener('click', async () => {
+      const name = pop.querySelector('#ecp_name').value.trim();
+      const debt = parseFloat(pop.querySelector('#ecp_debt').value) || 0;
+      const account = pop.querySelector('#ecp_account').value.trim();
+      const type = pop.querySelector('#ecp_type').value;
+      const status = pop.querySelector('#ecp_status').value;
+
+      if (!name) { pop.querySelector('#ecp_name').focus(); return; }
+
+      const saveBtn = pop.querySelector('.ecp-save');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '...';
+
+      try {
+        const leadId = window.currentLeadId;
+        const resp = await fetch(`/api/leads/${leadId}/creditors/${creditorId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creditorName: name,
+            debtAmount: debt,
+            accountNumber: account,
+            accountType: type,
+            accountStatus: status
+          })
+        });
+        if (!resp.ok) throw new Error('Error al guardar');
+        closeEditPopover();
+        await loadSaved({ silent: true });
+        setStatus('Acreedor actualizado.', 'success');
+      } catch (err) {
+        console.error('[Edit Creditor]', err);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Guardar';
+        setStatus('Error al actualizar acreedor.', 'error');
+      }
+    });
+
+    pop.querySelector('#ecp_name').focus();
+    setTimeout(() => {
+      document.addEventListener('keydown', _editPopoverEsc);
+      document.addEventListener('mousedown', _editPopoverOutside);
+    }, 50);
+  }
+
   async function handleToggle(event) {
     const creditorId = event?.target?.dataset?.id;
     if (!creditorId) return;
@@ -2208,6 +2471,113 @@
     }
   }
 
+  // ============================================
+  // MODAL: AGREGAR DEUDA MANUALMENTE
+  // ============================================
+
+  function openManualDebtModal() {
+    const modal = document.getElementById('manualDebtModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const form = document.getElementById('manualDebtModalForm');
+    if (form) form.reset();
+    const extra = document.getElementById('mdmExtraFields');
+    if (extra) extra.classList.add('hidden');
+    setTimeout(() => document.getElementById('mdm_creditorName')?.focus(), 100);
+  }
+
+  function closeManualDebtModal() {
+    const modal = document.getElementById('manualDebtModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async function saveManualDebtFromModal() {
+    const leadId = Number(window.currentLeadId || 0);
+    if (!leadId) {
+      setStatus('No hay lead seleccionado.', 'error');
+      return;
+    }
+
+    const creditorName = (document.getElementById('mdm_creditorName')?.value || '').trim();
+    const debtAmountRaw = document.getElementById('mdm_debtAmount')?.value || '';
+    const debtAmount = parseFloat(String(debtAmountRaw).replace(/[^0-9.-]/g, '')) || 0;
+
+    if (!creditorName) {
+      setStatus('El nombre del acreedor es obligatorio.', 'error');
+      return;
+    }
+    if (debtAmount <= 0) {
+      setStatus('La deuda debe ser mayor a 0.', 'error');
+      return;
+    }
+
+    const payload = {
+      sourceReport: 'Manual',
+      creditorName,
+      debtAmount,
+      accountNumber: (document.getElementById('mdm_accountNumber')?.value || '').trim(),
+      accountStatus: document.getElementById('mdm_accountStatus')?.value || '',
+      accountType: (document.getElementById('mdm_accountType')?.value || '').trim(),
+      responsibility: document.getElementById('mdm_responsibility')?.value || 'Individual',
+      monthsReviewed: parseInt(document.getElementById('mdm_monthsReviewed')?.value) || null,
+      pastDue: parseFloat(String(document.getElementById('mdm_pastDue')?.value || '0').replace(/[^0-9.-]/g, '')) || 0,
+      isIncluded: true
+    };
+
+    const saveBtn = document.getElementById('manualDebtSaveBtn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando...'; }
+
+    try {
+      const response = await fetch(`/api/leads/${leadId}/creditors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo guardar la deuda.');
+      }
+
+      closeManualDebtModal();
+      await loadSaved({ silent: true });
+      syncCalculatorFromIncludedDebt({ persist: true, toast: false });
+      setStatus('Deuda manual guardada correctamente.', 'success');
+    } catch (err) {
+      setStatus(err.message || 'Error guardando deuda manual.', 'error');
+    } finally {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar Deuda'; }
+    }
+  }
+
+  function initManualDebtModal() {
+    const addBtn = document.getElementById('creditorsAddDebtBtn');
+    if (addBtn) addBtn.addEventListener('click', openManualDebtModal);
+
+    const closeBtn = document.getElementById('manualDebtModalClose');
+    if (closeBtn) closeBtn.addEventListener('click', closeManualDebtModal);
+
+    const backdrop = document.getElementById('manualDebtModalBackdrop');
+    if (backdrop) backdrop.addEventListener('click', closeManualDebtModal);
+
+    const cancelBtn = document.getElementById('manualDebtCancelBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeManualDebtModal);
+
+    const saveBtn = document.getElementById('manualDebtSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveManualDebtFromModal);
+
+    // Escape para cerrar
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('manualDebtModal');
+        if (modal && !modal.classList.contains('hidden')) {
+          closeManualDebtModal();
+        }
+      }
+    });
+  }
+
   function handleCoappIncludeToggleChanged() {
     renderSaved();
   }
@@ -2224,10 +2594,7 @@
     const leadId = Number(window.currentLeadId || 0);
     setFicoScores(readStoredFicoScores(leadId), { persist: false });
 
-    const applyTotalBtn = document.getElementById('creditorsApplyTotalBtn');
-    if (applyTotalBtn) {
-      applyTotalBtn.addEventListener('click', applyTotalToCalculator);
-    }
+    initManualDebtModal();
     bindActiveSortToggle();
 
     // Botones Copiar Cuenta (delegación de eventos)

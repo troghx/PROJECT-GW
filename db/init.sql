@@ -898,6 +898,7 @@ CREATE TABLE IF NOT EXISTS lead_creditors (
   account_status VARCHAR(80),
   account_type VARCHAR(80),
   debtor_party VARCHAR(16) NOT NULL DEFAULT 'applicant',
+  date_last_payment VARCHAR(24),
   monthly_payment NUMERIC(12,2) NOT NULL DEFAULT 0,
   balance NUMERIC(12,2) NOT NULL DEFAULT 0,
   past_due NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -1251,6 +1252,14 @@ BEGIN
     WHERE table_name = 'lead_creditors' AND column_name = 'months_reviewed'
   ) THEN
     ALTER TABLE lead_creditors ADD COLUMN months_reviewed INTEGER;
+  END IF;
+
+  -- Agregar date_last_payment si no existe
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lead_creditors' AND column_name = 'date_last_payment'
+  ) THEN
+    ALTER TABLE lead_creditors ADD COLUMN date_last_payment VARCHAR(24);
   END IF;
 END $$;
 

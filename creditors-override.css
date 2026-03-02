@@ -122,11 +122,11 @@
 /* Light Mode */
 body.theme-light .creditors-table th,
 body.theme-light .creditors-table td {
-  color: rgba(15, 23, 42, 0.85) !important;
+  color: rgba(20, 20, 22, 0.85) !important;
 }
 
 body.theme-light .creditors-table .col-num {
-  color: rgba(15, 23, 42, 0.4) !important;
+  color: rgba(20, 20, 22, 0.4) !important;
 }
 
 body.theme-light .creditors-table .col-debt {
@@ -134,16 +134,16 @@ body.theme-light .creditors-table .col-debt {
 }
 
 body.theme-light .creditors-table .col-account {
-  color: rgba(15, 23, 42, 0.5) !important;
+  color: rgba(20, 20, 22, 0.5) !important;
 }
 
 body.theme-light .btn-header-icon {
-  border-color: rgba(15, 23, 42, 0.12) !important;
-  background: rgba(15, 23, 42, 0.03) !important;
-  color: rgba(15, 23, 42, 0.4) !important;
+  border-color: rgba(20, 20, 22, 0.12) !important;
+  background: rgba(20, 20, 22, 0.03) !important;
+  color: rgba(20, 20, 22, 0.4) !important;
 }
 
 body.theme-light .btn-header-icon:hover {
-  background: rgba(15, 23, 42, 0.08) !important;
-  color: rgba(15, 23, 42, 0.7) !important;
+  background: rgba(20, 20, 22, 0.08) !important;
+  color: rgba(20, 20, 22, 0.7) !important;
 }

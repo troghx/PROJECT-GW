@@ -1,10 +1,10 @@
 # Plan Maestro - CRM
-Fecha: 2026-02-27
+Fecha: 2026-02-28
 Alcance: Completar CRM sin incluir integracion API de correo ni API de reportes de credito.
 Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM]]
 
 ## Estado global
-- Fase activa: Fase 4 cerrada (motor de tareas) y Fase 5 en preparacion.
+- Fase activa: Fase 4 cerrada (motor de tareas), Fase 5 en preparacion y Fase 07 abierta para Pull Credit.
 - Prioridad de ejecucion: Seguridad -> Permisos -> Auditoria -> Operacion/KPI.
 
 ## Diagnostico tecnico (2026-02-27)
@@ -15,6 +15,7 @@ Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM
 - Fase 4: cerrada (tabla/API de tareas, SLA/recurrencia/escalamiento y bandeja owner/equipo).
 - Fase 5: pendiente (hay redaccion parcial en auditoria, pero no cifrado/mascarado integral de PII).
 - Fase 6: pendiente (request-id y health basico existen; falta observabilidad/QA end-to-end).
+- Fase 07: pendiente (UX lista en frontend, pero backend de soft pull aun no implementado).
 
 ## Fase 0 - Hardening Base
 - [x] Eliminar usuarios seed en produccion.
@@ -58,6 +59,13 @@ Referencia: [[../02_Estrategia/Faltantes Criticos - CRM|Faltantes Criticos - CRM
 - [ ] Monitoreo, alertas y healthchecks extendidos (solo `/api/health` basico implementado).
 - [ ] Plan de backup/restore probado.
 - [ ] Suite minima de tests + CI.
+
+## Fase 07 - Pull Credit (Soft Pull + Array)
+- [ ] Endpoint backend de pull por `applicant/coapp`.
+- [ ] Consentimiento explicito con evidencia trazable por lead.
+- [ ] Integracion de proveedor (sandbox/prod) y manejo de credenciales por entorno.
+- [ ] Persistencia/auditoria de request-respuesta y score resultante.
+- [ ] Feature flag para activacion controlada.
 
 ## Definicion de Hecho
 - Cada fase cierra con evidencia en PR/commit + validacion funcional.
