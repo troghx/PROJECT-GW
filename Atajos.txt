@@ -15,6 +15,11 @@ FLUJO RECOMENDADO (SIEMPRE)
    - Existe node_modules
    - PostgreSQL 17 instalado en:
      C:\Program Files\PostgreSQL\17\bin
+   - Python 3 disponible en PATH (o variable PYTHON_BIN)
+   - Dependencia Python para contratos:
+     pip install pymupdf
+   - Verificacion:
+     python -c "import fitz; print('ok')"
 
 3) Inicializar DB local (idempotente, se puede correr siempre):
    npm run db:init-local

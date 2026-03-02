@@ -1363,3 +1363,30 @@ body.theme-light .ecp-save {
 body.theme-light .ecp-save:hover {
   background: rgba(57, 176, 255, 0.2);
 }
+
+/* Compact override for creditors table typography */
+#creditorsSavedTable {
+  font-size: 11px !important;
+}
+
+#creditorsSavedTable th,
+#creditorsSavedTable td {
+  font-size: 11px !important;
+  line-height: 1.14 !important;
+}
+
+#creditorsSavedTable th *,
+#creditorsSavedTable td * {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+#creditorsSavedTable .badge {
+  padding: 1px 4px !important;
+  border-radius: 999px !important;
+  letter-spacing: 0.2px !important;
+}
+
+#creditorsSavedTable .creditor-name {
+  font-weight: 600 !important;
+}

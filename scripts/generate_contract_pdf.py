@@ -15,6 +15,7 @@ REDACT_GRAPHICS_MODE = getattr(fitz, "PDF_REDACT_LINE_ART_NONE", 0)
 REDACT_TEXT_MODE = getattr(fitz, "PDF_REDACT_TEXT_REMOVE", 0)
 TABLE_TOKEN_PATTERN = re.compile(r"^/(CNAME|CACCOUNTNUMBER|CBALANCE|CDATELASTPAYMENT)(\d+)/$")
 TABLE_COLUMN_ORDER = ("CNAME", "CACCOUNTNUMBER", "CBALANCE", "CDATELASTPAYMENT")
+SIGN_PLACEHOLDER_PATTERN = re.compile(r"sign_(?:applicant|coapp)_\d+")
 HARDSHIP_REASON_LABELS = {
     "loss_of_income": "Loss of Income",
     "medical": "Medical Issues",
@@ -1248,12 +1249,17 @@ def _rects_overlap(r1, r2, threshold=0.3):
 
 
 def _process_page(page, placeholders, legacy, context):
+    # Hint de texto para evitar buscar tokens que no existen en la pagina.
+    page_text = page.get_text("text") or ""
+
     # Fase 1: buscar y redactar placeholders (merge fields del template).
     ph_draws = []
     table_draws = []
     ph_rects = []
     token_hits = {}
     for text, value in placeholders.items():
+        if text and text not in page_text:
+            continue
         for rect in page.search_for(text):
             page.add_redact_annot(rect, fill=False)
             token_hits.setdefault(text, []).append(fitz.Rect(rect))
@@ -1274,6 +1280,8 @@ def _process_page(page, placeholders, legacy, context):
     legacy_draws = []
     legacy_used = []
     for text, value in legacy.items():
+        if text and text not in page_text:
+            continue
         for rect in page.search_for(text):
             if any(_rects_overlap(rect, used, 0.3) for used in legacy_used):
                 continue
@@ -1297,12 +1305,13 @@ def _process_page(page, placeholders, legacy, context):
     _apply_page_overrides(page, token_hits, context)
 
     # Fase 3: regex cleanup de sign_applicant/sign_coapp residuales.
-    sign_pattern = re.compile(r"sign_(?:applicant|coapp)_\d+")
+    if "sign_" not in page_text:
+        return
     sign_rects = []
     for block in page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get("blocks", []):
         for line in block.get("lines", []):
             for span in line.get("spans", []):
-                if sign_pattern.search(span.get("text", "")):
+                if SIGN_PLACEHOLDER_PATTERN.search(span.get("text", "")):
                     sign_rects.append(fitz.Rect(span["bbox"]))
     if sign_rects:
         for rect in sign_rects:

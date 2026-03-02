@@ -4290,6 +4290,13 @@ async function runContractPdfGenerator({ payload }) {
       });
 
       child.on('error', (error) => {
+        if (error && error.code === 'ENOENT') {
+          return reject(
+            new Error(
+              `No se encontro el ejecutable de Python (${pythonBin}). Instala Python 3 y/o configura PYTHON_BIN en .env.`
+            )
+          );
+        }
         reject(error);
       });
 
@@ -5109,7 +5116,11 @@ app.post('/api/leads/:id/contracts/generate', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al generar contrato del lead:', error);
-    return res.status(500).json({ message: 'No se pudo generar el contrato.' });
+    const errorDetails = cleanText(error?.message, 500);
+    return res.status(500).json({
+      message: 'No se pudo generar el contrato.',
+      details: errorDetails || null
+    });
   }
 });
 

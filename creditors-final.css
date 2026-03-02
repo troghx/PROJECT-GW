@@ -205,7 +205,7 @@ body.theme-light .creditors-sort-toggle:focus-visible {
 
 #creditorsSavedTable { table-layout: fixed !important; width: 100% !important; border-collapse: collapse !important; }
 
-#creditorsSavedTable th, #creditorsSavedTable td { padding: 3px 3px !important; font-size: 11px !important; line-height: 1.15 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; transition: background-color 0.15s ease; }
+#creditorsSavedTable th, #creditorsSavedTable td { padding: 2px 2px !important; font-size: 9px !important; line-height: 1.12 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; transition: background-color 0.15s ease; }
 
 #creditorsSavedTable tbody tr { transition: background-color 0.15s ease; }
 #creditorsSavedTable tbody tr:hover { background: rgba(255,255,255,0.04); }
@@ -239,9 +239,9 @@ body.theme-light #creditorsSavedTable tbody tr:hover { background: rgba(15,23,42
 
 #creditorsSavedTable .debt-share-pill {
   display: inline-block;
-  padding: 2px 4px;
+  padding: 1px 4px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1;
   letter-spacing: 0.2px;
   font-weight: 700;
@@ -250,7 +250,7 @@ body.theme-light #creditorsSavedTable tbody tr:hover { background: rgba(15,23,42
   color: rgba(110, 231, 183, 0.95);
 }
 
-.badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }
+.badge { display: inline-block; padding: 1px 5px; border-radius: 4px; font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.25px; line-height: 1; }
 
 .creditors-empty-status { padding: 10px 12px !important; }
 .creditors-empty-status .status-text { font-size: 0.74rem !important; line-height: 1.25 !important; }

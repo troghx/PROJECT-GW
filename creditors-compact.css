@@ -390,7 +390,7 @@
 .creditors-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
 }
 
 .creditors-table th {
@@ -400,7 +400,7 @@
   color: rgba(255, 255, 255, 0.55);
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -434,7 +434,7 @@
 
 .creditors-table th,
 .creditors-table td {
-  padding: 5px 3px;
+  padding: 4px 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -481,7 +481,7 @@
   width: 18px;
   text-align: center;
   color: rgba(255, 255, 255, 0.35);
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   padding: 0 !important;
 }
 
@@ -500,7 +500,7 @@
   white-space: nowrap;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.95);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
 }
 
 .creditor-name-wrap {
@@ -515,9 +515,31 @@
   flex: 0 0 auto;
   color: rgba(248, 113, 113, 0.95);
   font-weight: 800;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   line-height: 1;
   letter-spacing: 0.01em;
+}
+
+.creditor-duplicate-flag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 16px;
+  color: rgba(255, 60, 70, 0.98);
+}
+
+.creditor-duplicate-flag svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px rgba(255, 40, 40, 0.95)) drop-shadow(0 0 8px rgba(255, 40, 40, 0.58));
 }
 
 /* 4. Deuda */
@@ -527,7 +549,7 @@
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: rgba(126, 234, 252, 0.95);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   padding-right: 4px !important;
 }
 
@@ -542,7 +564,7 @@
 .col-account {
   width: 70px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   color: rgba(255, 255, 255, 0.5);
   text-align: center;
   padding: 0 2px !important;
@@ -581,7 +603,7 @@
   width: 55px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  font-size: 0.62rem;
 }
 
 /* 12. Acciones */
@@ -604,9 +626,9 @@
 /* Badges */
 .badge {
   display: inline-block;
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -751,6 +773,14 @@ body.theme-light .creditor-name {
 
 body.theme-light .creditor-unacceptable-flag {
   color: rgba(220, 38, 38, 0.95);
+}
+
+body.theme-light .creditor-duplicate-flag {
+  color: rgba(220, 38, 38, 0.95);
+}
+
+body.theme-light .creditor-duplicate-flag svg {
+  filter: none;
 }
 
 body.theme-light .col-debt {

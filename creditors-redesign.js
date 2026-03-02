@@ -75,6 +75,32 @@
     }).format(normalizeMoney(value));
   }
 
+  function normalizeDuplicateAccountKey(value) {
+    const normalized = String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .replace(/[x*]/g, '')
+      .trim();
+    if (normalized.length < 6) return '';
+    return normalized;
+  }
+
+  function getDuplicateAccountKeySet(entries = []) {
+    const counts = new Map();
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      const accountRaw = entry?.account_number || entry?.accountNumber || '';
+      const key = normalizeDuplicateAccountKey(accountRaw);
+      if (!key) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    const duplicates = new Set();
+    counts.forEach((count, key) => {
+      if (count > 1) duplicates.add(key);
+    });
+    return duplicates;
+  }
+
   const escapeHtml = crmHelpers.escapeHtml
     ? (text) => crmHelpers.escapeHtml(text)
     : function escapeHtml(text) {
@@ -1871,7 +1897,10 @@
 
     const includedActiveDebtTotal = getIncludedActiveDebtTotal(currentCreditors);
     const displayCreditors = getDisplayCreditors(currentCreditors);
-    tbody.innerHTML = displayCreditors.map((entry, index) => renderRowOrdered(entry, index, includedActiveDebtTotal)).join('');
+    const duplicateAccountKeys = getDuplicateAccountKeySet(displayCreditors);
+    tbody.innerHTML = displayCreditors
+      .map((entry, index) => renderRowOrdered(entry, index, includedActiveDebtTotal, duplicateAccountKeys))
+      .join('');
     updateSummary();
 
     tbody.querySelectorAll('.row-checkbox').forEach((checkbox) => {
@@ -1896,7 +1925,7 @@
     });
   }
 
-  function renderRowOrdered(entry, index, includedActiveDebtTotal = 0) {
+  function renderRowOrdered(entry, index, includedActiveDebtTotal = 0, duplicateAccountKeys = new Set()) {
     const partyLabel = getPartyLabel(entry.debtor_party || entry.debtorParty);
     const partyClass = getPartyClass(entry.debtor_party || entry.debtorParty);
     const isActive = isCreditorEntryActive(entry);
@@ -1914,6 +1943,9 @@
     const editBtn = `<button class="btn-edit-creditor" data-id="${entry.id}" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>`;
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}" ${isActive ? '' : 'disabled title="Cuenta coapp desactivada por toggle"'}>×</button>`;
     const rawCreditorName = entry.creditor_name || entry.creditorName || '';
+    const rawAccountNumber = entry.account_number || entry.accountNumber || '';
+    const duplicateAccountKey = normalizeDuplicateAccountKey(rawAccountNumber);
+    const isDuplicateAccount = Boolean(duplicateAccountKey && duplicateAccountKeys.has(duplicateAccountKey));
     const truncatedCreditorName = escapeHtml(truncate(rawCreditorName || '-', 28));
     const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
       ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
@@ -1921,14 +1953,17 @@
     const unacceptableFlagHtml = isUnacceptableCreditor
       ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
       : '';
+    const duplicateFlagHtml = isDuplicateAccount
+      ? '<span class="creditor-duplicate-flag" title="Posible cuenta duplicada detectada" aria-label="Posible cuenta duplicada detectada"><svg viewBox="0 0 16 22" aria-hidden="true" focusable="false"><path d="M8 13.4 1.9 2.9h12.2z"/><path d="M8 6.1v3.5"/><path d="M8 11.3v.1"/><ellipse cx="8" cy="18.3" rx="5.7" ry="2.8"/></svg></span>'
+      : '';
     
     const cells = {
       checkbox: `<td class="col-checkbox">${checkbox}</td>`,
       num: `<td class="col-num">${index + 1}</td>`,
-      name: `<td class="col-name" title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${truncatedCreditorName}</span>${unacceptableFlagHtml}</span></td>`,
+      name: `<td class="col-name" title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${truncatedCreditorName}</span>${unacceptableFlagHtml}${duplicateFlagHtml}</span></td>`,
       debt: `<td class="col-debt"><span class="debt-cell-inline"><span class="debt-value">${formatCurrency(debtAmount)}</span>${debtShareHtml}</span></td>`,
       party: `<td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>`,
-      account: `<td class="col-account">${entry.account_number || entry.accountNumber ? `<span class="account-num">${escapeHtml(entry.account_number || entry.accountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(entry.account_number || entry.accountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
+      account: `<td class="col-account">${rawAccountNumber ? `<span class="account-num">${escapeHtml(rawAccountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(rawAccountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
       resp: `<td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>`,
       status: `<td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>`,
       type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>`,

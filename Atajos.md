@@ -7,14 +7,18 @@ Fecha: 2026-02-26
    - `git pull origin main`
 2. Sincronizar dependencias del backend:
    - `npm install`
-3. Verificar variables criticas de auth en `.env`:
+3. Verificar prerequisito de contratos PDF (Python):
+   - Debe existir `python` en PATH (o configurar `PYTHON_BIN` en `.env`).
+   - Instalar dependencia Python: `pip install pymupdf`
+   - Verificar rapido: `python -c "import fitz; print('ok')"`
+4. Verificar variables criticas de auth en `.env`:
    - `JWT_SECRET=...`
    - `JWT_EXPIRES_IN=12h`
    - `CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000`
-4. Si aparece error `Cannot find module 'jsonwebtoken'` al correr `npm start`:
+5. Si aparece error `Cannot find module 'jsonwebtoken'` al correr `npm start`:
    - Ejecutar de nuevo `npm install`
    - Reintentar `npm start`
-5. Si aparece error `JWT_SECRET no esta configurado`:
+6. Si aparece error `JWT_SECRET no esta configurado`:
    - Agregar `JWT_SECRET` en `.env`
    - Reintentar `npm start`
 

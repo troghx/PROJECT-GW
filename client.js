@@ -3018,6 +3018,32 @@
       };
     }
 
+    function normalizeDuplicateAccountKey(value) {
+      const normalized = String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '')
+        .replace(/[x*]/g, '')
+        .trim();
+      if (normalized.length < 6) return '';
+      return normalized;
+    }
+
+    function getDuplicateAccountKeySet(entries = []) {
+      const counts = new Map();
+      (Array.isArray(entries) ? entries : []).forEach((entry) => {
+        const accountRaw = entry?.accountNumber || entry?.account_number || '';
+        const key = normalizeDuplicateAccountKey(accountRaw);
+        if (!key) return;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+
+      const duplicates = new Set();
+      counts.forEach((count, key) => {
+        if (count > 1) duplicates.add(key);
+      });
+      return duplicates;
+    }
+
     function updateCreditorsImportButtonState() {
       const importBtn = document.getElementById('creditorsImportBtn');
       if (!importBtn) return;
@@ -3068,21 +3094,29 @@
         return;
       }
 
+      const duplicateAccountKeys = getDuplicateAccountKeySet(currentCreditors);
+
       body.innerHTML = currentCreditors.map((entry, index) => {
         const rawCreditorName = entry.creditorName || '';
+        const rawAccountNumber = entry.accountNumber || '';
+        const duplicateAccountKey = normalizeDuplicateAccountKey(rawAccountNumber);
+        const isDuplicateAccount = Boolean(duplicateAccountKey && duplicateAccountKeys.has(duplicateAccountKey));
         const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
           ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
           : false;
         const unacceptableFlagHtml = isUnacceptableCreditor
           ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
           : '';
+        const duplicateFlagHtml = isDuplicateAccount
+          ? '<span class="creditor-duplicate-flag" title="Posible cuenta duplicada detectada" aria-label="Posible cuenta duplicada detectada"><svg viewBox="0 0 16 22" aria-hidden="true" focusable="false"><path d="M8 13.4 1.9 2.9h12.2z"/><path d="M8 6.1v3.5"/><path d="M8 11.3v.1"/><ellipse cx="8" cy="18.3" rx="5.7" ry="2.8"/></svg></span>'
+          : '';
 
         return `
           <tr>
             <td class="mono">${index + 1}</td>
             <td><input type="checkbox" class="saved-include-toggle" data-creditor-id="${entry.id}" ${entry.isIncluded ? 'checked' : ''}></td>
-            <td title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${escapeHtml(rawCreditorName || '-')}</span>${unacceptableFlagHtml}</span></td>
-            <td class="mono">${escapeHtml(entry.accountNumber || '-')}</td>
+            <td title="${escapeHtml(rawCreditorName)}"><span class="creditor-name-wrap"><span class="creditor-name">${escapeHtml(rawCreditorName || '-')}</span>${unacceptableFlagHtml}${duplicateFlagHtml}</span></td>
+            <td class="mono">${escapeHtml(rawAccountNumber || '-')}</td>
             <td>${escapeHtml(entry.accountStatus || '-')}</td>
             <td>${escapeHtml(entry.accountType || '-')}</td>
             <td><input type="text" class="creditors-inline-input saved-debt-input mono" data-creditor-id="${entry.id}" value="${Number(entry.debtAmount || 0).toFixed(2)}"></td>

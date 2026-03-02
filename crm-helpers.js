@@ -546,11 +546,46 @@
     '1st franklin'
   ];
 
+  function aliasMatchesCatalogEntry(aliasNormalized, catalogNameNormalized) {
+    if (!aliasNormalized || !catalogNameNormalized) return false;
+    return catalogNameNormalized === aliasNormalized
+      || catalogNameNormalized.includes(aliasNormalized)
+      || aliasNormalized.includes(catalogNameNormalized);
+  }
+
+  function getAliasOverrideState(alias) {
+    const aliasNormalized = normalizeCreditorComparable(alias);
+    if (!aliasNormalized) return 'none';
+
+    let hasAcceptableMatch = false;
+    let hasUnacceptableMatch = false;
+
+    CREDITOR_STATUS_CATALOG.forEach((entry) => {
+      const catalogNameNormalized = normalizeCreditorComparable(entry?.nombre);
+      if (!aliasMatchesCatalogEntry(aliasNormalized, catalogNameNormalized)) return;
+      if (entry?.estatus === 'no_aceptable') {
+        hasUnacceptableMatch = true;
+      } else {
+        hasAcceptableMatch = true;
+      }
+    });
+
+    if (hasUnacceptableMatch) return 'no_aceptable';
+    if (hasAcceptableMatch) return 'aceptable';
+    return 'none';
+  }
+
   function rebuildCreditorAliasCaches() {
+    const extraAliases = EXTRA_UNACCEPTABLE_CREDITOR_ALIASES.filter((alias) => {
+      // Respeta overrides manuales: si existe match aceptable, no fuerces alias no aceptable.
+      const overrideState = getAliasOverrideState(alias);
+      return overrideState !== 'aceptable';
+    });
+
     UNACCEPTABLE_CREDITOR_ALIASES = CREDITOR_STATUS_CATALOG
       .filter((entry) => entry.estatus === 'no_aceptable')
       .map((entry) => entry.nombre)
-      .concat(EXTRA_UNACCEPTABLE_CREDITOR_ALIASES);
+      .concat(extraAliases);
 
     NORMALIZED_UNACCEPTABLE_ALIASES = UNACCEPTABLE_CREDITOR_ALIASES
       .map((alias) => normalizeCreditorComparable(alias))
