@@ -41,6 +41,7 @@
     cleanCreditorName: (name) => {
       if (!name) return name;
       let cleaned = name;
+      cleaned = cleaned.replace(/^(?:not\s+available|no\s+data\s+available|data\s+not\s+available)\b[:\s-]*/i, '').trim();
       // Remover "CIUDAD,ESTADO ZIP" al inicio (ej: "COLUMBUS,OH43218 TBOM/MILESTONE")
       cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
       // Remover PO BOX
@@ -79,6 +80,25 @@
       if (/^[A-Z]{2}$/.test(line.trim())) return true;
       if (/^\d+\s+[A-Z]/i.test(line) && /\b(ST|AVE|BLVD|DR|RD|LN|CT|WAY|PL|CIR|HWY|PKWY|STE|SUITE|APT|UNIT|FLOOR|FL)\b/i.test(line)) return true;
       return false;
+    },
+
+    normalizeLifecycleStatus: (raw) => {
+      const value = String(raw || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s/.-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!value) return '';
+      if (/\bclosed\b/.test(value)) return 'Closed';
+      if (/\bcharge\s*off\b|\bcharged\s*off\b|\bcollection\b|\btransferred\b|\brefinanced\b/.test(value)) return 'Closed';
+      if (/\bpast\s*due\b|\bdelinquent\b|\blate\b/.test(value)) return 'Past Due';
+      if (/\bpaid\b/.test(value)) return 'Paid';
+      if (/\bgood\s*standing\b|\bas\s*agreed\b|\bcurrent\b/.test(value)) return 'Good Standing';
+      if (/\bopen\b/.test(value)) {
+        const openDateOnly = /\bopen\s+date\b/.test(value) && !/\bstatus\b|\boverview\b/.test(value);
+        if (!openDateOnly) return 'Open';
+      }
+      return '';
     }
   };
 
@@ -287,115 +307,82 @@
     },
 
     parseLocally(text) {
-      // Parser local como fallback cuando Gemini no está disponible
+      // Parser local como fallback cuando Gemini no esta disponible
       const creditors = [];
+      const quickCreditors = [];
       const lines = text.split('\n');
-      
-      // NUEVO: Buscar deudas por patrón de balance + nombre
-      // Busca líneas con montos como $445.00 y extrae nombre de líneas cercanas
+
+      // Metodo rapido: detectar monto + nombre cercano
       const debtPattern = /\$([\d,]+\.\d{2})/;
       const seenAccounts = new Set();
-      
-      // Palabras que NO son nombres de acreedores
-      const invalidCreditorLine = /Remarks|Due|Date|Bankruptcy|Repossession|Past|Status|Type|Responsibility|Account|Balance|Current|Payment|Address|Phone|Fax|Report|Overview|Summary|Credit\s+Score|FICO|Inquir/i;
+      const invalidCreditorLine = /Remarks|Due|Date|Bankruptcy|Repossession|Past|Status|Type|Responsibility|Account|Balance|Current|Payment|Address|Phone|Fax|Report|Overview|Summary|Credit\s+Score|FICO|Inquir|Not\s+available|No\s+data\s+available/i;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-
-        // Buscar línea con monto de deuda
         const debtMatch = line.match(debtPattern);
-        if (debtMatch) {
-          const debtAmount = parseFloat(debtMatch[1].replace(/,/g, ''));
+        if (!debtMatch) continue;
 
-          // Buscar nombre de acreedor en líneas anteriores (hasta 5 líneas atrás)
-          let creditorName = null;
-          for (let j = Math.max(0, i - 5); j < i; j++) {
-            const prevLine = lines[j].trim();
-            // Nombre en mayúsculas, no muy largo
-            // Excluir direcciones, ubicaciones y palabras inválidas
-            if (/^[A-Z][A-Z0-9\s&/'-]{2,40}$/.test(prevLine) &&
-                !utils.isAddressLine(prevLine) &&
-                !invalidCreditorLine.test(prevLine) &&
-                // No debe ser solo un número o solo espacios/puntuación
-                /[A-Z]{2,}/.test(prevLine)) {
-              creditorName = prevLine;
-              break;
-            }
+        const debtAmount = parseFloat(debtMatch[1].replace(/,/g, ''));
+        let creditorName = null;
+
+        for (let j = Math.max(0, i - 5); j < i; j++) {
+          const prevLine = lines[j].trim();
+          if (
+            /^[A-Z][A-Z0-9\s&/'-]{2,40}$/.test(prevLine) &&
+            !utils.isAddressLine(prevLine) &&
+            !invalidCreditorLine.test(prevLine) &&
+            /[A-Z]{2,}/.test(prevLine)
+          ) {
+            creditorName = prevLine;
+            break;
           }
-          
-          // Si encontramos nombre y deuda > 0, agregar
-          if (creditorName && debtAmount > 0) {
-            const key = creditorName.toLowerCase();
-            if (!seenAccounts.has(key)) {
-              seenAccounts.add(key);
-              creditors.push({
-                creditorName: creditorName,
-                debtAmount: debtAmount,
-                accountNumber: '',
-                accountStatus: 'Open',
-                accountType: '',
-                responsibility: 'Individual',
-                monthsReviewed: null,
-                creditLimit: 0,
-                pastDue: 0,
-                sourceReport: 'LocalParser',
-                isIncluded: true
-              });
-            }
+        }
+
+        if (creditorName && debtAmount > 0) {
+          const key = creditorName.toLowerCase();
+          if (!seenAccounts.has(key)) {
+            seenAccounts.add(key);
+            quickCreditors.push({
+              creditorName,
+              debtAmount,
+              accountNumber: '',
+              accountStatus: '',
+              accountType: '',
+              responsibility: 'Individual',
+              monthsReviewed: null,
+              creditLimit: 0,
+              pastDue: 0,
+              sourceReport: 'LocalParser',
+              isIncluded: true
+            });
           }
         }
       }
-      
-      // Si encontramos deudas con el método nuevo, retornarlas
-      if (creditors.length > 0) {
-        utils.log(`Parser local encontró ${creditors.length} deudas por patrón de montos`);
-        return creditors;
-      }
-      
-      // Fallback al método anterior
+
       const patterns = {
-        // Nombre del acreedor - más flexible
         creditorName: /^[A-Z][A-Z0-9\s&.,'-]+(?:BANK|CREDIT|LOAN|MORTGAGE|AUTO|FINANCE|FUND|UNION|EXPRESS|ONE|CAPITAL|DISCOVER|AMEX|CHASE|WELLS|BOFA|CITI|JPMCB|USBANK|PNC)$/i,
-        
-        // Balance/Deuda
         balance: /Balance[:\s]*\$?([\d,]+\.?\d*)/i,
         accountBalance: /Account\s+Balance[:\s]*\$?([\d,]+\.?\d*)/i,
         currentBalance: /Current\s+Balance[:\s]*\$?([\d,]+\.?\d*)/i,
         amountDue: /Amount\s+Due[:\s]*\$?([\d,]+\.?\d*)/i,
-        
-        // Número de cuenta
         accountNumber: /Account\s+(?:Number|#)[:\s]*([\dXx\-]+)/i,
-        
-        // Status
-        statusOpen: /(?:Status[:\s]*)?Open/i,
-        statusClosed: /(?:Status[:\s]*)?Closed/i,
+        statusOpen: /\b(?:Account\s+Status|Status)\b[:\s]*Open\b/i,
+        statusClosed: /\b(?:Account\s+Status|Status)\b[:\s]*Closed\b/i,
         statusChargeOff: /Charge[-\s]?Off|Charged\s+Off/i,
         statusCollection: /Collection|In\s+Collection/i,
-        statusGoodStanding: /Good\s+Standing|Current|As\s+Agreed/i,
+        statusGoodStanding: /Good\s+Standing|As\s+Agreed/i,
         statusPastDue: /Past\s+Due|Delinquent|Late/i,
-        
-        // Tipo
         typeCreditCard: /Credit\s+Card|Credit\s+Line/i,
-        typeAuto: /Auto|Vehicle|Car\s+Loan/i,
-        typeMortgage: /Mortgage|Home\s+Loan/i,
+        typeAuto: /Auto|Vehicle|Car\s+Loan|Automobile/i,
+        typeMortgage: /Mortgage|Home\s+Loan|Real\s+Estate/i,
         typePersonal: /Personal\s+Loan/i,
         typeStudent: /Student\s+Loan|Education/i,
-        
-        // Responsibility
         responsibility: /Responsibility[:\s]*(Individual|Joint|Authorized\s+User|Co-signer)/i,
-        
-        // Months reviewed
         monthsReviewed: /Month['\s]*s?\s+Reviewed[:\s]*(\d+)/i,
-        
-        // Credit limit
         creditLimit: /Credit\s+Limit[:\s]*\$?([\d,]+\.?\d*)/i,
         highCredit: /High\s+(?:Credit|Balance)[:\s]*\$?([\d,]+\.?\d*)/i,
-        
-        // Past due
         pastDue: /Past\s+Due|Amount\s+Past\s+Due[:\s]*\$?([\d,]+\.?\d*)/i,
-        
-        // EXCLUIR - Palabras que indican que NO es un nombre de acreedor
-        invalidCreditor: /Remarks|Due\s+Date|Bankruptcy|Repossession|Foreclosure|Charge\s+Off|Past\s+Due|Days\s+Late|Payment\s+History|Account\s+Status|Type:|Responsibility:/i
+        invalidCreditor: /Remarks|Due\s+Date|Bankruptcy|Repossession|Foreclosure|Charge\s+Off|Past\s+Due|Days\s+Late|Payment\s+History|Account\s+Status|Type:|Responsibility:|Not\s+available|No\s+data\s+available/i
       };
 
       let currentCreditor = null;
@@ -405,23 +392,18 @@
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Detectar posible nombre de acreedor
-        // EXCLUIR líneas que contengan palabras inválidas
-        if (patterns.invalidCreditor.test(line)) {
-          continue;
-        }
-        
+        if (!currentCreditor && patterns.invalidCreditor.test(line)) continue;
+
         if (patterns.creditorName.test(line) && line.length > 3 && line.length < 60) {
-          // Guardar el anterior si existe
           if (currentCreditor && currentCreditor.creditorName) {
             creditors.push(this.finalizeCreditor(currentCreditor));
           }
-          
+
           currentCreditor = {
             creditorName: line.replace(/\s+/g, ' ').trim(),
             debtAmount: 0,
             accountNumber: '',
-            accountStatus: 'Open',
+            accountStatus: '',
             accountType: '',
             responsibility: 'Individual',
             monthsReviewed: null,
@@ -434,19 +416,20 @@
         }
 
         if (!currentCreditor) continue;
-        linesSinceHeader++;
+        linesSinceHeader += 1;
 
-        // Solo buscar datos en las siguientes 15 líneas después del header
-        if (linesSinceHeader > 15) {
+        // Ventana amplia para no perder Account Status / Current Payment Status
+        if (linesSinceHeader > 45) {
           creditors.push(this.finalizeCreditor(currentCreditor));
           currentCreditor = null;
           continue;
         }
 
-        // Extraer datos
-        const balanceMatch = line.match(patterns.balance) || 
-                            line.match(patterns.currentBalance) || 
-                            line.match(patterns.accountBalance);
+        const nextLine = (lines[i + 1] || '').trim();
+        const nextTwoLines = (lines[i + 2] || '').trim();
+        const statusContext = `${line} ${nextLine} ${nextTwoLines}`.replace(/\s+/g, ' ').trim();
+
+        const balanceMatch = line.match(patterns.balance) || line.match(patterns.currentBalance) || line.match(patterns.accountBalance);
         if (balanceMatch && !currentCreditor.debtAmount) {
           currentCreditor.debtAmount = utils.normalizeMoney(balanceMatch[1]);
         }
@@ -471,46 +454,76 @@
           currentCreditor.responsibility = respMatch[1];
         }
 
-        // Status
-        if (patterns.statusChargeOff.test(line)) currentCreditor.accountStatus = 'Charge Off';
-        else if (patterns.statusCollection.test(line)) currentCreditor.accountStatus = 'Collection';
-        else if (patterns.statusClosed.test(line)) currentCreditor.accountStatus = 'Closed';
-        else if (patterns.statusGoodStanding.test(line)) currentCreditor.accountStatus = 'Good Standing';
-        else if (patterns.statusPastDue.test(line)) currentCreditor.accountStatus = 'Past Due';
+        if (/^Account\s+Status\s*:?\s*$/i.test(line)) {
+          const explicitStatus = utils.normalizeLifecycleStatus(`${nextLine} ${nextTwoLines}`);
+          if (explicitStatus) currentCreditor.accountStatus = explicitStatus;
+        }
 
-        // Tipo
+        const lifecycleStatus = utils.normalizeLifecycleStatus(statusContext);
+        if (lifecycleStatus && (!currentCreditor.accountStatus || lifecycleStatus === 'Closed')) {
+          currentCreditor.accountStatus = lifecycleStatus;
+        }
+
+        if (patterns.statusChargeOff.test(statusContext) || patterns.statusCollection.test(statusContext)) {
+          currentCreditor.accountStatus = 'Closed';
+        } else if (patterns.statusClosed.test(statusContext)) {
+          currentCreditor.accountStatus = 'Closed';
+        } else if (patterns.statusPastDue.test(statusContext) && currentCreditor.accountStatus !== 'Closed') {
+          currentCreditor.accountStatus = 'Past Due';
+        } else if (patterns.statusGoodStanding.test(statusContext) && !currentCreditor.accountStatus) {
+          currentCreditor.accountStatus = 'Good Standing';
+        } else if (patterns.statusOpen.test(statusContext) && !/open\s+date/i.test(statusContext) && !currentCreditor.accountStatus) {
+          currentCreditor.accountStatus = 'Open';
+        }
+
         if (patterns.typeCreditCard.test(line)) currentCreditor.accountType = 'Credit Card';
         else if (patterns.typeAuto.test(line)) currentCreditor.accountType = 'Auto Loan';
         else if (patterns.typeMortgage.test(line)) currentCreditor.accountType = 'Mortgage';
         else if (patterns.typePersonal.test(line)) currentCreditor.accountType = 'Personal Loan';
         else if (patterns.typeStudent.test(line)) currentCreditor.accountType = 'Student Loan';
+
+        if (/(collection|charge[-\s]?off)/i.test(statusContext) && !currentCreditor.accountType) {
+          currentCreditor.accountType = 'Collection';
+        }
       }
 
-      // Agregar el último
       if (currentCreditor && currentCreditor.creditorName) {
         creditors.push(this.finalizeCreditor(currentCreditor));
       }
 
-      // FILTROS:
-      // 1. Solo deudas con debtAmount > 0 (no $0)
-      // 2. Deduplicar por nombre de acreedor
       const seen = new Set();
       const uniqueCreditors = creditors
         .filter(c => c.creditorName && c.debtAmount > 0)
         .filter(c => {
-          // Excluir cuentas mortgage
           const t = String(c.accountType || '').toLowerCase();
-          if (/mortgage|home\s*loan|conventional/.test(t)) return false;
+          if (/mortgage|home\s*loan|conventional|real\s+estate/.test(t)) return false;
           return true;
         })
         .filter(c => {
-          const key = c.creditorName.toLowerCase().trim();
+          const key = `${String(c.creditorName || '').toLowerCase().trim()}|${String(c.accountNumber || '').toLowerCase().trim()}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
         });
-      
-      return uniqueCreditors;
+
+      if (uniqueCreditors.length > 0) {
+        return uniqueCreditors;
+      }
+
+      if (quickCreditors.length > 0) {
+        utils.log(`Parser local encontro ${quickCreditors.length} deudas por patron de montos`);
+        const quickSeen = new Set();
+        return quickCreditors
+          .filter(c => c.creditorName && c.debtAmount > 0)
+          .filter(c => {
+            const key = String(c.creditorName || '').toLowerCase().trim();
+            if (quickSeen.has(key)) return false;
+            quickSeen.add(key);
+            return true;
+          });
+      }
+
+      return [];
     },
 
     finalizeCreditor(c) {
@@ -522,6 +535,19 @@
       if (!c.debtAmount && c.creditLimit) {
         c.debtAmount = c.creditLimit;
       }
+
+      const statusSignal = `${c.accountStatus || ''} ${c.currentPaymentStatus || ''}`;
+      const normalizedStatus = utils.normalizeLifecycleStatus(statusSignal);
+      if (normalizedStatus) {
+        c.accountStatus = normalizedStatus;
+      }
+      if (/(collection|charge[-\s]?off|transferred|refinanced)/i.test(statusSignal)) {
+        c.accountStatus = 'Closed';
+      }
+      if (String(c.accountType || '').toLowerCase() === 'collection') {
+        c.accountStatus = 'Closed';
+      }
+
       c.isIncluded = c.debtAmount > 0;
       return c;
     }
@@ -585,7 +611,7 @@
             originalCreditor: creditor.originalCreditor || creditor.creditorName,
             accountNumber: creditor.accountNumber || '',
             dateLastPayment: creditor.dateLastPayment || creditor.date_last_payment || creditor.lastPaymentDate || creditor.last_activity || '',
-            accountStatus: creditor.accountStatus || 'Open',
+            accountStatus: creditor.accountStatus || '',
             accountType: creditor.accountType || '',
             responsibility: creditor.responsibility || 'Individual',
             monthsReviewed: creditor.monthsReviewed || null,

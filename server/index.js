@@ -3592,6 +3592,7 @@ function normalizeAiMonthsReviewed(value) {
 function cleanCreditorNameFromAddress(name) {
   if (!name) return name;
   let cleaned = name;
+  cleaned = cleaned.replace(/^(?:not\s+available|no\s+data\s+available|data\s+not\s+available)\b[:\s-]*/i, '').trim();
   // Remover "CIUDAD,ESTADO ZIP" al inicio
   cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
   // Remover PO BOX
@@ -3635,10 +3636,36 @@ function cleanAccountStatus(raw) {
   if (/good\s*standing|as\s*agreed|current|pays?\s*as\s*agreed/.test(lower)) return 'Good Standing';
   if (/closed/.test(lower)) return 'Closed';
   if (/past\s*due|delinquent|late/.test(lower)) return 'Past Due';
-  if (/open/.test(lower)) return 'Open';
+  if (/open/.test(lower) && !/open\s+date/.test(lower)) return 'Open';
   if (/paid/.test(lower)) return 'Paid';
-  // Devolver limpio sin expandir — solo trim y capitalizar primera palabra
+  // Devolver limpio sin expandir - solo trim y capitalizar primera palabra
   return s.replace(/\s+/g, ' ').slice(0, 30);
+}
+
+function normalizeLifecycleAccountStatus(raw) {
+  const value = String(raw || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!value) return null;
+  if (/\bclosed\b/.test(value)) return 'Closed';
+  if (/\bcharge\s*off\b|\bcharged\s*off\b|\bcollection\b|\btransferred\b|\brefinanced\b/.test(value)) return 'Closed';
+  if (/\bpast\s*due\b|\bdelinquent\b|\blate\b/.test(value)) return 'Past Due';
+  if (/\bpaid\b/.test(value)) return 'Paid';
+  if (/\bgood\s*standing\b|\bas\s*agreed\b|\bcurrent\b/.test(value)) return 'Good Standing';
+  if (/\bopen\b/.test(value)) {
+    const openDateOnly = /\bopen\s+date\b/.test(value) && !/\bstatus\b|\boverview\b/.test(value);
+    if (!openDateOnly) return 'Open';
+  }
+  return null;
+}
+
+function getLifecycleStatusPriority(rawStatus) {
+  const lifecycle = normalizeLifecycleAccountStatus(rawStatus);
+  if (!lifecycle) return 0;
+  if (lifecycle === 'Closed') return 5;
+  if (lifecycle === 'Past Due') return 4;
+  if (lifecycle === 'Good Standing') return 3;
+  if (lifecycle === 'Paid') return 2;
+  if (lifecycle === 'Open') return 1;
+  return 0;
 }
 
 function cleanAccountType(raw) {
@@ -3928,7 +3955,10 @@ function mapLeadFileRow(row) {
 }
 
 function normalizeCreditorPayload(body = {}) {
-  const creditorName = toNullableText(pickFirstDefined(body, ['creditorName', 'creditor_name']), 180);
+  const creditorName = toNullableText(
+    cleanCreditorNameFromAddress(pickFirstDefined(body, ['creditorName', 'creditor_name'])),
+    180
+  );
   if (!creditorName) {
     return { ok: false, message: 'creditorName es obligatorio.' };
   }
@@ -3969,16 +3999,30 @@ function normalizeCreditorPayload(body = {}) {
   );
   if (!dateLastPayment.ok) return dateLastPayment;
 
+  const normalizedAccountType = cleanAccountType(
+    pickFirstDefined(body, ['accountType', 'account_type'])
+  );
+  const normalizedAccountStatus = cleanAccountStatus(
+    pickFirstDefined(body, ['accountStatus', 'account_status'])
+  );
+  const lifecycleAccountStatus = normalizeLifecycleAccountStatus(normalizedAccountStatus);
+  const effectiveAccountStatus = normalizedAccountType === 'Collection'
+    ? 'Closed'
+    : (lifecycleAccountStatus || normalizedAccountStatus);
+
   return {
     ok: true,
     value: {
       source_report: toNullableText(pickFirstDefined(body, ['sourceReport', 'source_report']), 180),
       creditor_name: creditorName,
-      original_creditor: toNullableText(pickFirstDefined(body, ['originalCreditor', 'original_creditor']), 180),
+      original_creditor: toNullableText(
+        cleanCreditorNameFromAddress(pickFirstDefined(body, ['originalCreditor', 'original_creditor'])),
+        180
+      ),
       account_number: toNullableText(pickFirstDefined(body, ['accountNumber', 'account_number']), 80),
       date_last_payment: dateLastPayment.value,
-      account_status: toNullableText(pickFirstDefined(body, ['accountStatus', 'account_status']), 80),
-      account_type: toNullableText(pickFirstDefined(body, ['accountType', 'account_type']), 80),
+      account_status: toNullableText(effectiveAccountStatus, 80),
+      account_type: toNullableText(normalizedAccountType, 80),
       debtor_party: debtorParty.value,
       responsibility: responsibility.value,
       months_reviewed: monthsReviewed.value,
@@ -8662,7 +8706,8 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
     const existingEntries = [];
     if (!replaceExisting) {
       const { rows: existingRows } = await pool.query(
-        `SELECT id, creditor_name, account_number, account_status, debt_amount, debtor_party, date_last_payment
+        `SELECT id, creditor_name, account_number, account_status, account_type, responsibility, months_reviewed,
+                debt_amount, past_due, debtor_party, date_last_payment
          FROM lead_creditors
          WHERE lead_id = $1`,
         [leadId]
@@ -8728,6 +8773,59 @@ app.post('/api/leads/:id/creditors/import', async (req, res) => {
         if (incomingHighCredit > 0) {
           updateFields.push(`high_credit = $${updateValues.length + 1}`);
           updateValues.push(incomingHighCredit);
+        }
+
+        const incomingAccountType = cleanAccountType(entry.account_type);
+        const existingAccountType = cleanAccountType(duplicate.account_type);
+        if (incomingAccountType && !existingAccountType) {
+          updateFields.push(`account_type = $${updateValues.length + 1}`);
+          updateValues.push(incomingAccountType);
+          duplicate.account_type = incomingAccountType;
+        }
+
+        const incomingResponsibility = normalizeResponsibility(entry.responsibility).value;
+        const existingResponsibility = normalizeResponsibility(duplicate.responsibility).value;
+        if (incomingResponsibility && !existingResponsibility) {
+          updateFields.push(`responsibility = $${updateValues.length + 1}`);
+          updateValues.push(incomingResponsibility);
+          duplicate.responsibility = incomingResponsibility;
+        }
+
+        const incomingStatusRaw = cleanAccountStatus(entry.account_status);
+        const incomingStatus =
+          (incomingAccountType === 'Collection' || existingAccountType === 'Collection')
+            ? 'Closed'
+            : incomingStatusRaw;
+        const existingStatusRaw = String(duplicate.account_status || '').trim();
+        const existingStatus = cleanAccountStatus(existingStatusRaw);
+        const incomingLifecycleStatus = normalizeLifecycleAccountStatus(incomingStatus);
+        const existingLifecycleStatus = normalizeLifecycleAccountStatus(existingStatus);
+        const incomingLifecyclePriority = getLifecycleStatusPriority(incomingStatus);
+        const existingLifecyclePriority = getLifecycleStatusPriority(existingStatus);
+        const existingStatusLooksCorrupted = /current\s*rating|type|responsibility/i.test(existingStatusRaw) || existingStatusRaw.length > 30;
+        const shouldReplaceWithLifecycleStatus =
+          incomingLifecycleStatus &&
+          (
+            !existingLifecycleStatus ||
+            existingStatus === 'Collection' ||
+            existingStatus === 'Charge Off' ||
+            existingStatusLooksCorrupted ||
+            incomingLifecyclePriority > existingLifecyclePriority
+          );
+
+        if (incomingStatus && (shouldReplaceWithLifecycleStatus || !existingStatus || existingStatusLooksCorrupted)) {
+          updateFields.push(`account_status = $${updateValues.length + 1}`);
+          const nextStatus = shouldReplaceWithLifecycleStatus ? incomingLifecycleStatus : incomingStatus;
+          updateValues.push(nextStatus);
+          duplicate.account_status = nextStatus;
+        }
+
+        const incomingMonths = Number.isInteger(entry.months_reviewed) ? entry.months_reviewed : null;
+        const existingMonths = Number.isInteger(duplicate.months_reviewed) ? duplicate.months_reviewed : null;
+        if (incomingMonths !== null && (existingMonths === null || incomingMonths < existingMonths)) {
+          updateFields.push(`months_reviewed = $${updateValues.length + 1}`);
+          updateValues.push(incomingMonths);
+          duplicate.months_reviewed = incomingMonths;
         }
 
         const normalizedLastPayment = normalizeLastPaymentDateText(entry.date_last_payment).value;
@@ -9467,3 +9565,4 @@ startServer().catch((error) => {
   console.error('Error de arranque:', error.message);
   process.exit(1);
 });
+

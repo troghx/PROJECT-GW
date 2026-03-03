@@ -635,6 +635,47 @@
     return NORMALIZED_UNACCEPTABLE_ALIASES.some((alias) => normalizedName.includes(alias));
   }
 
+  const NON_QUALIFYING_MIN_DEBT = 400;
+  const MORTGAGE_ACCOUNT_TYPE_REGEX = /\bmortgage\b|\bhome loan\b|\bconventional\b|\bfha\b|\bva loan\b|\breal estate\b|\blien(?:s)?\b/i;
+
+  function normalizeMoneyAmount(value) {
+    if (value === undefined || value === null || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const parsed = Number(String(value).replace(/[^0-9.-]+/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function isMortgageAccountType(value) {
+    const normalizedType = normalizeCreditorComparable(value);
+    if (!normalizedType) return false;
+    return MORTGAGE_ACCOUNT_TYPE_REGEX.test(normalizedType);
+  }
+
+  function isNonQualifyingCreditorEntry(entry = {}) {
+    const normalizedEntry = entry && typeof entry === 'object' ? entry : {};
+    const creditorName = normalizedEntry.creditorName
+      || normalizedEntry.creditor_name
+      || normalizedEntry.creditor
+      || normalizedEntry.name
+      || '';
+    const accountType = normalizedEntry.accountType || normalizedEntry.account_type || '';
+    const originalCreditor = normalizedEntry.originalCreditor || normalizedEntry.original_creditor || '';
+    const debtAmount = normalizeMoneyAmount(
+      normalizedEntry.debtAmount
+      ?? normalizedEntry.debt_amount
+      ?? normalizedEntry.balance
+      ?? normalizedEntry.unpaidBalance
+      ?? normalizedEntry.unpaid_balance
+      ?? 0
+    );
+
+    if (isUnacceptableCreditorName(creditorName)) return true;
+    if (isMortgageAccountType(creditorName)) return true;
+    if (isMortgageAccountType(originalCreditor)) return true;
+    if (isMortgageAccountType(accountType)) return true;
+    return debtAmount > 0 && debtAmount < NON_QUALIFYING_MIN_DEBT;
+  }
+
   globalScope.CrmHelpers = {
     STATE_NAMES,
     CREDITOR_STATUS_CATALOG: getCreditorStatusCatalog(),
@@ -650,6 +691,7 @@
     normalizePhoneForLead,
     normalizeCreditorComparable,
     isUnacceptableCreditorName,
+    isNonQualifyingCreditorEntry,
     getCreditorStatusCatalog,
     setCreditorStatusCatalog,
     buildLeadSearchIndex,

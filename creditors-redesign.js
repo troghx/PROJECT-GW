@@ -52,7 +52,8 @@
     'auto loans', 'student loans', 'personal loans',
     'installment loans', 'other accounts', 'mortgages',
     'bymailonly', 'by mail only', 'by phone only',
-    'do not contact', 'account id:', 'creditor information'
+    'do not contact', 'account id:', 'creditor information',
+    'not available', 'no data available', 'data not available'
   ];
 
   const OCR_MIN_PAGE_TEXT_LENGTH = 40;
@@ -390,6 +391,9 @@
       normalized === 'account details' ||
       normalized === 'payment history' ||
       normalized === 'creditor information' ||
+      normalized === 'not available' ||
+      normalized === 'no data available' ||
+      normalized === 'data not available' ||
       normalized === 'credit cards' ||
       normalized === 'auto loans' ||
       normalized === 'student loans' ||
@@ -407,6 +411,9 @@
       normalized === 'do not contact' ||
       normalized.startsWith('you\'re currently using') ||
       normalized.startsWith('you have ') ||
+      normalized.startsWith('not available ') ||
+      normalized.startsWith('no data available ') ||
+      normalized.startsWith('data not available ') ||
       normalized.startsWith('report date') ||
       normalized.startsWith('personal info') ||
       normalized.startsWith('account id')
@@ -417,6 +424,7 @@
     let normalized = String(line || '').replace(/\s{2,}/g, ' ').trim();
     if (!normalized) return '';
 
+    normalized = normalized.replace(/^(?:not\s+available|no\s+data\s+available|data\s+not\s+available)\b[:\s-]*/i, '').trim();
     normalized = normalized.replace(/\s+\$[0-9,].*$/i, '').trim();
     normalized = normalized.replace(/\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b[\s\S]*$/i, '').trim();
     normalized = normalized.replace(/\s+(?:in good standing|closed|charge off|collection\/charge-off)\b[\s\S]*$/i, '').trim();
@@ -593,27 +601,57 @@
   }
 
   function extractStatus(line) {
-    const source = String(line || '');
+    const source = normalizeMetadataLine(String(line || ''));
+    if (!source) return '';
+
+    const directLifecycle = normalizeLifecycleStatus(source);
+    if (directLifecycle) return directLifecycle;
+
     let match = source.match(/Account\s+Status[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
 
-    if (!match && !/Current\s+Payment\s+Status/i.test(source)) {
-      match = source.match(/(?:Current\s+Rating|(?:^|\b)Status)[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
+    if (!match && !/Current\s+Payment\s+Status|Current\s+Rating/i.test(source)) {
+      match = source.match(/(?:^|\b)Status[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
     }
 
     if (!match) return '';
 
     let value = match[1].trim();
     value = value.split(/\b(?:Account\s+Status|Current\s+Rating|Open\s+Date|Last\s+Activity|Type|Responsibility|Remarks|High\s+Balance|Unpaid\s+Balance|Current\s+Payment)\b/i)[0].trim();
+    const lifecycle = normalizeLifecycleStatus(value);
+    if (lifecycle) return lifecycle;
     return truncate(value, 40);
   }
 
   function extractCurrentPaymentStatus(line) {
-    const match = String(line || '').match(/Current\s+Payment\s+Status[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
+    const source = normalizeMetadataLine(String(line || ''));
+    if (!source) return '';
+
+    let match = source.match(/Current\s+Payment\s+Status[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
+    if (!match) {
+      match = source.match(/Current\s+Rating[:\s]*([A-Za-z][A-Za-z\s\-\/]*)/i);
+    }
+    if (!match && /collection\/?\s*charge[-\s]?off/i.test(source)) {
+      return 'Collection/Charge-off';
+    }
     if (!match) return '';
 
     let value = match[1].trim();
-    value = value.split(/\b(?:Monthly\s+Payment|Amount\s+Past\s+Due|Payment\s+History|Terms?\s+Count|Month(?:'s|s)?\s+Reviewed|Current\s+Payment\s+Status)\b/i)[0].trim();
+    value = value.split(/\b(?:Monthly\s+Payment|Amount\s+Past\s+Due|Payment\s+History|Terms?\s+Count|Month(?:'s|s)?\s+Reviewed|Current\s+Payment\s+Status|Current\s+Rating)\b/i)[0].trim();
     return truncate(value, 40);
+  }
+
+  function normalizeResponsibilityValue(raw) {
+    const value = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!value) return '';
+
+    const lowered = value.toLowerCase();
+    const idxIndividual = lowered.indexOf('individual');
+    const idxJoint = lowered.indexOf('joint');
+    if (idxIndividual >= 0 && (idxJoint < 0 || idxIndividual <= idxJoint)) return 'Individual';
+    if (idxJoint >= 0) return 'Joint';
+    if (lowered.includes('authorized')) return 'Authorized';
+    if (lowered.includes('co-signer') || lowered.includes('cosigner')) return 'Co-signer';
+    return '';
   }
 
   function cleanAccountTypeValue(raw) {
@@ -634,14 +672,60 @@
     if (/revolving|line\s*of\s*credit/.test(lower)) return 'Revolving';
     if (/charge\s*account/.test(lower)) return 'Charge Account';
     if (/collection/.test(lower)) return 'Collection';
+
+    // Evita contaminar "Tipo" con valores de responsabilidad (ej. "IndividualType ...").
+    const looksLikeResponsibility = normalizeResponsibilityValue(s);
+    const hasRealTypeKeyword = /credit\s*card|bank\s*card|charge\s*card|charge\s*account|mortgage|home\s*loan|conventional|auto|vehicle|car\s*loan|personal\s*loan|student\s*loan|education|unsecured|secured|installment|revolving|line\s*of\s*credit|collection/.test(lower);
+    if (looksLikeResponsibility && !hasRealTypeKeyword) return '';
+
     return s.replace(/\s+/g, ' ').slice(0, 30);
   }
 
+  function normalizeMetadataLine(raw) {
+    let source = String(raw || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!source) return '';
+
+    // Separa tokens pegados por OCR/PDF text layer (ej: "TypeIndividual", "Charge-offStatus").
+    source = source
+      .replace(/(Collection\/Charge-?off)(?=(?:Status|Type|Responsibility|Current|High|Unpaid|Remarks|Account))/ig, '$1 ')
+      .replace(/(Current\s*Rating)(?=(?:Collection|Charge|Open|Closed|Past|Good))/ig, '$1 ')
+      .replace(/(Status)(?=(?:Open|Closed|Collection|Charge|Past|Good))/ig, '$1 ')
+      .replace(/(Type)(?=(?:Individual|Joint|Authorized|Co[-\s]?signer|Credit|Charge|Auto|Personal|Student|Mortgage|Unsecured|Secured|Installment|Revolving|Collection))/ig, '$1 ')
+      .replace(/(Responsibility)(?=(?:Individual|Joint|Authorized|Co[-\s]?signer))/ig, '$1 ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return source;
+  }
+
+  function normalizeLifecycleStatus(raw) {
+    const value = String(raw || '').toLowerCase().replace(/[^a-z0-9\s/.-]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!value) return '';
+    if (/\bclosed\b/.test(value)) return 'Closed';
+    if (/\bcharge\s*off\b|\bcharged\s*off\b|\bcollection\b|\btransferred\b|\brefinanced\b/.test(value)) return 'Closed';
+    if (/\bpast\s*due\b|\bdelinquent\b|\blate\b/.test(value)) return 'Past Due';
+    if (/\bpaid\b/.test(value)) return 'Paid';
+    if (/\bgood\s*standing\b|\bas\s*agreed\b|\bcurrent\b/.test(value)) return 'Good Standing';
+    if (/\bopen\b/.test(value)) {
+      const openDateOnly = /\bopen\s+date\b/.test(value) && !/\bstatus\b|\boverview\b/.test(value);
+      if (!openDateOnly) return 'Open';
+    }
+    return '';
+  }
+
+  function isLifecycleStatus(value) {
+    return Boolean(normalizeLifecycleStatus(value));
+  }
+
   function extractType(line) {
-    const source = String(line || '');
+    const source = normalizeMetadataLine(String(line || ''));
     if (/Term\s+Source\s+Type/i.test(source)) return '';
 
-    const match = source.match(/(?:^|\b)Type[:\s]+([A-Za-z][A-Za-z\s/&\-]*)/i);
+    const match = source.match(/(?:^|\b)Type\s*:?\s*([A-Za-z][A-Za-z\s/&\-]*)/i);
     if (!match) return '';
 
     let value = match[1].trim();
@@ -653,20 +737,37 @@
   }
 
   function extractResponsibility(line) {
-    const match = String(line || '').match(/Responsibility[:\s]*([A-Za-z][A-Za-z\s-]*)/i);
-    if (!match) return '';
+    const source = normalizeMetadataLine(String(line || ''));
+    if (!source) return '';
 
-    let value = match[1].trim();
-    value = value
-      .split(/\b(?:Type|Month(?:'s|s)?\s+Reviewed|Remarks|Account\s+Status|Current\s+Payment|Open\s+Date|Last\s+Activity|Terms?\s+Count|Responsibility)\b/i)[0]
-      .trim();
-    const lowered = value.toLowerCase();
-    const idxIndividual = lowered.indexOf('individual');
-    const idxJoint = lowered.indexOf('joint');
-    if (idxIndividual >= 0 && (idxJoint < 0 || idxIndividual <= idxJoint)) return 'Individual';
-    if (idxJoint >= 0) return 'Joint';
-    if (lowered.includes('authorized')) return 'Authorized';
-    return truncate(value, 15);
+    const match = source.match(/Responsibility\s*:?\s*([A-Za-z][A-Za-z\s-]*)/i);
+    if (match) {
+      let value = match[1].trim();
+      value = value
+        .split(/\b(?:Type|Month(?:'s|s)?\s+Reviewed|Remarks|Account\s+Status|Current\s+Payment|Open\s+Date|Last\s+Activity|Terms?\s+Count|Responsibility)\b/i)[0]
+        .trim();
+      return normalizeResponsibilityValue(value) || truncate(value, 15);
+    }
+
+    // Algunos reportes de collections traen "Type Individual" sin etiqueta Responsibility.
+    const fromTypeMatch = source.match(/(?:^|\b)Type\s*:?\s*(Individual|Joint(?:\s+Contractual\s+Liability)?|Authorized(?:\s+User)?|Co[-\s]?signer)\b/i);
+    if (fromTypeMatch) {
+      return normalizeResponsibilityValue(fromTypeMatch[1]);
+    }
+
+    if (/\b(?:status|type|responsibility|current\s+rating|collection\/charge-?off|account\s+details)\b/i.test(source)) {
+      const inlineMatch = source.match(/\b(Individual|Joint(?:\s+Contractual\s+Liability)?|Authorized(?:\s+User)?|Co[-\s]?signer)\b/i);
+      if (inlineMatch) {
+        return normalizeResponsibilityValue(inlineMatch[1]);
+      }
+    }
+
+    // Fallback para formato en linea siguiente: "Responsibility" + "\nIndividual"
+    if (/^(?:individual|joint(?:\s+contractual\s+liability)?|authorized(?:\s+user)?|co[-\s]?signer)$/i.test(source)) {
+      return normalizeResponsibilityValue(source);
+    }
+
+    return '';
   }
 
   function extractMonthsReviewed(line) {
@@ -869,6 +970,7 @@
   function cleanCreditorAddress(name) {
     if (!name) return name;
     let cleaned = name;
+    cleaned = cleaned.replace(/^(?:not\s+available|no\s+data\s+available|data\s+not\s+available)\b[:\s-]*/i, '').trim();
     // Remover "CIUDAD,ESTADO ZIP" al inicio (ej: "COLUMBUS,OH43218 TBOM/MILESTONE")
     cleaned = cleaned.replace(/^[A-Z]+[,\s]*[A-Z]{2}\s*\d{5}(-\d{4})?\s*/i, '');
     // Remover PO BOX
@@ -1360,6 +1462,10 @@
       let waitingBalanceMode = 'balance';
       let hasExplicitDebtSignal = false;
       let waitingLastPayment = false;
+      let waitingType = false;
+      let waitingResponsibility = false;
+      let waitingAccountStatus = false;
+      let waitingCurrentRating = false;
 
       for (let cursor = accountIndex; cursor <= blockEnd; cursor += 1) {
         const line = lines[cursor];
@@ -1368,24 +1474,88 @@
           break;
         }
 
-        if (!creditor.accountStatus) {
+        if (!creditor.accountStatus || !isLifecycleStatus(creditor.accountStatus)) {
           const status = extractStatus(line);
-          if (status) creditor.accountStatus = status;
+          if (status) {
+            creditor.accountStatus = status;
+            waitingAccountStatus = false;
+          } else if (/^\s*(?:Account\s+Status|Status)\s*:?\s*$/i.test(normalizeMetadataLine(line))) {
+            waitingAccountStatus = true;
+          } else if (waitingAccountStatus) {
+            const adjacentStatus = normalizeLifecycleStatus(normalizeMetadataLine(line));
+            if (adjacentStatus) {
+              creditor.accountStatus = adjacentStatus;
+              waitingAccountStatus = false;
+            } else if (
+              /\b(?:current\s+rating|current\s+payment|responsibility|type|month(?:'s|s)?\s+reviewed|terms?\s+count|term\s+source|amount\s+past\s+due|account\s+details|high(?:est)?\s+balance|high\s+credit)\b/i.test(line) ||
+              /Account\s*(?:Number|#)/i.test(line)
+            ) {
+              waitingAccountStatus = false;
+            }
+          }
         }
 
         if (!creditor.currentPaymentStatus) {
           const currentStatus = extractCurrentPaymentStatus(line);
-          if (currentStatus) creditor.currentPaymentStatus = currentStatus;
+          if (currentStatus) {
+            creditor.currentPaymentStatus = currentStatus;
+            waitingCurrentRating = false;
+          } else if (/^\s*Current\s+(?:Rating|Payment\s+Status)\s*:?\s*$/i.test(normalizeMetadataLine(line))) {
+            waitingCurrentRating = true;
+          } else if (waitingCurrentRating) {
+            const adjacentCurrentStatus = extractCurrentPaymentStatus(line);
+            if (adjacentCurrentStatus) {
+              creditor.currentPaymentStatus = adjacentCurrentStatus;
+              waitingCurrentRating = false;
+            } else if (
+              /\b(?:status|responsibility|type|month(?:'s|s)?\s+reviewed|terms?\s+count|term\s+source|amount\s+past\s+due|account\s+details|high(?:est)?\s+balance|high\s+credit)\b/i.test(line) ||
+              /Account\s*(?:Number|#)/i.test(line)
+            ) {
+              waitingCurrentRating = false;
+            }
+          }
         }
 
         if (!creditor.accountType) {
           const type = extractType(line);
-          if (type) creditor.accountType = type;
+          if (type) {
+            creditor.accountType = type;
+            waitingType = false;
+          } else if (/^\s*Type\s*:?\s*$/i.test(line)) {
+            waitingType = true;
+          } else if (waitingType) {
+            const adjacentType = cleanAccountTypeValue(line);
+            if (adjacentType) {
+              creditor.accountType = adjacentType;
+              waitingType = false;
+            } else if (
+              /\b(?:responsibility|account\s+status|status|current\s+payment|monthly\s+payment|amount\s+past\s+due|month(?:'s|s)?\s+reviewed|terms?\s+count|term\s+source|high(?:est)?\s+balance|high\s+credit|account\s+details)\b/i.test(line) ||
+              /Account\s*(?:Number|#)/i.test(line)
+            ) {
+              waitingType = false;
+            }
+          }
         }
 
         if (!creditor.responsibility) {
           const resp = extractResponsibility(line);
-          if (resp) creditor.responsibility = resp;
+          if (resp) {
+            creditor.responsibility = resp;
+            waitingResponsibility = false;
+          } else if (/^\s*Responsibility\s*:?\s*$/i.test(line)) {
+            waitingResponsibility = true;
+          } else if (waitingResponsibility) {
+            const adjacentResp = normalizeResponsibilityValue(line);
+            if (adjacentResp) {
+              creditor.responsibility = adjacentResp;
+              waitingResponsibility = false;
+            } else if (
+              /\b(?:type|account\s+status|status|current\s+payment|monthly\s+payment|amount\s+past\s+due|month(?:'s|s)?\s+reviewed|terms?\s+count|term\s+source|high(?:est)?\s+balance|high\s+credit|account\s+details)\b/i.test(line) ||
+              /Account\s*(?:Number|#)/i.test(line)
+            ) {
+              waitingResponsibility = false;
+            }
+          }
         }
 
         const months = extractMonthsReviewed(line);
@@ -1475,12 +1645,33 @@
         }
       }
 
+      if (!creditor.responsibility) {
+        const inferredResponsibility = normalizeResponsibilityValue(creditor.accountType);
+        if (inferredResponsibility) {
+          creditor.responsibility = inferredResponsibility;
+          creditor.accountType = '';
+        }
+      }
+
+      if (!creditor.accountType) {
+        const statusSignal = `${creditor.accountStatus || ''} ${creditor.currentPaymentStatus || ''}`;
+        if (/(collection|charge[-\s]?off)/i.test(statusSignal)) {
+          creditor.accountType = 'Collection';
+        }
+      }
+      if (/(charge[-\s]?off|collection|transferred|refinanced)/i.test(`${creditor.accountStatus || ''} ${creditor.currentPaymentStatus || ''}`)) {
+        creditor.accountStatus = 'Closed';
+      }
+      if (creditor.accountType === 'Collection') {
+        creditor.accountStatus = 'Closed';
+      }
+
       if (!creditor.accountStatus && creditor.currentPaymentStatus) {
         creditor.accountStatus = creditor.currentPaymentStatus;
       } else if (creditor.currentPaymentStatus) {
         const cps = creditor.currentPaymentStatus.toLowerCase();
         const currentStatus = creditor.accountStatus.toLowerCase();
-        if (!/closed/.test(currentStatus)) {
+        if (!isLifecycleStatus(creditor.accountStatus) && !/closed/.test(currentStatus)) {
           if (/(collection|charge[-\s]?off)/.test(cps)) {
             creditor.accountStatus = 'Collection/Charge-off';
           } else if (/(past due|delinquent|late)/.test(cps)) {
@@ -1565,9 +1756,25 @@
   function normalizeExtractedEntry(entry, sourceName, party) {
     const debtAmount = normalizeMoney(entry.debtAmount || entry.debt_amount || entry.latestDebt || entry.recentDebt || entry.balance);
     const monthsReviewed = normalizeMonthsReviewed(entry.monthsReviewed || entry.months_reviewed || entry.months);
-    const accountStatus = String(entry.accountStatus || entry.account_status || '').trim();
+    let accountStatus = String(entry.accountStatus || entry.account_status || '').trim();
     const currentPaymentStatus = String(entry.currentPaymentStatus || entry.current_payment_status || '').trim();
-    const accountType = cleanAccountTypeValue(String(entry.accountType || entry.account_type || '').trim());
+    let accountType = cleanAccountTypeValue(String(entry.accountType || entry.account_type || '').trim());
+    const lifecycleFromStatus = normalizeLifecycleStatus(accountStatus);
+    if (lifecycleFromStatus) {
+      accountStatus = lifecycleFromStatus;
+    } else if (!accountStatus) {
+      const lifecycleFromCurrent = normalizeLifecycleStatus(currentPaymentStatus);
+      if (lifecycleFromCurrent) accountStatus = lifecycleFromCurrent;
+    }
+    if (!accountType && /(collection|charge[-\s]?off)/i.test(`${accountStatus} ${currentPaymentStatus}`)) {
+      accountType = 'Collection';
+    }
+    if (/(charge[-\s]?off|collection|transferred|refinanced)/i.test(`${accountStatus} ${currentPaymentStatus}`)) {
+      accountStatus = 'Closed';
+    }
+    if (accountType === 'Collection') {
+      accountStatus = 'Closed';
+    }
     const dateLastPayment = normalizeLastPaymentDate(
       entry.dateLastPayment || entry.date_last_payment || entry.lastPaymentDate || entry.last_payment_date
     );
@@ -1579,6 +1786,13 @@
       if (idxIndividual >= 0 && (idxJoint < 0 || idxIndividual <= idxJoint)) responsibility = 'Individual';
       else if (idxJoint >= 0) responsibility = 'Joint';
       else if (lowered.includes('authorized')) responsibility = 'Authorized';
+    }
+    if (!responsibility) {
+      const inferredResponsibility = normalizeResponsibilityValue(accountType);
+      if (inferredResponsibility) {
+        responsibility = inferredResponsibility;
+        accountType = '';
+      }
     }
 
     // Filtrar cuentas mortgage
@@ -1645,11 +1859,23 @@
     return `<span class="badge ${cls}">${escapeHtml(truncate(status || '-', 18))}</span>`;
   }
 
+  function getDisplayResponsibility(entry) {
+    const explicit = normalizeResponsibilityValue(entry?.responsibility || entry?.responsability || '');
+    if (explicit) return explicit;
+    return normalizeResponsibilityValue(entry?.account_type || entry?.accountType || '');
+  }
+
+  function getDisplayAccountType(entry) {
+    return cleanAccountTypeValue(entry?.account_type || entry?.accountType || '');
+  }
+
   function renderRow(entry, index) {
     const isIncluded = entry.is_included !== false;
     const party = parseDebtorParty(entry.debtor_party || entry.debtorParty);
     const partyLabel = getPartyLabel(party);
     const partyClass = party === 'coapp' ? 'badge-party-coapp' : 'badge-party-applicant';
+    const displayResponsibility = getDisplayResponsibility(entry);
+    const displayAccountType = getDisplayAccountType(entry);
     const checkbox = `<button type="button" class="row-checkbox ${isIncluded ? 'is-checked' : ''}" aria-label="Incluir deuda" aria-pressed="${isIncluded ? 'true' : 'false'}" data-id="${entry.id || ''}"></button>`;
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}">x</button>`;
 
@@ -1673,9 +1899,9 @@
             </button>
           ` : '-'}
         </td>
-        <td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>
+        <td class="col-resp">${displayResponsibility ? `<span class="badge badge-resp">${escapeHtml(displayResponsibility)}</span>` : '-'}</td>
         <td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>
-        <td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>
+        <td class="col-type">${displayAccountType ? `<span class="badge badge-type">${escapeHtml(truncate(displayAccountType, 18))}</span>` : '-'}</td>
         <td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>
         <td class="col-utilization">-</td>
         <td class="col-actions">${deleteBtn}</td>
@@ -1944,14 +2170,18 @@
     const deleteBtn = `<button class="btn-delete" data-id="${entry.id}" ${isActive ? '' : 'disabled title="Cuenta coapp desactivada por toggle"'}>×</button>`;
     const rawCreditorName = entry.creditor_name || entry.creditorName || '';
     const rawAccountNumber = entry.account_number || entry.accountNumber || '';
+    const displayResponsibility = getDisplayResponsibility(entry);
+    const displayAccountType = getDisplayAccountType(entry);
     const duplicateAccountKey = normalizeDuplicateAccountKey(rawAccountNumber);
     const isDuplicateAccount = Boolean(duplicateAccountKey && duplicateAccountKeys.has(duplicateAccountKey));
     const truncatedCreditorName = escapeHtml(truncate(rawCreditorName || '-', 28));
-    const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
-      ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
-      : false;
-    const unacceptableFlagHtml = isUnacceptableCreditor
-      ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
+    const isNonQualifyingCreditor = crmHelpers.isNonQualifyingCreditorEntry
+      ? crmHelpers.isNonQualifyingCreditorEntry(entry)
+      : (crmHelpers.isUnacceptableCreditorName
+        ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
+        : false);
+    const unacceptableFlagHtml = isNonQualifyingCreditor
+      ? '<span class="creditor-unacceptable-flag" title="Cuenta no califica" aria-label="Cuenta no califica">X</span>'
       : '';
     const duplicateFlagHtml = isDuplicateAccount
       ? '<span class="creditor-duplicate-flag" title="Posible cuenta duplicada detectada" aria-label="Posible cuenta duplicada detectada"><svg viewBox="0 0 16 22" aria-hidden="true" focusable="false"><path d="M8 13.4 1.9 2.9h12.2z"/><path d="M8 6.1v3.5"/><path d="M8 11.3v.1"/><ellipse cx="8" cy="18.3" rx="5.7" ry="2.8"/></svg></span>'
@@ -1964,9 +2194,9 @@
       debt: `<td class="col-debt"><span class="debt-cell-inline"><span class="debt-value">${formatCurrency(debtAmount)}</span>${debtShareHtml}</span></td>`,
       party: `<td class="col-party">${partyLabel ? `<span class="badge ${partyClass}">${escapeHtml(partyLabel)}</span>` : '-'}</td>`,
       account: `<td class="col-account">${rawAccountNumber ? `<span class="account-num">${escapeHtml(rawAccountNumber)}</span><button class="btn-copy-account" data-account="${escapeHtml(rawAccountNumber)}" title="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : '-'}</td>`,
-      resp: `<td class="col-resp">${entry.responsibility ? `<span class="badge badge-resp">${escapeHtml(entry.responsibility)}</span>` : '-'}</td>`,
+      resp: `<td class="col-resp">${displayResponsibility ? `<span class="badge badge-resp">${escapeHtml(displayResponsibility)}</span>` : '-'}</td>`,
       status: `<td class="col-status">${entry.account_status || entry.accountStatus ? getStatusBadge(entry.account_status || entry.accountStatus) : '-'}</td>`,
-      type: `<td class="col-type">${entry.account_type || entry.accountType ? `<span class="badge badge-type">${escapeHtml(truncate(entry.account_type || entry.accountType, 18))}</span>` : '-'}</td>`,
+      type: `<td class="col-type">${displayAccountType ? `<span class="badge badge-type">${escapeHtml(truncate(displayAccountType, 18))}</span>` : '-'}</td>`,
       months: `<td class="col-months">${entry.months_reviewed || entry.monthsReviewed ? `<span class="badge badge-months">${entry.months_reviewed || entry.monthsReviewed}</span>` : '-'}</td>`,
       utilization: (() => {
         const creditLimit = normalizeMoney(entry.credit_limit || entry.creditLimit)
@@ -2089,7 +2319,8 @@
     const pageWidth = Math.max(1, Number(viewport?.width || 1000));
     const rowTolerance = 2.5;
     const columnGapThreshold = Math.max(70, pageWidth * 0.16);
-    const wordGapThreshold = Math.max(8, pageWidth * 0.012);
+    // Gap mas sensible para no pegar etiquetas clave (Type/Status/Responsibility).
+    const wordGapThreshold = Math.max(3, pageWidth * 0.004);
 
     const rows = [];
 

@@ -18,6 +18,23 @@ const manageUsersBtn = document.getElementById('manageUsersBtn');
 const toolbarToggle = document.getElementById('toolbarToggle');
 const toolbarWrap = document.getElementById('toolbarWrap');
 const homeSearchInput = document.getElementById('homeSearch');
+const leadsSpecificSearch = document.getElementById('leadsSpecificSearch');
+
+if (leadsSpecificSearch) {
+  leadsSpecificSearch.addEventListener('input', (event) => {
+    scheduleLeadSearch(event.target.value);
+  });
+  leadsSpecificSearch.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setLeadSearchQuery('');
+      leadsSpecificSearch.blur();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      runLeadSearchSubmit();
+    }
+  });
+}
 const crmHelpers = window.CrmHelpers || {};
 const usersAdminView = document.getElementById('usersAdminView');
 const usersAdminLayout = document.getElementById('usersAdminLayout');
@@ -2108,6 +2125,12 @@ let leadSearchSuggestionShell = null;
 let leadSearchSuggestionMatches = [];
 let leadSearchSuggestionActiveIndex = -1;
 let leadActionsMenuDocumentBound = false;
+let leadAssigneeMenuDocumentBound = false;
+let leadAssigneeMenuElement = null;
+let leadAssignableMembers = [];
+let leadAssignableMembersLoaded = false;
+let leadAssignableMembersPromise = null;
+let leadAssigneeUpdateInFlight = false;
 let scheduleViewDate = new Date();
 let scheduleSelectedDateKey = new Date().toISOString().slice(0, 10);
 let scheduleTasks = [];
@@ -2336,8 +2359,14 @@ function consumeTransferredLeadSearchQuery() {
 
 function setLeadSearchQuery(query, { syncInput = true } = {}) {
   currentLeadSearchQuery = String(query || '').trim();
-  if (syncInput && homeSearchInput) {
-    homeSearchInput.value = currentLeadSearchQuery;
+  if (syncInput) {
+    if (homeSearchInput) {
+      homeSearchInput.value = currentLeadSearchQuery;
+    }
+    const leadsSpecificSearch = document.getElementById('leadsSpecificSearch');
+    if (leadsSpecificSearch) {
+      leadsSpecificSearch.value = currentLeadSearchQuery;
+    }
   }
 }
 
@@ -5258,12 +5287,220 @@ function renderLeadCopyButton(value, label) {
   `;
 }
 
+function renderLeadReassignButton(lead) {
+  const leadId = Number(lead?.id || 0);
+  if (!leadId) return '';
+  const currentAssignee = String(lead?.assigned_to || '').trim();
+
+  return `
+    <button
+      class="lead-reassign-btn"
+      type="button"
+      data-lead-id="${leadId}"
+      data-current-assignee="${encodeURIComponent(currentAssignee)}"
+      title="Reasignar lead"
+      aria-label="Reasignar lead"
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="6.8" cy="7.3" r="2.6" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M2.8 14.6c0-2 1.8-3.6 4-3.6s4 1.6 4 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M14.1 6.6h5.5m0 0-1.7-1.7m1.7 1.7-1.7 1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.1 16.5h-5.6m0 0 1.7 1.7m-1.7-1.7 1.7-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16.2 8.8a4.1 4.1 0 0 1 3.9 2.8m-5.7 3.8a4.1 4.1 0 0 1-1.3-2.9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+    </button>
+  `;
+}
+
+function closeLeadAssigneeMenu() {
+  if (!leadAssigneeMenuElement) return;
+  leadAssigneeMenuElement.classList.add('hidden');
+  leadAssigneeMenuElement.dataset.leadId = '';
+  leadAssigneeMenuElement.dataset.currentAssignee = '';
+}
+
+function ensureLeadAssigneeMenu() {
+  if (leadAssigneeMenuElement && document.body.contains(leadAssigneeMenuElement)) {
+    return leadAssigneeMenuElement;
+  }
+
+  const menu = document.createElement('div');
+  menu.className = 'lead-assignee-menu hidden';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', 'Reasignar lead');
+  document.body.appendChild(menu);
+  leadAssigneeMenuElement = menu;
+  return menu;
+}
+
+function positionLeadAssigneeMenu(anchorEl, menuEl) {
+  if (!anchorEl || !menuEl) return;
+
+  const rect = anchorEl.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 10;
+  const menuWidth = menuEl.offsetWidth || 220;
+  const menuHeight = menuEl.offsetHeight || 180;
+
+  let left = rect.left - (menuWidth - rect.width);
+  if (left + menuWidth > vw - margin) left = vw - margin - menuWidth;
+  if (left < margin) left = margin;
+
+  let top = rect.bottom + 8;
+  if (top + menuHeight > vh - margin) {
+    top = Math.max(margin, rect.top - menuHeight - 8);
+  }
+
+  menuEl.style.left = `${Math.round(left)}px`;
+  menuEl.style.top = `${Math.round(top)}px`;
+}
+
+async function loadLeadAssignableMembers({ force = false } = {}) {
+  if (!force && leadAssignableMembersLoaded) return leadAssignableMembers;
+  if (leadAssignableMembersPromise) return leadAssignableMembersPromise;
+
+  leadAssignableMembersPromise = (async () => {
+    const membersMap = new Map();
+    const pushMember = (usernameValue, displayNameValue = '', roleValue = '') => {
+      const username = normalizeScheduleOwnerUsername(usernameValue);
+      if (!username) return;
+      if (!membersMap.has(username)) {
+        membersMap.set(username, {
+          username,
+          displayName: String(displayNameValue || '').trim() || username,
+          role: String(roleValue || '').trim().toLowerCase()
+        });
+      }
+    };
+
+    try {
+      const data = await requestJson('/api/users', { cache: 'no-store' });
+      const members = Array.isArray(data?.members) ? data.members : [];
+      if (members.length) {
+        members.forEach((member) => {
+          pushMember(member?.username, member?.displayName || member?.display_name || member?.username, member?.role);
+        });
+      } else {
+        const users = Array.isArray(data?.users) ? data.users : [];
+        users.forEach((userLabel) => {
+          const normalized = String(userLabel || '').trim();
+          if (!normalized) return;
+          pushMember(normalized, normalized, '');
+        });
+      }
+    } catch (_error) {
+      // Fallback al usuario actual
+    } finally {
+      const identity = getSessionIdentity();
+      pushMember(identity.username, identity.displayName || identity.username, identity.role);
+      leadAssignableMembers = Array.from(membersMap.values()).sort((a, b) =>
+        String(a.username || '').localeCompare(String(b.username || ''), 'es', { sensitivity: 'base' })
+      );
+      leadAssignableMembersLoaded = true;
+      leadAssignableMembersPromise = null;
+    }
+
+    return leadAssignableMembers;
+  })();
+
+  return leadAssignableMembersPromise;
+}
+
+function buildLeadAssigneeMenuMarkup({ members = [], currentAssignee = '' } = {}) {
+  const normalizedCurrent = normalizeScheduleOwnerUsername(currentAssignee);
+  const options = members.length
+    ? members
+    : [{ username: normalizeScheduleOwnerUsername(getSessionIdentity().username), displayName: getSessionIdentity().displayName || getSessionIdentity().username, role: '' }];
+
+  return `
+    <p class="lead-assignee-menu-title">Reasignar lead</p>
+    <div style="padding-bottom: 8px;">
+      <input type="text" class="lead-assignee-search" placeholder="Buscar agente..." autocomplete="off" style="width: 100%; padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color, rgba(255,255,255,0.2)); background: var(--bg-secondary, rgba(0,0,0,0.3)); color: var(--text-primary, #fff);">
+    </div>
+    <div class="lead-assignee-menu-list">
+      ${options.map((member) => {
+        const username = normalizeScheduleOwnerUsername(member.username);
+        if (!username) return '';
+        const displayLabel = buildScheduleMemberLabel(member);
+        const isActive = username === normalizedCurrent;
+        return `
+          <button
+            class="lead-assignee-option${isActive ? ' active' : ''}"
+            type="button"
+            data-assignee="${escapeHtml(username)}"
+          >
+            <span>${escapeHtml(displayLabel)}</span>
+            ${isActive ? '<strong>Actual</strong>' : ''}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+async function updateLeadAssignee(leadId, nextAssignee) {
+  const normalizedLeadId = Number(leadId || 0);
+  const normalizedAssignee = normalizeScheduleOwnerUsername(nextAssignee);
+  if (!normalizedLeadId || !normalizedAssignee) return false;
+  if (leadAssigneeUpdateInFlight) return false;
+
+  leadAssigneeUpdateInFlight = true;
+  try {
+    const data = await requestJson(`/api/leads/${normalizedLeadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignedTo: normalizedAssignee })
+    });
+
+    const updatedLead = data?.lead || {};
+    allLeadsCache = allLeadsCache.map((lead) => {
+      if (Number(lead?.id) !== normalizedLeadId) return lead;
+      return {
+        ...lead,
+        assigned_to: updatedLead?.assigned_to || normalizedAssignee,
+        updated_at: updatedLead?.updated_at || lead?.updated_at
+      };
+    });
+    leadSearchIndex = buildLeadsSearchIndex(allLeadsCache);
+
+    const matches = searchLeadsByQuery(currentLeadSearchQuery);
+    renderLeadsRows(matches);
+    showToast(`Lead reasignado a @${normalizedAssignee}`, 'success');
+    return true;
+  } catch (error) {
+    showToast(error.message || 'No se pudo reasignar el lead.', 'error');
+    return false;
+  } finally {
+    leadAssigneeUpdateInFlight = false;
+  }
+}
+
+let leadsCurrentPage = 1;
+const leadsPerPage = 20;
+
 function renderLeadsRows(leads) {
   const tbody = document.getElementById('leadsTableBody');
   if (!tbody) return;
 
   const rows = Array.isArray(leads) ? leads : [];
   updateLeadsCounter(rows.length);
+
+  const totalPages = Math.ceil(rows.length / leadsPerPage) || 1;
+  if (leadsCurrentPage > totalPages) leadsCurrentPage = totalPages;
+
+  const startIndex = (leadsCurrentPage - 1) * leadsPerPage;
+  const paginatedRows = rows.slice(startIndex, startIndex + leadsPerPage);
+
+  const prevBtn = document.getElementById('leadsPrevPageBtn');
+  const nextBtn = document.getElementById('leadsNextPageBtn');
+  const currentText = document.getElementById('leadsCurrentPageText');
+  const totalText = document.getElementById('leadsTotalPagesText');
+
+  if (prevBtn) prevBtn.disabled = leadsCurrentPage <= 1;
+  if (nextBtn) nextBtn.disabled = leadsCurrentPage >= totalPages;
+  if (currentText) currentText.textContent = leadsCurrentPage;
+  if (totalText) totalText.textContent = totalPages;
 
   if (allLeadsCache.length === 0) {
     tbody.innerHTML = `
@@ -5325,9 +5562,9 @@ function renderLeadsRows(leads) {
       </td>
       <td>${getLeadBadgesCell(lead, leadMapById)}</td>
       <td class="lead-user">
-        <div class="lead-copy-inline">
-          <span class="lead-copy-value">${escapeHtml(lead.assigned_to || '-')}</span>
-          ${renderLeadCopyButton(lead.assigned_to, 'agente')}
+        <div class="lead-assignee-inline">
+          <span class="lead-assignee-name">${escapeHtml(lead.assigned_to || '-')}</span>
+          ${renderLeadReassignButton(lead)}
         </div>
       </td>
       <td class="lead-date">${formatDate(lead.created_at)}</td>
@@ -5339,8 +5576,12 @@ function renderLeadsRows(leads) {
         </div>
       </td>
       <td class="lead-email">${escapeHtml(lead.email || '-')}</td>
-      <td class="lead-state">${lead.state_code || '-'}</td>
-      <td>${getStateTypeBadge(lead.state_code, lead.state_type)}</td>
+      <td class="lead-state">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>${lead.state_code || '-'}</span>
+          ${getStateTypeBadge(lead.state_code, lead.state_type)}
+        </div>
+      </td>
       <td class="lead-campaign">${escapeHtml(lead.source || '-')}</td>
       <td class="lead-actions">
         <div class="lead-actions-wrap">
@@ -5349,13 +5590,40 @@ function renderLeadsRows(leads) {
           </button>
           <div class="lead-actions-menu" role="menu" aria-label="Acciones del lead">
             <button
+              class="lead-menu-item lead-docs-item"
+              type="button"
+              role="menuitem"
+              data-id="${lead.id}"
+            >
+              <span class="lead-menu-item-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" focusable="false">
+                  <path d="M6.4 3.2h4.8l3 3V15a1.3 1.3 0 0 1-1.3 1.3H6.4A1.3 1.3 0 0 1 5.1 15V4.5a1.3 1.3 0 0 1 1.3-1.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M11.2 3.2V6.1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.5 10.2h4.9M7.5 12.6h3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="lead-menu-item-copy">
+                <span class="lead-menu-item-title">Ver docs</span>
+                <span class="lead-menu-item-subtitle">Abrir archivos del lead</span>
+              </span>
+            </button>
+            <button
               class="lead-menu-item lead-delete-item"
               type="button"
               role="menuitem"
               data-id="${lead.id}"
               data-name="${escapeHtml(lead.full_name)}"
             >
-              Eliminar lead
+              <span class="lead-menu-item-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" focusable="false">
+                  <path d="M5.7 6.1h8.6M8 6.1V4.8h4v1.3m-5.2 0v8.4a1 1 0 0 0 1 1h4.4a1 1 0 0 0 1-1V6.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8.8 8.5v4.7M11.2 8.5v4.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="lead-menu-item-copy">
+                <span class="lead-menu-item-title">Eliminar lead</span>
+                <span class="lead-menu-item-subtitle">Borrar permanentemente</span>
+              </span>
             </button>
           </div>
         </div>
@@ -5388,6 +5656,52 @@ function renderLeadsRows(leads) {
     });
   });
 
+  tbody.querySelectorAll('.lead-reassign-btn').forEach((btn) => {
+    btn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const leadId = Number(btn.dataset.leadId || 0);
+      if (!leadId) return;
+
+      const menu = ensureLeadAssigneeMenu();
+      const currentAssignee = decodeURIComponent(btn.dataset.currentAssignee || '');
+
+      closeLeadActionsMenus();
+      menu.classList.remove('hidden');
+      menu.dataset.leadId = String(leadId);
+      menu.dataset.currentAssignee = currentAssignee;
+      menu.innerHTML = '<p class="lead-assignee-menu-title">Reasignar lead</p><div class="lead-assignee-menu-loading">Cargando usuarios...</div>';
+      positionLeadAssigneeMenu(btn, menu);
+
+      try {
+        const members = await loadLeadAssignableMembers();
+        menu.innerHTML = buildLeadAssigneeMenuMarkup({ members, currentAssignee });
+        positionLeadAssigneeMenu(btn, menu);
+        
+        const searchInput = menu.querySelector('.lead-assignee-search');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const items = menu.querySelectorAll('.lead-assignee-option');
+            items.forEach(item => {
+              const text = item.textContent.toLowerCase();
+              if (text.includes(query)) {
+                item.style.display = '';
+              } else {
+                item.style.display = 'none';
+              }
+            });
+          });
+        }
+      } catch (_error) {
+        menu.innerHTML = '<p class="lead-assignee-menu-title">Reasignar lead</p><div class="lead-assignee-menu-error">No se pudo cargar la lista de usuarios.</div>';
+        positionLeadAssigneeMenu(btn, menu);
+      }
+    });
+  });
+
   if (!leadActionsMenuDocumentBound) {
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.lead-actions-wrap')) {
@@ -5398,6 +5712,61 @@ function renderLeadsRows(leads) {
     });
     leadActionsMenuDocumentBound = true;
   }
+
+  if (!leadAssigneeMenuDocumentBound) {
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target.closest('.lead-assignee-menu') && !target.closest('.lead-reassign-btn')) {
+        closeLeadAssigneeMenu();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeLeadAssigneeMenu();
+      }
+    });
+
+    leadAssigneeMenuDocumentBound = true;
+  }
+
+  const assigneeMenu = ensureLeadAssigneeMenu();
+  assigneeMenu.onclick = async (event) => {
+    const optionBtn = event.target.closest('.lead-assignee-option[data-assignee]');
+    if (!optionBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const leadId = Number(assigneeMenu.dataset.leadId || 0);
+    const nextAssignee = normalizeScheduleOwnerUsername(optionBtn.dataset.assignee || '');
+    const currentAssignee = normalizeScheduleOwnerUsername(assigneeMenu.dataset.currentAssignee || '');
+
+    if (!leadId || !nextAssignee || nextAssignee === currentAssignee) {
+      closeLeadAssigneeMenu();
+      return;
+    }
+
+    optionBtn.disabled = true;
+    optionBtn.classList.add('loading');
+    const updated = await updateLeadAssignee(leadId, nextAssignee);
+    if (updated) {
+      closeLeadAssigneeMenu();
+    } else {
+      optionBtn.disabled = false;
+      optionBtn.classList.remove('loading');
+    }
+  };
+
+  tbody.querySelectorAll('.lead-docs-item').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeLeadActionsMenus();
+      const leadId = Number(btn.dataset.id || 0);
+      if (!leadId) return;
+      window.location.assign(`/client.html?id=${leadId}&tab=lead&open=docs`);
+    });
+  });
 
   tbody.querySelectorAll('.lead-delete-item').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
@@ -5461,6 +5830,29 @@ function renderFilteredLeads() {
   const matches = searchLeadsByQuery(currentLeadSearchQuery);
   renderLeadsRows(matches);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const prevBtn = document.getElementById('leadsPrevPageBtn');
+  const nextBtn = document.getElementById('leadsNextPageBtn');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (leadsCurrentPage > 1) {
+        leadsCurrentPage--;
+        renderFilteredLeads();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      const matches = searchLeadsByQuery(currentLeadSearchQuery);
+      const totalPages = Math.ceil(matches.length / leadsPerPage) || 1;
+      if (leadsCurrentPage < totalPages) {
+        leadsCurrentPage++;
+        renderFilteredLeads();
+      }
+    });
+  }
+});
 
 async function loadLeads(forceReload = false) {
   if (leadsLoaded && !forceReload) {

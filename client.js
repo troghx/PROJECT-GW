@@ -2349,6 +2349,7 @@
 
     function normalizeCreditorName(name) {
       let cleaned = String(name || '')
+        .replace(/^(?:not\s+available|no\s+data\s+available|data\s+not\s+available)\b[:\s-]*/i, '')
         .replace(/\bFINANCI\b/gi, 'FINANCIAL')
         .replace(/\bBY\s*MAIL\s*ONLY\b/gi, '')
         .replace(/\bBYMAILONLY\b/gi, '')
@@ -2375,7 +2376,7 @@
     function isWeakCreditorName(nameValue) {
       const name = normalizeCreditorName(nameValue);
       if (!name) return true;
-      return /^(you(?:'re| are)?\b|hide details\b|no data available\b|n\/a\b|overview\b|account details\b|auto loans?\b|student loans?\b|personal loans?\b|credit cards?\b|collections?\b|other accounts?\b|total count\b|times 30\/60\/90\b|terms count\b|remarks?\b|finan\b|closed\b|bymailonly\b|by mail only\b)/i.test(name);
+      return /^(you(?:'re| are)?\b|hide details\b|not available\b|no data available\b|data not available\b|n\/a\b|overview\b|account details\b|auto loans?\b|student loans?\b|personal loans?\b|credit cards?\b|collections?\b|other accounts?\b|total count\b|times 30\/60\/90\b|terms count\b|remarks?\b|finan\b|closed\b|bymailonly\b|by mail only\b)/i.test(name);
     }
 
     function normalizeAccountToken(value) {
@@ -3101,11 +3102,13 @@
         const rawAccountNumber = entry.accountNumber || '';
         const duplicateAccountKey = normalizeDuplicateAccountKey(rawAccountNumber);
         const isDuplicateAccount = Boolean(duplicateAccountKey && duplicateAccountKeys.has(duplicateAccountKey));
-        const isUnacceptableCreditor = crmHelpers.isUnacceptableCreditorName
-          ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
-          : false;
-        const unacceptableFlagHtml = isUnacceptableCreditor
-          ? '<span class="creditor-unacceptable-flag" title="Acreedor no aceptable" aria-label="Acreedor no aceptable">X</span>'
+        const isNonQualifyingCreditor = crmHelpers.isNonQualifyingCreditorEntry
+          ? crmHelpers.isNonQualifyingCreditorEntry(entry)
+          : (crmHelpers.isUnacceptableCreditorName
+            ? crmHelpers.isUnacceptableCreditorName(rawCreditorName)
+            : false);
+        const unacceptableFlagHtml = isNonQualifyingCreditor
+          ? '<span class="creditor-unacceptable-flag" title="Cuenta no califica" aria-label="Cuenta no califica">X</span>'
           : '';
         const duplicateFlagHtml = isDuplicateAccount
           ? '<span class="creditor-duplicate-flag" title="Posible cuenta duplicada detectada" aria-label="Posible cuenta duplicada detectada"><svg viewBox="0 0 16 22" aria-hidden="true" focusable="false"><path d="M8 13.4 1.9 2.9h12.2z"/><path d="M8 6.1v3.5"/><path d="M8 11.3v.1"/><ellipse cx="8" cy="18.3" rx="5.7" ry="2.8"/></svg></span>'
@@ -7276,6 +7279,13 @@
         
         // Inicializar navegación de pestañas
         initLeadTabs();
+
+        const openTarget = String(new URLSearchParams(window.location.search).get('open') || '').trim().toLowerCase();
+        if (openTarget === 'docs' || openTarget === 'files') {
+          if (typeof window.openLeadFilesPanel === 'function') {
+            window.openLeadFilesPanel({ forceServer: true });
+          }
+        }
         
       } catch (error) {
         console.error('Error cargando lead:', error);
@@ -7760,21 +7770,28 @@
         return readStoredFilesMetadata(normalizedLeadId);
       };
 
+      function openFilesPanel(options = {}) {
+        const { forceServer = true } = options;
+        setNotesPanelOpen(false);
+        const emailPanel = document.getElementById('emailPanel');
+        const emailBtn = document.getElementById('emailBtn');
+        emailPanel?.classList.add('hidden');
+        emailBtn?.setAttribute('aria-expanded', 'false');
+        filesPanel.classList.remove('hidden');
+        filesBtn.setAttribute('aria-expanded', 'true');
+        loadFilesList({ forceServer }).catch((error) => {
+          console.error('Error cargando archivos:', error);
+        });
+      }
+
+      window.openLeadFilesPanel = openFilesPanel;
+
       filesBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isHidden = filesPanel.classList.contains('hidden');
 
         if (isHidden) {
-          setNotesPanelOpen(false);
-          const emailPanel = document.getElementById('emailPanel');
-          const emailBtn = document.getElementById('emailBtn');
-          emailPanel?.classList.add('hidden');
-          emailBtn?.setAttribute('aria-expanded', 'false');
-          filesPanel.classList.remove('hidden');
-          filesBtn.setAttribute('aria-expanded', 'true');
-          loadFilesList({ forceServer: true }).catch((error) => {
-            console.error('Error cargando archivos:', error);
-          });
+          openFilesPanel({ forceServer: true });
         } else {
           filesPanel.classList.add('hidden');
           filesBtn.setAttribute('aria-expanded', 'false');

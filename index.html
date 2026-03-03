@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tenor+Sans&family=Playfair+Display:ital,wght@1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260227h" />
+    <link rel="stylesheet" href="styles.css?v=20260303b" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -518,15 +518,23 @@
       <!-- VISTA DE LEADS -->
       <div id="leadsView" class="leads-view hidden">
         <!-- Header de Leads -->
-        <div class="leads-header">
+        <div class="leads-header" style="justify-content: flex-start; gap: 20px;">
           <div class="leads-title-section">
             <h2>Leads <span class="leads-count" id="leadsCount">(0)</span></h2>
+          </div>
+          <div class="leads-header-actions" style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
+            <div class="leads-search-box" style="position: relative;">
+              <input type="text" id="leadsSpecificSearch" placeholder="Buscar en leads..." style="padding: 8px 12px 8px 32px; border-radius: 6px; border: 1px solid var(--border-color, rgba(255,255,255,0.1)); background: var(--bg-secondary, rgba(0,0,0,0.2)); color: var(--text-primary, #fff); font-size: 13px; width: 220px;" autocomplete="off">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted, rgba(255,255,255,0.5));">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+            </div>
             <button class="create-lead-btn" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              Nuevo Lead
+              <span>Nuevo Lead</span>
             </button>
           </div>
         </div>
@@ -547,7 +555,7 @@
                   </svg>
                 </th>
                 <th>Case ID</th>
-                <th>Estado</th>
+                <th>Status</th>
                 <th>Agente</th>
                 <th class="sortable">
                   Fecha Creación
@@ -558,8 +566,7 @@
                 <th>Fecha Modificación</th>
                 <th>Teléfono</th>
                 <th>Email</th>
-                <th>Estado (US)</th>
-                <th>State Type</th>
+                <th>Ubicación</th>
                 <th>Campaign</th>
                 <th class="actions-col"></th>
               </tr>
@@ -567,7 +574,7 @@
             <tbody id="leadsTableBody">
               <!-- Los leads se cargarán dinámicamente aquí -->
               <tr class="lead-row empty-state">
-                <td colspan="13" class="empty-message">
+                <td colspan="12" class="empty-message">
                   <div class="empty-content">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -584,14 +591,14 @@
           </div>
 
         <!-- Paginación -->
-          <div class="leads-pagination">
-          <button class="page-btn" disabled>
+          <div class="leads-pagination" id="leadsPaginationContainer">
+          <button class="page-btn" id="leadsPrevPageBtn" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
-          <span class="page-info">Página <strong>1</strong> de <strong>1</strong></span>
-          <button class="page-btn" disabled>
+          <span class="page-info">Página <strong id="leadsCurrentPageText">1</strong> de <strong id="leadsTotalPagesText">1</strong></span>
+          <button class="page-btn" id="leadsNextPageBtn" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
@@ -918,7 +925,7 @@
     </section>
 
     <script src="crm-helpers.js?v=20260302a"></script>
-    <script src="app.js?v=20260226b"></script>
+    <script src="app.js?v=20260303b"></script>
     <script src="quick-actions.js?v=20260226b"></script>
     <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
     <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notificaciones">
