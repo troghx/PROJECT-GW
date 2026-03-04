@@ -1114,6 +1114,12 @@
     const caseNumberEl = document.getElementById('caseNumber');
     const copyCaseBtn = document.getElementById('copyCaseBtn');
     const leadStatusBadgeSelect = document.getElementById('leadStatusBadgeSelect');
+    const leadStatusBadgePicker = document.getElementById('leadStatusBadgePicker');
+    const leadStatusBadgeTrigger = document.getElementById('leadStatusBadgeTrigger');
+    const leadStatusBadgeTriggerLabel = document.getElementById('leadStatusBadgeTriggerLabel');
+    const leadStatusBadgePanel = document.getElementById('leadStatusBadgePanel');
+    const leadStatusBadgeSearchInput = document.getElementById('leadStatusBadgeSearchInput');
+    const leadStatusBadgeOptionsList = document.getElementById('leadStatusBadgeOptions');
     const leadAssigneeInput = document.getElementById('leadAssigneeInput');
     const leadAssigneeSuggestions = document.getElementById('leadAssigneeSuggestions');
     const leadAssigneeToggleBtn = document.getElementById('leadAssigneeToggleBtn');
@@ -1141,6 +1147,8 @@
     let assignableUsersLoadingPromise = null;
     let assigneeSaving = false;
     let leadStatusSaving = false;
+    let leadStatusPickerOpen = false;
+    let leadStatusOptionsCache = [];
     let assigneeSuggestionsOpen = false;
     let assigneeActiveIndex = -1;
     let assigneeVisibleUsers = [];
@@ -4740,12 +4748,67 @@
       if (!leadStatusBadgeSelect) return;
       const toneClass = getLeadStatusToneClass(statusValue);
       leadStatusBadgeSelect.className = `lead-status-badge-select ${toneClass}`;
+      if (leadStatusBadgeTrigger) {
+        leadStatusBadgeTrigger.className = `lead-status-badge-trigger ${toneClass}`;
+      }
+    }
+
+    function setLeadStatusPickerOpen(nextOpen) {
+      if (!leadStatusBadgePanel || !leadStatusBadgeTrigger || !leadStatusBadgeSearchInput) return;
+      const shouldOpen = Boolean(nextOpen) && !leadStatusBadgeTrigger.disabled;
+      leadStatusPickerOpen = shouldOpen;
+      if (leadStatusBadgePicker) {
+        leadStatusBadgePicker.classList.toggle('is-open', shouldOpen);
+      }
+      leadStatusBadgePanel.classList.toggle('hidden', !shouldOpen);
+      leadStatusBadgeTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+      leadStatusBadgePanel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+
+      if (shouldOpen) {
+        leadStatusBadgeSearchInput.value = '';
+        renderLeadStatusPickerOptions('');
+        leadStatusBadgeSearchInput.focus();
+      }
+    }
+
+    function renderLeadStatusPickerOptions(query = '') {
+      if (!leadStatusBadgeOptionsList || !leadStatusBadgeSelect) return;
+      const normalizedQuery = String(query || '').trim().toLowerCase();
+      const currentKey = normalizeLeadStatusToken(leadStatusBadgeSelect.dataset.currentStatus || leadStatusBadgeSelect.value);
+      const filteredOptions = leadStatusOptionsCache.filter((statusValue) =>
+        !normalizedQuery || String(statusValue || '').toLowerCase().includes(normalizedQuery)
+      );
+
+      leadStatusBadgeOptionsList.innerHTML = '';
+      if (!filteredOptions.length) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'lead-status-badge-option-empty';
+        emptyEl.textContent = 'Sin coincidencias.';
+        leadStatusBadgeOptionsList.appendChild(emptyEl);
+        return;
+      }
+
+      filteredOptions.forEach((statusValue) => {
+        const optionBtn = document.createElement('button');
+        optionBtn.type = 'button';
+        optionBtn.className = 'lead-status-badge-option';
+        const isActive = normalizeLeadStatusToken(statusValue) === currentKey;
+        if (isActive) {
+          optionBtn.classList.add('is-active');
+        }
+        optionBtn.setAttribute('role', 'option');
+        optionBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        optionBtn.dataset.statusValue = statusValue;
+        optionBtn.textContent = statusValue;
+        leadStatusBadgeOptionsList.appendChild(optionBtn);
+      });
     }
 
     function renderLeadStatusBadgeOptions(currentStatusValue) {
       if (!leadStatusBadgeSelect) return;
       const currentStatus = normalizeLeadStatus(currentStatusValue) || 'New';
       const options = getLeadStatusOptions(currentStatus);
+      leadStatusOptionsCache = options.slice();
       leadStatusBadgeSelect.innerHTML = '';
       options.forEach((optionValue) => {
         const option = document.createElement('option');
@@ -4755,7 +4818,11 @@
       });
       leadStatusBadgeSelect.value = currentStatus;
       leadStatusBadgeSelect.dataset.currentStatus = currentStatus;
+      if (leadStatusBadgeTriggerLabel) {
+        leadStatusBadgeTriggerLabel.textContent = currentStatus;
+      }
       applyLeadStatusBadgeTone(currentStatus);
+      renderLeadStatusPickerOptions(leadStatusBadgeSearchInput?.value || '');
     }
 
     function syncLeadStatusBadge(lead = currentLeadData) {
@@ -4770,6 +4837,43 @@
       leadStatusBadgeSelect.dataset.bound = '1';
       loadPipelineCatalogInBackground();
 
+      if (leadStatusBadgeTrigger && leadStatusBadgePanel && leadStatusBadgeSearchInput && leadStatusBadgeOptionsList) {
+        leadStatusBadgeTrigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setLeadStatusPickerOpen(!leadStatusPickerOpen);
+        });
+
+        leadStatusBadgeSearchInput.addEventListener('input', () => {
+          renderLeadStatusPickerOptions(leadStatusBadgeSearchInput.value);
+        });
+
+        leadStatusBadgeOptionsList.addEventListener('click', (event) => {
+          const optionBtn = event.target.closest('.lead-status-badge-option[data-status-value]');
+          if (!optionBtn || leadStatusBadgeSelect.disabled) return;
+          const nextStatus = normalizeLeadStatus(optionBtn.dataset.statusValue);
+          if (!nextStatus) return;
+          leadStatusBadgeSelect.value = nextStatus;
+          setLeadStatusPickerOpen(false);
+          leadStatusBadgeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!leadStatusPickerOpen) return;
+          if (!leadStatusBadgePicker) return;
+          if (leadStatusBadgePicker.contains(event.target)) return;
+          setLeadStatusPickerOpen(false);
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (!leadStatusPickerOpen) return;
+          if (event.key === 'Escape') {
+            setLeadStatusPickerOpen(false);
+            leadStatusBadgeTrigger.focus();
+          }
+        });
+      }
+
       leadStatusBadgeSelect.addEventListener('change', async () => {
         if (leadStatusSaving) return;
 
@@ -4780,6 +4884,7 @@
         try {
           leadStatusSaving = true;
           leadStatusBadgeSelect.disabled = true;
+          if (leadStatusBadgeTrigger) leadStatusBadgeTrigger.disabled = true;
           const updatedLead = await patchLead({ status: nextStatus });
           const persistedStatus = normalizeLeadStatus(updatedLead?.status) || nextStatus;
           renderLeadStatusBadgeOptions(persistedStatus);
@@ -4790,6 +4895,7 @@
         } finally {
           leadStatusSaving = false;
           leadStatusBadgeSelect.disabled = false;
+          if (leadStatusBadgeTrigger) leadStatusBadgeTrigger.disabled = false;
         }
       });
     }

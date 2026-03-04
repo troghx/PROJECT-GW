@@ -21,17 +21,30 @@ const homeSearchInput = document.getElementById('homeSearch');
 const leadsSpecificSearch = document.getElementById('leadsSpecificSearch');
 
 if (leadsSpecificSearch) {
+  let _lsDebounce = null;
   leadsSpecificSearch.addEventListener('input', (event) => {
-    scheduleLeadSearch(event.target.value);
+    const q = event.target.value;
+    setLeadSearchQuery(q, { syncInput: false });
+    clearTimeout(_lsDebounce);
+    _lsDebounce = setTimeout(async () => {
+      await loadLeads();
+      hideLeadSearchSuggestions();
+      if (isLeadsView) {
+        const matches = currentLeadSearchQuery ? searchLeadsByQuery(currentLeadSearchQuery) : allLeadsCache;
+        renderLeadsRows(matches);
+      }
+    }, LEAD_SEARCH_DEBOUNCE_MS);
   });
   leadsSpecificSearch.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      setLeadSearchQuery('');
+      setLeadSearchQuery('', { syncInput: false });
+      leadsSpecificSearch.value = '';
+      hideLeadSearchSuggestions();
+      if (isLeadsView) renderFilteredLeads();
       leadsSpecificSearch.blur();
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      runLeadSearchSubmit();
     }
   });
 }
@@ -2384,22 +2397,62 @@ function buildLeadsSearchIndex(leads) {
 }
 
 function searchLeadsByQuery(query) {
-  if (!currentLeadSearchQuery && !query) {
-    return allLeadsCache.slice();
+  let leadsToFilter = allLeadsCache.slice();
+
+  const dateFromEl = document.getElementById('leadsFilterDateFrom');
+  const dateToEl = document.getElementById('leadsFilterDateTo');
+
+  const assigneeFilter = window._leadsSelectedAssignee ? window._leadsSelectedAssignee.value : '';
+  const dateFromFilter = dateFromEl ? dateFromEl.value : '';
+  const dateToFilter = dateToEl ? dateToEl.value : '';
+
+  // Multi-status filter
+  const selectedStatuses = window._leadsSelectedStatuses;
+  if (selectedStatuses && selectedStatuses.size > 0) {
+    const statusSetLow = new Set(Array.from(selectedStatuses).map(s => s.toLowerCase()));
+    leadsToFilter = leadsToFilter.filter(lead => statusSetLow.has((lead.status || '').toLowerCase()));
   }
+  if (assigneeFilter) {
+    leadsToFilter = leadsToFilter.filter(lead => lead.assigned_to === assigneeFilter);
+  }
+  if (dateFromFilter) {
+    const fromDate = new Date(dateFromFilter);
+    leadsToFilter = leadsToFilter.filter(lead => new Date(lead.created_at) >= fromDate);
+  }
+  if (dateToFilter) {
+    const toDate = new Date(dateToFilter);
+    toDate.setHours(23, 59, 59, 999);
+    leadsToFilter = leadsToFilter.filter(lead => new Date(lead.created_at) <= toDate);
+  }
+
   const normalizedQuery = String(query ?? currentLeadSearchQuery ?? '').trim();
-  if (!normalizedQuery) return allLeadsCache.slice();
-  if (typeof crmHelpers.searchLeads === 'function') {
-    return crmHelpers.searchLeads(leadSearchIndex, normalizedQuery);
+  if (!normalizedQuery) {
+    return leadsToFilter;
   }
-  return allLeadsCache.filter((lead) => String(lead?.full_name || '').toLowerCase().includes(normalizedQuery.toLowerCase()));
+
+  let textSearchResults = [];
+  if (typeof crmHelpers.searchLeads === 'function') {
+    textSearchResults = crmHelpers.searchLeads(leadSearchIndex, normalizedQuery);
+  } else {
+    textSearchResults = allLeadsCache.filter((lead) => String(lead?.full_name || '').toLowerCase().includes(normalizedQuery.toLowerCase()));
+  }
+
+  const filterSet = new Set(leadsToFilter.map(l => l.id));
+  return textSearchResults.filter(lead => filterSet.has(lead.id));
 }
 
 function updateLeadsCounter(filteredCount) {
   const countEl = document.getElementById('leadsCount');
   if (!countEl) return;
+
+  const selectedStatuses = window._leadsSelectedStatuses;
+  const assigneeFilter = window._leadsSelectedAssignee ? window._leadsSelectedAssignee.value : '';
+  const dateFromEl = document.getElementById('leadsFilterDateFrom');
+  const dateToEl = document.getElementById('leadsFilterDateTo');
+  const hasFilters = (selectedStatuses && selectedStatuses.size > 0) || assigneeFilter || (dateFromEl && dateFromEl.value) || (dateToEl && dateToEl.value);
+
   const safeFilteredCount = Number.isFinite(filteredCount) ? filteredCount : allLeadsCache.length;
-  if (currentLeadSearchQuery) {
+  if (currentLeadSearchQuery || hasFilters) {
     countEl.textContent = `(${safeFilteredCount}/${allLeadsCache.length})`;
     return;
   }
@@ -3983,9 +4036,48 @@ function renderEmailsRows(emails) {
   syncEmailSelectionUi();
 }
 
+function renderFilteredEmails() {
+  let emailsToFilter = allEmailsCache.slice();
+
+  const searchEl = document.getElementById('emailsSpecificSearch');
+  const statusEl = document.getElementById('emailsFilterStatus');
+  const dateFromEl = document.getElementById('emailsFilterDateFrom');
+  const dateToEl = document.getElementById('emailsFilterDateTo');
+
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : '';
+  const dateFromFilter = dateFromEl ? dateFromEl.value : '';
+  const dateToFilter = dateToEl ? dateToEl.value : '';
+
+  if (query) {
+    emailsToFilter = emailsToFilter.filter(email => 
+      String(email.subject || '').toLowerCase().includes(query) ||
+      String(email.from_address || '').toLowerCase().includes(query) ||
+      String(email.to_address || '').toLowerCase().includes(query)
+    );
+  }
+
+  if (statusFilter) {
+    emailsToFilter = emailsToFilter.filter(email => email.status === statusFilter);
+  }
+
+  if (dateFromFilter) {
+    const fromDate = new Date(dateFromFilter);
+    emailsToFilter = emailsToFilter.filter(email => new Date(email.created_at || email.sent_at) >= fromDate);
+  }
+
+  if (dateToFilter) {
+    const toDate = new Date(dateToFilter);
+    toDate.setHours(23, 59, 59, 999);
+    emailsToFilter = emailsToFilter.filter(email => new Date(email.created_at || email.sent_at) <= toDate);
+  }
+
+  renderEmailsRows(emailsToFilter);
+}
+
 async function loadEmails(forceReload = false) {
   if (emailsLoaded && !forceReload) {
-    renderEmailsRows(allEmailsCache);
+    renderFilteredEmails();
     return allEmailsCache;
   }
 
@@ -5302,11 +5394,10 @@ function renderLeadReassignButton(lead) {
       aria-label="Reasignar lead"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-        <circle cx="6.8" cy="7.3" r="2.6" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M2.8 14.6c0-2 1.8-3.6 4-3.6s4 1.6 4 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="M14.1 6.6h5.5m0 0-1.7-1.7m1.7 1.7-1.7 1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M20.1 16.5h-5.6m0 0 1.7 1.7m-1.7-1.7 1.7-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M16.2 8.8a4.1 4.1 0 0 1 3.9 2.8m-5.7 3.8a4.1 4.1 0 0 1-1.3-2.9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M20 7v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 17v-4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7.2 9.2a6 6 0 0 1 10.1-1.9L20 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16.8 14.8a6 6 0 0 1-10.1 1.9L4 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
   `;
@@ -5478,6 +5569,234 @@ async function updateLeadAssignee(leadId, nextAssignee) {
 
 let leadsCurrentPage = 1;
 const leadsPerPage = 20;
+const leadDocsFilesByLeadId = new Map();
+
+function formatLeadDocsFileSize(bytes) {
+  const safeBytes = Number(bytes || 0);
+  if (!Number.isFinite(safeBytes) || safeBytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const unitIndex = Math.min(Math.floor(Math.log(safeBytes) / Math.log(1024)), units.length - 1);
+  const value = safeBytes / (1024 ** unitIndex);
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatLeadDocsDate(dateValue) {
+  if (!dateValue) return '-';
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('es-ES', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function normalizeLeadDocsFileEntry(entry, fallbackLeadId = 0) {
+  if (!entry || typeof entry !== 'object') return null;
+  const numericId = Number(entry.id);
+  if (!Number.isInteger(numericId) || numericId <= 0) return null;
+  return {
+    id: numericId,
+    leadId: Number(entry.leadId || entry.lead_id || fallbackLeadId || 0),
+    name: String(entry.name || entry.fileName || entry.file_name || 'Archivo'),
+    type: String(entry.type || entry.mimeType || entry.mime_type || ''),
+    size: Number(entry.size || entry.fileSize || entry.file_size || 0),
+    uploadedAt: entry.uploadedAt || entry.created_at || null
+  };
+}
+
+function setLeadDocsPanelStatus(panelEl, message = '', type = 'info') {
+  const statusEl = panelEl?.querySelector('.lead-docs-panel-status');
+  if (!statusEl) return;
+
+  const safeMessage = String(message || '').trim();
+  statusEl.classList.remove('hidden', 'is-error', 'is-info');
+  if (!safeMessage) {
+    statusEl.textContent = '';
+    statusEl.classList.add('hidden');
+    return;
+  }
+
+  statusEl.textContent = safeMessage;
+  statusEl.classList.add(type === 'error' ? 'is-error' : 'is-info');
+}
+
+function renderLeadDocsPanelList(panelEl, files = [], leadId = 0) {
+  const listEl = panelEl?.querySelector('.lead-docs-panel-list');
+  if (!listEl) return;
+
+  const safeFiles = Array.isArray(files) ? files : [];
+  if (!safeFiles.length) {
+    listEl.innerHTML = '<div class="lead-docs-panel-empty">Este lead no tiene archivos cargados.</div>';
+    return;
+  }
+
+  listEl.innerHTML = safeFiles.map((file) => {
+    const typeLabel = String(file.type || '').trim() || 'tipo sin definir';
+    const sizeLabel = formatLeadDocsFileSize(file.size);
+    const dateLabel = formatLeadDocsDate(file.uploadedAt);
+    return `
+      <article class="lead-docs-panel-row">
+        <div class="lead-docs-panel-row-info">
+          <p class="lead-docs-panel-row-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</p>
+          <p class="lead-docs-panel-row-meta">${escapeHtml(typeLabel)} · ${escapeHtml(sizeLabel)} · ${escapeHtml(dateLabel)}</p>
+        </div>
+        <button
+          class="lead-docs-panel-open-btn"
+          type="button"
+          data-lead-id="${Number(leadId) || 0}"
+          data-file-id="${Number(file.id) || 0}"
+        >
+          Abrir
+        </button>
+      </article>
+    `;
+  }).join('');
+}
+
+function setLeadActionsMenuView(menuEl, view = 'actions') {
+  if (!menuEl) return;
+  const actionsView = menuEl.querySelector('.lead-actions-view');
+  const docsView = menuEl.querySelector('.lead-docs-panel');
+  const showDocs = view === 'docs';
+
+  actionsView?.classList.toggle('hidden', showDocs);
+  docsView?.classList.toggle('hidden', !showDocs);
+  menuEl.classList.toggle('docs-mode', showDocs);
+}
+
+async function fetchLeadDocsMetadataFromServer(leadId) {
+  const numericLeadId = Number(leadId || 0);
+  if (!Number.isInteger(numericLeadId) || numericLeadId <= 0) {
+    throw new Error('ID de lead invalido.');
+  }
+  const data = await requestJson(`/api/leads/${numericLeadId}/files`, { cache: 'no-store' });
+  const files = Array.isArray(data?.files) ? data.files : [];
+  return files
+    .map((entry) => normalizeLeadDocsFileEntry(entry, numericLeadId))
+    .filter(Boolean);
+}
+
+async function fetchLeadDocContentDataUrl(leadId, fileId) {
+  const numericLeadId = Number(leadId || 0);
+  const numericFileId = Number(fileId || 0);
+  if (!Number.isInteger(numericLeadId) || numericLeadId <= 0) {
+    throw new Error('ID de lead invalido.');
+  }
+  if (!Number.isInteger(numericFileId) || numericFileId <= 0) {
+    throw new Error('ID de archivo invalido.');
+  }
+
+  const data = await requestJson(`/api/leads/${numericLeadId}/files/${numericFileId}/content`, { cache: 'no-store' });
+  return String(data?.dataUrl || '');
+}
+
+function dataUrlToBlob(dataUrl) {
+  const raw = String(dataUrl || '');
+  const match = raw.match(/^data:([^;]+);base64,(.+)$/i);
+  if (!match) {
+    throw new Error('Formato de archivo invalido.');
+  }
+
+  const mimeType = String(match[1] || 'application/octet-stream');
+  const payload = String(match[2] || '');
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+function openBlobInNewTab(blob, fileName) {
+  const blobUrl = URL.createObjectURL(blob);
+  const opened = window.open(blobUrl, '_blank', 'noopener');
+  if (!opened) {
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName || 'archivo';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+}
+
+async function openLeadDocFileFromPanel(leadId, fileId, buttonEl = null) {
+  const numericLeadId = Number(leadId || 0);
+  const numericFileId = Number(fileId || 0);
+  if (!Number.isInteger(numericLeadId) || numericLeadId <= 0) return;
+  if (!Number.isInteger(numericFileId) || numericFileId <= 0) return;
+
+  const files = leadDocsFilesByLeadId.get(numericLeadId) || [];
+  const file = files.find((entry) => Number(entry.id) === numericFileId);
+  if (!file) {
+    showToast('Archivo no encontrado.', 'error');
+    return;
+  }
+
+  if (buttonEl) buttonEl.disabled = true;
+  try {
+    const isPdf = String(file.type || '').toLowerCase() === 'application/pdf';
+    if (isPdf) {
+      const viewerUrl = `credit-report-viewer.html?fileId=${encodeURIComponent(file.id)}&leadId=${encodeURIComponent(numericLeadId)}&name=${encodeURIComponent(file.name)}`;
+      window.open(viewerUrl, '_blank', 'noopener');
+      return;
+    }
+
+    const dataUrl = await fetchLeadDocContentDataUrl(numericLeadId, numericFileId);
+    if (!dataUrl) {
+      throw new Error('No se encontro el contenido del archivo.');
+    }
+    const blob = dataUrlToBlob(dataUrl);
+    openBlobInNewTab(blob, file.name);
+  } catch (error) {
+    showToast(error.message || 'No se pudo abrir el archivo.', 'error');
+  } finally {
+    if (buttonEl) buttonEl.disabled = false;
+  }
+}
+
+async function openLeadDocsPanelForMenu(menuWrap, leadId) {
+  const numericLeadId = Number(leadId || 0);
+  if (!menuWrap || !Number.isInteger(numericLeadId) || numericLeadId <= 0) return;
+
+  const menuEl = menuWrap.querySelector('.lead-actions-menu');
+  const docsPanelEl = menuEl?.querySelector('.lead-docs-panel');
+  const listEl = docsPanelEl?.querySelector('.lead-docs-panel-list');
+  const subtitleEl = docsPanelEl?.querySelector('.lead-docs-panel-subtitle');
+  if (!menuEl || !docsPanelEl || !listEl) return;
+
+  const lead = allLeadsCache.find((item) => Number(item?.id) === numericLeadId);
+  const leadName = String(lead?.full_name || `Lead #${numericLeadId}`).trim();
+  const caseLabel = lead?.case_id ? `Case #${lead.case_id}` : `Lead #${numericLeadId}`;
+  if (subtitleEl) {
+    subtitleEl.textContent = `${leadName} · ${caseLabel}`;
+  }
+
+  setLeadActionsMenuView(menuEl, 'docs');
+  listEl.innerHTML = '<div class="lead-docs-panel-empty">Cargando archivos...</div>';
+  setLeadDocsPanelStatus(docsPanelEl, 'Cargando archivos...');
+
+  const requestToken = `${Date.now()}-${Math.random()}`;
+  docsPanelEl.dataset.requestToken = requestToken;
+  docsPanelEl.dataset.leadId = String(numericLeadId);
+
+  try {
+    const files = await fetchLeadDocsMetadataFromServer(numericLeadId);
+    if (docsPanelEl.dataset.requestToken !== requestToken) return;
+    leadDocsFilesByLeadId.set(numericLeadId, files);
+    renderLeadDocsPanelList(docsPanelEl, files, numericLeadId);
+    setLeadDocsPanelStatus(docsPanelEl, '');
+  } catch (error) {
+    if (docsPanelEl.dataset.requestToken !== requestToken) return;
+    leadDocsFilesByLeadId.set(numericLeadId, []);
+    renderLeadDocsPanelList(docsPanelEl, [], numericLeadId);
+    setLeadDocsPanelStatus(docsPanelEl, error.message || 'No se pudieron cargar los documentos.', 'error');
+  }
+}
 
 function renderLeadsRows(leads) {
   const tbody = document.getElementById('leadsTableBody');
@@ -5563,7 +5882,7 @@ function renderLeadsRows(leads) {
       <td>${getLeadBadgesCell(lead, leadMapById)}</td>
       <td class="lead-user">
         <div class="lead-assignee-inline">
-          <span class="lead-assignee-name">${escapeHtml(lead.assigned_to || '-')}</span>
+          <span class="lead-assignee-name" ${lead.assigned_to ? `data-qf="assignee" data-qf-value="${escapeHtml(lead.assigned_to)}" title="Click para filtrar por ${escapeHtml(lead.assigned_to)}"` : ''}>${escapeHtml(lead.assigned_to || '-')}</span>
           ${renderLeadReassignButton(lead)}
         </div>
       </td>
@@ -5589,42 +5908,53 @@ function renderLeadsRows(leads) {
             <span class="lead-more-dots" aria-hidden="true"></span>
           </button>
           <div class="lead-actions-menu" role="menu" aria-label="Acciones del lead">
-            <button
-              class="lead-menu-item lead-docs-item"
-              type="button"
-              role="menuitem"
-              data-id="${lead.id}"
-            >
-              <span class="lead-menu-item-icon" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" focusable="false">
-                  <path d="M6.4 3.2h4.8l3 3V15a1.3 1.3 0 0 1-1.3 1.3H6.4A1.3 1.3 0 0 1 5.1 15V4.5a1.3 1.3 0 0 1 1.3-1.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                  <path d="M11.2 3.2V6.1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M7.5 10.2h4.9M7.5 12.6h3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="lead-menu-item-copy">
-                <span class="lead-menu-item-title">Ver docs</span>
-                <span class="lead-menu-item-subtitle">Abrir archivos del lead</span>
-              </span>
-            </button>
-            <button
-              class="lead-menu-item lead-delete-item"
-              type="button"
-              role="menuitem"
-              data-id="${lead.id}"
-              data-name="${escapeHtml(lead.full_name)}"
-            >
-              <span class="lead-menu-item-icon" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" focusable="false">
-                  <path d="M5.7 6.1h8.6M8 6.1V4.8h4v1.3m-5.2 0v8.4a1 1 0 0 0 1 1h4.4a1 1 0 0 0 1-1V6.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M8.8 8.5v4.7M11.2 8.5v4.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="lead-menu-item-copy">
-                <span class="lead-menu-item-title">Eliminar lead</span>
-                <span class="lead-menu-item-subtitle">Borrar permanentemente</span>
-              </span>
-            </button>
+            <div class="lead-actions-view">
+              <button
+                class="lead-menu-item lead-docs-item"
+                type="button"
+                role="menuitem"
+                data-id="${lead.id}"
+              >
+                <span class="lead-menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" focusable="false">
+                    <path d="M6.4 3.2h4.8l3 3V15a1.3 1.3 0 0 1-1.3 1.3H6.4A1.3 1.3 0 0 1 5.1 15V4.5a1.3 1.3 0 0 1 1.3-1.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M11.2 3.2V6.1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M7.5 10.2h4.9M7.5 12.6h3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <span class="lead-menu-item-copy">
+                  <span class="lead-menu-item-title">Ver docs</span>
+                  <span class="lead-menu-item-subtitle">Abrir archivos del lead</span>
+                </span>
+              </button>
+              <button
+                class="lead-menu-item lead-delete-item"
+                type="button"
+                role="menuitem"
+                data-id="${lead.id}"
+                data-name="${escapeHtml(lead.full_name)}"
+              >
+                <span class="lead-menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" focusable="false">
+                    <path d="M5.7 6.1h8.6M8 6.1V4.8h4v1.3m-5.2 0v8.4a1 1 0 0 0 1 1h4.4a1 1 0 0 0 1-1V6.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8.8 8.5v4.7M11.2 8.5v4.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <span class="lead-menu-item-copy">
+                  <span class="lead-menu-item-title">Eliminar lead</span>
+                  <span class="lead-menu-item-subtitle">Borrar permanentemente</span>
+                </span>
+              </button>
+            </div>
+            <div class="lead-docs-panel hidden">
+              <div class="lead-docs-panel-head">
+                <p class="lead-docs-panel-title">ARCHIVOS</p>
+                <button class="lead-docs-panel-back-btn" type="button">Volver</button>
+              </div>
+              <p class="lead-docs-panel-subtitle">Selecciona un archivo para abrirlo.</p>
+              <div class="lead-docs-panel-status hidden"></div>
+              <div class="lead-docs-panel-list"></div>
+            </div>
           </div>
         </div>
       </td>
@@ -5636,6 +5966,8 @@ function renderLeadsRows(leads) {
 
   const closeLeadActionsMenus = () => {
     tbody.querySelectorAll('.lead-actions-wrap.open').forEach((menuWrap) => {
+      const menuEl = menuWrap.querySelector('.lead-actions-menu');
+      setLeadActionsMenuView(menuEl, 'actions');
       menuWrap.classList.remove('open');
     });
   };
@@ -5706,6 +6038,8 @@ function renderLeadsRows(leads) {
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.lead-actions-wrap')) {
         document.querySelectorAll('.lead-actions-wrap.open').forEach((menuWrap) => {
+          const menuEl = menuWrap.querySelector('.lead-actions-menu');
+          setLeadActionsMenuView(menuEl, 'actions');
           menuWrap.classList.remove('open');
         });
       }
@@ -5761,10 +6095,43 @@ function renderLeadsRows(leads) {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      closeLeadActionsMenus();
       const leadId = Number(btn.dataset.id || 0);
       if (!leadId) return;
-      window.location.assign(`/client.html?id=${leadId}&tab=lead&open=docs`);
+
+      const menuWrap = btn.closest('.lead-actions-wrap');
+      if (!menuWrap) return;
+
+      tbody.querySelectorAll('.lead-actions-wrap.open').forEach((otherWrap) => {
+        if (otherWrap === menuWrap) return;
+        const otherMenu = otherWrap.querySelector('.lead-actions-menu');
+        setLeadActionsMenuView(otherMenu, 'actions');
+        otherWrap.classList.remove('open');
+      });
+
+      menuWrap.classList.add('open');
+      void openLeadDocsPanelForMenu(menuWrap, leadId);
+    });
+  });
+
+  tbody.querySelectorAll('.lead-docs-panel-back-btn').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menuEl = btn.closest('.lead-actions-menu');
+      setLeadActionsMenuView(menuEl, 'actions');
+    });
+  });
+
+  tbody.querySelectorAll('.lead-docs-panel-list').forEach((listEl) => {
+    listEl.addEventListener('click', (event) => {
+      const targetBtn = event.target.closest('.lead-docs-panel-open-btn[data-file-id][data-lead-id]');
+      if (!targetBtn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const leadId = Number(targetBtn.dataset.leadId || 0);
+      const fileId = Number(targetBtn.dataset.fileId || 0);
+      if (!leadId || !fileId) return;
+      void openLeadDocFileFromPanel(leadId, fileId, targetBtn);
     });
   });
 
@@ -5913,16 +6280,17 @@ function getStatusBadge(status, isTest) {
     return crmHelpers.getStatusBadgeHtml(status, isTest);
   }
   if (isTest) {
-    return '<span class="status-badge test">Test</span>';
+    return '<span class="status-badge test" data-qf="status" data-qf-value="Test" title="Click para filtrar">Test</span>';
   }
-  const statusClass = {
-    'New Lead': 'new',
-    'Submitted to UW': 'submitted',
-    'Docs Back': 'docs',
-    'Sent to Debt Manager': 'manager',
-    'Callback Requested': 'callback'
-  }[status] || 'new';
-  return `<span class="status-badge ${statusClass}">${escapeHtml(status)}</span>`;
+  const s = String(status || '').trim();
+  const sLow = s.toLowerCase();
+  let statusClass = 'new';
+  if (sLow.includes('bad') || sLow.includes('dead') || sLow.includes('dnc') || sLow.includes('nq') || sLow.includes('reject') || sLow.includes("can't") || sLow.includes('not interested')) statusClass = 'negative';
+  else if (sLow.includes('docs')) statusClass = 'docs';
+  else if (sLow.includes('submitted') || sLow.includes('debtmanager')) statusClass = 'submitted';
+  else if (sLow.includes('banking') || sLow.includes('hotlist') || sLow.includes('ca hold')) statusClass = 'manager';
+  else if (sLow.includes('attempt') || sLow.includes('contact') || sLow.includes('warm') || sLow.includes('meeting') || sLow.includes('nurture') || sLow.includes('looking') || sLow.includes('transferred') || sLow.includes('callback')) statusClass = 'callback';
+  return `<span class="status-badge ${statusClass}" data-qf="status" data-qf-value="${escapeHtml(status)}" title="Click para filtrar">${escapeHtml(status)}</span>`;
 }
 
 function getStateTypeBadge(stateCode, stateType) {
@@ -6223,6 +6591,7 @@ function initRankingsWheel() {
     let startOffset = 0;
     
     wheel.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       isDragging = true;
       isPaused = true;
       startY = e.clientY;
@@ -6233,6 +6602,7 @@ function initRankingsWheel() {
     let _wheelDragTicking = false;
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
+      e.preventDefault();
       if (!_wheelDragTicking) {
         window.requestAnimationFrame(() => {
           const delta = e.clientY - startY;
@@ -6286,10 +6656,508 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[RankingsWheel] Elemento dashboard:', dashboard);
   
   if (isVisible) {
-    console.log('[RankingsWheel] Inicializando desde DOMContentLoaded');
+    console.log('[RankingsWheel] Inicializando desde DOMContentLoaded');     
     setTimeout(initRankingsWheel, 500);
   }
 });
+
+// Inicialización de filtros de Leads
+document.addEventListener('DOMContentLoaded', () => {
+  const clearBtn = document.getElementById('leadsFilterClearBtn');
+  const chipsContainer = document.getElementById('leadsFilterChips');
+  const dateTrigger = document.getElementById('leadsDateTrigger');
+  const dateDropdown = document.getElementById('leadsDateDropdown');
+  const statusTrigger = document.getElementById('leadsStatusTrigger');
+  const statusDropdown = document.getElementById('leadsStatusDropdown');
+  const statusList = document.getElementById('leadsStatusList');
+  const statusCountBadge = document.getElementById('leadsStatusCount');
+  const statusSearchInput = document.getElementById('leadsStatusSearch');
+  const assigneeTrigger = document.getElementById('leadsAssigneeTrigger');
+  const assigneeDropdown = document.getElementById('leadsAssigneeDropdown');
+  const assigneeListEl = document.getElementById('leadsAssigneeList');
+  const assigneeSearchInput = document.getElementById('leadsAssigneeSearch');
+  const savedTrigger = document.getElementById('leadsSavedTrigger');
+  const savedDropdown = document.getElementById('leadsSavedDropdown');
+  const savedList = document.getElementById('leadsSavedList');
+  const savedNameInput = document.getElementById('leadsSavedNameInput');
+  const saveFilterBtn = document.getElementById('leadsSaveFilterBtn');
+  let activeDatePreset = '';
+  let selectedStatuses = new Set();
+  let selectedAssignee = '';
+  const SAVED_FILTERS_KEY = 'project_gw_leads_saved_filters_v1';
+
+  // All possible statuses
+  const ALL_STATUSES = [
+    'New Lead','New','New Duplicate','Attempring contact','Contacted Warm','Warm',
+    'Meeting','Nurture','Docs sent','Docs back','Submitted to UW','Sent to DebtManager',
+    'Hotlist','Banking','CA Hold','Callback Requested','Looking for a loan',
+    'Transferred to CCCF','Bad number','bad state','Dead','DNC','Not interested',
+    'NQ Debt type','NQ language',"NQ Can't afford",'NQ Debt Amount','UW Reject','Test'
+  ];
+
+  // ── Multi-select status ──
+  function getStatusCounts() {
+    const counts = {};
+    allLeadsCache.forEach(lead => {
+      const s = lead.status || 'Unknown';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return counts;
+  }
+
+  function renderStatusList(filter) {
+    if (!statusList) return;
+    const counts = getStatusCounts();
+    const filterLow = (filter || '').toLowerCase();
+    const filtered = filterLow ? ALL_STATUSES.filter(s => s.toLowerCase().includes(filterLow)) : ALL_STATUSES;
+
+    statusList.innerHTML = filtered.map(s => {
+      const active = selectedStatuses.has(s);
+      const count = counts[s] || 0;
+      return `<div class="lf-multi-opt ${active ? 'lf-opt-active' : ''}" data-status="${escapeHtml(s)}">
+        <span class="lf-multi-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span class="lf-multi-name">${escapeHtml(s)}</span>
+        <span class="lf-multi-cnt">${count}</span>
+      </div>`;
+    }).join('');
+
+    statusList.querySelectorAll('.lf-multi-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const val = opt.dataset.status;
+        if (selectedStatuses.has(val)) selectedStatuses.delete(val);
+        else selectedStatuses.add(val);
+        opt.classList.toggle('lf-opt-active', selectedStatuses.has(val));
+        syncStatusTrigger();
+        applyLeadsFilters();
+      });
+    });
+  }
+
+  function syncStatusTrigger() {
+    const n = selectedStatuses.size;
+    if (statusTrigger) {
+      statusTrigger.querySelector('span').textContent = n ? `Estado` : 'Estado';
+      statusTrigger.classList.toggle('lf-active', n > 0);
+    }
+    if (statusCountBadge) {
+      statusCountBadge.textContent = n;
+      statusCountBadge.classList.toggle('hidden', n === 0);
+    }
+  }
+
+  // Multi-select dropdown toggle
+  if (statusTrigger && statusDropdown) {
+    statusTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      statusDropdown.classList.toggle('hidden');
+      if (!statusDropdown.classList.contains('hidden')) {
+        renderStatusList('');
+        if (statusSearchInput) { statusSearchInput.value = ''; statusSearchInput.focus(); }
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!statusDropdown.contains(e.target) && e.target !== statusTrigger && !statusTrigger.contains(e.target)) {
+        statusDropdown.classList.add('hidden');
+      }
+    });
+    if (statusSearchInput) {
+      statusSearchInput.addEventListener('input', () => renderStatusList(statusSearchInput.value));
+    }
+    const statusClearAll = document.getElementById('leadsStatusClearAll');
+    if (statusClearAll) {
+      statusClearAll.addEventListener('click', () => {
+        selectedStatuses.clear();
+        syncStatusTrigger();
+        renderStatusList(statusSearchInput?.value || '');
+        applyLeadsFilters();
+      });
+    }
+  }
+
+  // Expose for searchLeadsByQuery
+  window._leadsSelectedStatuses = selectedStatuses;
+  window._leadsSelectedAssignee = { get value() { return selectedAssignee; } };
+
+  // ── Assignee dropdown (single-select with search) ──
+  function getAssigneeOptions() {
+    return [...new Set(allLeadsCache.map(l => l.assigned_to).filter(Boolean))].sort();
+  }
+
+  function renderAssigneeList(filter) {
+    if (!assigneeListEl) return;
+    const agents = getAssigneeOptions();
+    const filterLow = (filter || '').toLowerCase();
+    const filtered = filterLow ? agents.filter(a => a.toLowerCase().includes(filterLow)) : agents;
+
+    if (!filtered.length) {
+      assigneeListEl.innerHTML = '<div style="padding:10px 8px;font-size:11px;color:rgba(255,255,255,0.3);text-align:center;">Sin resultados</div>';
+      return;
+    }
+
+    assigneeListEl.innerHTML = filtered.map(a => {
+      const active = selectedAssignee === a;
+      const count = allLeadsCache.filter(l => l.assigned_to === a).length;
+      return `<div class="lf-multi-opt ${active ? 'lf-opt-active' : ''}" data-agent="${escapeHtml(a)}">
+        <span class="lf-multi-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span class="lf-multi-name">${escapeHtml(a)}</span>
+        <span class="lf-multi-cnt">${count}</span>
+      </div>`;
+    }).join('');
+
+    assigneeListEl.querySelectorAll('.lf-multi-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const val = opt.dataset.agent;
+        selectedAssignee = selectedAssignee === val ? '' : val;
+        syncAssigneeTrigger();
+        renderAssigneeList(assigneeSearchInput?.value || '');
+        assigneeDropdown?.classList.add('hidden');
+        applyLeadsFilters();
+      });
+    });
+  }
+
+  function syncAssigneeTrigger() {
+    if (assigneeTrigger) {
+      assigneeTrigger.querySelector('span').textContent = selectedAssignee || 'Agente';
+      assigneeTrigger.classList.toggle('lf-active', !!selectedAssignee);
+    }
+  }
+
+  if (assigneeTrigger && assigneeDropdown) {
+    assigneeTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      assigneeDropdown.classList.toggle('hidden');
+      if (!assigneeDropdown.classList.contains('hidden')) {
+        renderAssigneeList('');
+        if (assigneeSearchInput) { assigneeSearchInput.value = ''; assigneeSearchInput.focus(); }
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!assigneeDropdown.contains(e.target) && e.target !== assigneeTrigger && !assigneeTrigger.contains(e.target)) {
+        assigneeDropdown.classList.add('hidden');
+      }
+    });
+    if (assigneeSearchInput) {
+      assigneeSearchInput.addEventListener('input', () => renderAssigneeList(assigneeSearchInput.value));
+    }
+  }
+
+  // ── Sync highlights & chips ──
+  const syncFilterHighlights = () => {
+    let anyActive = selectedStatuses.size > 0;
+    if (selectedAssignee) anyActive = true;
+    syncAssigneeTrigger();
+    if (dateTrigger) {
+      const df = document.getElementById('leadsFilterDateFrom');
+      const dt = document.getElementById('leadsFilterDateTo');
+      const dateActive = (df && df.value) || (dt && dt.value);
+      dateTrigger.classList.toggle('lf-active', !!dateActive);
+      if (dateActive) anyActive = true;
+    }
+    syncStatusTrigger();
+    if (clearBtn) clearBtn.classList.toggle('lf-visible', anyActive);
+    renderFilterChips();
+  };
+
+  // ── Render chips ──
+  const renderFilterChips = () => {
+    if (!chipsContainer) return;
+    const chips = [];
+    const dateFromEl = document.getElementById('leadsFilterDateFrom');
+    const dateToEl = document.getElementById('leadsFilterDateTo');
+
+    // One chip per selected status
+    selectedStatuses.forEach(s => {
+      chips.push({ label: 'Estado', value: s, clear: () => {
+        selectedStatuses.delete(s);
+        syncStatusTrigger();
+      }});
+    });
+
+    if (selectedAssignee) {
+      chips.push({ label: 'Agente', value: selectedAssignee, clear: () => { selectedAssignee = ''; syncAssigneeTrigger(); } });
+    }
+    if ((dateFromEl && dateFromEl.value) || (dateToEl && dateToEl.value)) {
+      const from = dateFromEl?.value || '...';
+      const to = dateToEl?.value || '...';
+      const dateLabel = activeDatePreset || `${from} → ${to}`;
+      chips.push({ label: 'Fecha', value: dateLabel, clear: () => {
+        if (dateFromEl) dateFromEl.value = '';
+        if (dateToEl) dateToEl.value = '';
+        activeDatePreset = '';
+        if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Fecha';
+        dateDropdown?.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
+      }});
+    }
+
+    chipsContainer.innerHTML = chips.map((c, i) =>
+      `<span class="lf-chip"><span class="lf-chip-label">${c.label}:</span>${escapeHtml(c.value)}<button class="lf-chip-x" data-chip="${i}">&times;</button></span>`
+    ).join('');
+
+    chipsContainer.querySelectorAll('.lf-chip-x').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.dataset.chip);
+        if (chips[idx]) {
+          chips[idx].clear();
+          applyLeadsFilters();
+        }
+      });
+    });
+  };
+
+  // ── Apply filters (central) ──
+  const applyLeadsFilters = () => {
+    leadsCurrentPage = 1;
+    syncFilterHighlights();
+    renderFilteredLeads();
+  };
+  window._applyLeadsFilters = applyLeadsFilters;
+
+  // ── Date presets ──
+  if (dateTrigger && dateDropdown) {
+    dateTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dateDropdown.classList.toggle('hidden');
+    });
+    document.addEventListener('click', (e) => {
+      if (!dateDropdown.contains(e.target) && e.target !== dateTrigger && !dateTrigger.contains(e.target)) {
+        dateDropdown.classList.add('hidden');
+      }
+    });
+    dateDropdown.querySelectorAll('.lf-date-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        const now = new Date();
+        const dateFromEl = document.getElementById('leadsFilterDateFrom');
+        const dateToEl = document.getElementById('leadsFilterDateTo');
+        let fromDate = new Date();
+        const toISO = now.toISOString().split('T')[0];
+        if (preset === 'today') { fromDate = now; activeDatePreset = 'Hoy'; }
+        else if (preset === '7d') { fromDate.setDate(now.getDate() - 7); activeDatePreset = 'Ultimos 7 dias'; }
+        else if (preset === '30d') { fromDate.setDate(now.getDate() - 30); activeDatePreset = 'Ultimos 30 dias'; }
+        else if (preset === '90d') { fromDate.setDate(now.getDate() - 90); activeDatePreset = 'Ultimos 90 dias'; }
+        if (dateFromEl) dateFromEl.value = fromDate.toISOString().split('T')[0];
+        if (dateToEl) dateToEl.value = toISO;
+        dateDropdown.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
+        btn.classList.add('lf-preset-active');
+        if (dateTrigger) dateTrigger.querySelector('span').textContent = activeDatePreset;
+        dateDropdown.classList.add('hidden');
+        applyLeadsFilters();
+      });
+    });
+    const customApply = document.getElementById('leadsDateApplyCustom');
+    if (customApply) {
+      customApply.addEventListener('click', () => {
+        activeDatePreset = '';
+        dateDropdown.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
+        if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Rango custom';
+        dateDropdown.classList.add('hidden');
+        applyLeadsFilters();
+      });
+    }
+  }
+
+  // ── Clear all ──
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      selectedStatuses.clear();
+      syncStatusTrigger();
+      selectedAssignee = '';
+      syncAssigneeTrigger();
+      const dateFromEl = document.getElementById('leadsFilterDateFrom');
+      const dateToEl = document.getElementById('leadsFilterDateTo');
+      if (dateFromEl) dateFromEl.value = '';
+      if (dateToEl) dateToEl.value = '';
+      activeDatePreset = '';
+      if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Fecha';
+      dateDropdown?.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
+      applyLeadsFilters();
+    });
+  }
+
+  // ── Saved Filters ──
+  function loadSavedFilters() {
+    try { return JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY)) || []; }
+    catch { return []; }
+  }
+  function saveSavedFilters(arr) {
+    localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(arr));
+    if (savedTrigger) savedTrigger.classList.toggle('lf-has-saved', arr.length > 0);
+  }
+
+  function getCurrentFilterState() {
+    const dateFromEl = document.getElementById('leadsFilterDateFrom');
+    const dateToEl = document.getElementById('leadsFilterDateTo');
+    return {
+      statuses: Array.from(selectedStatuses),
+      assignee: selectedAssignee,
+      dateFrom: dateFromEl?.value || '',
+      dateTo: dateToEl?.value || '',
+      datePreset: activeDatePreset
+    };
+  }
+
+  function applyFilterState(state) {
+    selectedStatuses.clear();
+    (state.statuses || []).forEach(s => selectedStatuses.add(s));
+    syncStatusTrigger();
+    selectedAssignee = state.assignee || '';
+    syncAssigneeTrigger();
+    const dateFromEl = document.getElementById('leadsFilterDateFrom');
+    const dateToEl = document.getElementById('leadsFilterDateTo');
+    if (dateFromEl) dateFromEl.value = state.dateFrom || '';
+    if (dateToEl) dateToEl.value = state.dateTo || '';
+    activeDatePreset = state.datePreset || '';
+    if (dateTrigger) dateTrigger.querySelector('span').textContent = activeDatePreset || 'Fecha';
+    dateDropdown?.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
+    applyLeadsFilters();
+  }
+
+  function renderSavedFilters() {
+    if (!savedList) return;
+    const filters = loadSavedFilters();
+    if (savedTrigger) savedTrigger.classList.toggle('lf-has-saved', filters.length > 0);
+    if (!filters.length) {
+      savedList.innerHTML = '<span class="lf-saved-empty">No hay filtros guardados</span>';
+      return;
+    }
+    savedList.innerHTML = filters.map((f, i) => {
+      const desc = [];
+      if (f.state.statuses?.length) desc.push(`${f.state.statuses.length} status`);
+      if (f.state.assignee) desc.push(f.state.assignee);
+      if (f.state.datePreset) desc.push(f.state.datePreset);
+      else if (f.state.dateFrom || f.state.dateTo) desc.push('Rango');
+      return `<div class="lf-saved-item" data-idx="${i}">
+        <span class="lf-saved-item-name" title="${desc.join(', ')}">${escapeHtml(f.name)}</span>
+        <button class="lf-saved-item-del" data-del="${i}" title="Eliminar">&times;</button>
+      </div>`;
+    }).join('');
+
+    savedList.querySelectorAll('.lf-saved-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.lf-saved-item-del')) return;
+        const idx = parseInt(item.dataset.idx);
+        const filters = loadSavedFilters();
+        if (filters[idx]) {
+          applyFilterState(filters[idx].state);
+          savedDropdown?.classList.add('hidden');
+        }
+      });
+    });
+    savedList.querySelectorAll('.lf-saved-item-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.del);
+        const filters = loadSavedFilters();
+        filters.splice(idx, 1);
+        saveSavedFilters(filters);
+        renderSavedFilters();
+      });
+    });
+  }
+
+  if (savedTrigger && savedDropdown) {
+    savedTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      savedDropdown.classList.toggle('hidden');
+      if (!savedDropdown.classList.contains('hidden')) renderSavedFilters();
+    });
+    document.addEventListener('click', (e) => {
+      if (!savedDropdown.contains(e.target) && e.target !== savedTrigger && !savedTrigger.contains(e.target)) {
+        savedDropdown.classList.add('hidden');
+      }
+    });
+  }
+  if (saveFilterBtn && savedNameInput) {
+    const doSave = () => {
+      const name = savedNameInput.value.trim();
+      if (!name) return;
+      const state = getCurrentFilterState();
+      const hasAnything = state.statuses.length || state.assignee || state.dateFrom || state.dateTo;
+      if (!hasAnything) return;
+      const filters = loadSavedFilters();
+      filters.push({ name, state });
+      saveSavedFilters(filters);
+      savedNameInput.value = '';
+      renderSavedFilters();
+    };
+    saveFilterBtn.addEventListener('click', doSave);
+    savedNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); });
+  }
+  renderSavedFilters();
+
+  // ── Quick-filter by clicking status/assignee in table ──
+  const tbody = document.getElementById('leadsTableBody');
+  if (tbody) {
+    tbody.addEventListener('click', (e) => {
+      const qfEl = e.target.closest('[data-qf]');
+      if (!qfEl) return;
+      const type = qfEl.dataset.qf;
+      const value = qfEl.dataset.qfValue;
+      if (!value) return;
+
+      if (type === 'status') {
+        // Toggle in multi-select
+        if (selectedStatuses.has(value)) {
+          selectedStatuses.delete(value);
+        } else {
+          // Case-insensitive find
+          const match = ALL_STATUSES.find(s => s.toLowerCase() === value.toLowerCase());
+          selectedStatuses.add(match || value);
+        }
+        syncStatusTrigger();
+        applyLeadsFilters();
+      } else if (type === 'assignee') {
+        selectedAssignee = selectedAssignee === value ? '' : value;
+        syncAssigneeTrigger();
+        applyLeadsFilters();
+      }
+    });
+  }
+
+  // Filtros de Correos
+  const emailsFilterToggleBtn = document.getElementById('emailsFilterToggleBtn');
+  const emailsFilterPanel = document.getElementById('emailsFilterPanel');
+  const emailsSpecificSearch = document.getElementById('emailsSpecificSearch');
+
+  if (emailsFilterToggleBtn && emailsFilterPanel) {
+    emailsFilterToggleBtn.addEventListener('click', () => {
+      emailsFilterPanel.classList.toggle('hidden');
+      if (!emailsFilterPanel.classList.contains('hidden')) {
+        emailsFilterToggleBtn.style.background = 'rgba(255,255,255,0.1)';
+      } else {
+        emailsFilterToggleBtn.style.background = 'var(--bg-secondary, rgba(0,0,0,0.2))';
+      }
+    });
+  }
+
+  const applyEmailsFilters = () => {
+    renderFilteredEmails();
+  };
+
+  const emailFilters = ['emailsFilterStatus', 'emailsFilterDateFrom', 'emailsFilterDateTo'];
+  emailFilters.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyEmailsFilters);
+  });
+
+  if (emailsSpecificSearch) {
+    emailsSpecificSearch.addEventListener('input', applyEmailsFilters);
+  }
+
+  const emailsFilterClearBtn = document.getElementById('emailsFilterClearBtn');
+  if (emailsFilterClearBtn) {
+    emailsFilterClearBtn.addEventListener('click', () => {
+      emailFilters.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      if (emailsSpecificSearch) emailsSpecificSearch.value = '';
+      applyEmailsFilters();
+    });
+  }
+});
+
 
 
 

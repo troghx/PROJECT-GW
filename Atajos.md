@@ -1,97 +1,74 @@
 # Atajos Operativos (PROJECT-GW)
 
-Fecha: 2026-02-26
+Fecha: 2026-03-04
+
+## Lecciones aplicadas hoy (para no repetir errores)
+1. Ejecutar TODO desde la carpeta correcta:
+   - `cd /d "C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW"`
+2. Este archivo vive en `PROJECT-GW\Atajos.md` (no en la raiz `CD`).
+3. Si `npm run db:start-local` parece colgado o da timeout, primero validar puerto `5433` antes de reintentar.
+4. Mantener `npm start` en una terminal dedicada (backend real) y validar con `/api/health`.
+5. Para cerrar limpio al terminar sesion, usar `shutdown.bat` (nuevo).
 
 ## Post-Pull Obligatorio (antes de levantar servidor)
 1. Actualizar repo:
    - `git pull origin main`
-2. Sincronizar dependencias del backend:
+2. Sincronizar dependencias:
    - `npm install`
-3. Verificar prerequisito de contratos PDF (Python):
-   - Debe existir `python` en PATH (o configurar `PYTHON_BIN` en `.env`).
-   - Instalar dependencia Python: `pip install pymupdf`
-   - Verificar rapido: `python -c "import fitz; print('ok')"`
-4. Verificar variables criticas de auth en `.env`:
+3. Verificar prerequisito PDF (Python):
+   - `python -c "import fitz; print('ok')"`
+4. Verificar variables criticas en `.env`:
    - `JWT_SECRET=...`
    - `JWT_EXPIRES_IN=12h`
    - `CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000`
-5. Si aparece error `Cannot find module 'jsonwebtoken'` al correr `npm start`:
-   - Ejecutar de nuevo `npm install`
-   - Reintentar `npm start`
-6. Si aparece error `JWT_SECRET no esta configurado`:
-   - Agregar `JWT_SECRET` en `.env`
-   - Reintentar `npm start`
 
-## Arranque Diario (SIEMPRE PostgreSQL)
+## Arranque Diario (SIEMPRE PostgreSQL real)
 1. Entrar al proyecto:
-   - `cd C:\Users\trolo\Desktop\PROJECT-GW`
+   - `cd /d "C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW"`
 2. Levantar PostgreSQL local (puerto `5433`):
    - `npm run db:start-local`
-3. Levantar backend real:
+3. Si el paso 2 tarda mas de 30-40 segundos:
+   - Validar puerto: `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5433 -State Listen -ErrorAction SilentlyContinue"`
+   - Si `5433` esta en `Listen`, continuar (ya arranco).
+   - Si no esta en `Listen`, ejecutar:
+     - `npm run db:stop-local`
+     - `npm run db:start-local`
+4. Levantar backend real:
    - `npm start`
-4. Validar salud:
+5. Validar salud:
    - `http://localhost:3000/api/health`
    - Esperado: `{"ok":true,"message":"Server y PostgreSQL conectados."}`
 
-## Comando Rapido (copiar/pegar)
-`cd C:\Users\trolo\Desktop\PROJECT-GW; npm run db:start-local; npm start`
+## Reinicio Rapido (limpio)
+1. Cerrar backend + PostgreSQL:
+   - `shutdown.bat`
+2. Levantar de nuevo:
+   - `npm run db:start-local`
+   - `npm start`
 
-## Regla Clave (obligatoria)
-- El proyecto se ejecuta SOLO con backend real (`server/index.js`) y PostgreSQL real.
-- Comando valido para backend: `npm start`.
+## Comandos Rapidos (copiar/pegar)
+1. Arranque:
+   - `cd /d "C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW" && npm run db:start-local && npm start`
+2. Health check:
+   - `powershell -NoProfile -Command "(Invoke-WebRequest -UseBasicParsing http://localhost:3000/api/health -TimeoutSec 8).Content"`
+3. Apagado limpio:
+   - `cd /d "C:\Users\Windows 10\Desktop\varios\CD\PROJECT-GW" && shutdown.bat`
 
-## Cuando Si Correr `db:init-local`
+## Cuando SI correr `db:init-local`
 - Primera vez en la maquina.
-- Cuando hay cambios de esquema en `db/init.sql`.
-- Cuando la DB local se corrompio o quieres reconstruir.
+- Cambios de esquema en `db/init.sql`.
+- DB local corrupta o reconstruccion total.
 
 Comando:
 - `npm run db:init-local`
 
-Nota:
-- `db:init-local` no es para uso diario.
-- El backend ejecuta migraciones al arrancar (`runMigrations()`), por eso normalmente basta con reiniciar servidor.
-
-## Reinicio Rapido
-1. Matar proceso en puerto 3000.
-2. Volver a correr:
-   - `npm run db:start-local`
-   - `npm start`
-
-## Verificaciones Rapidas
-- Backend:
-  - `http://localhost:3000/api/health`
-- Leads:
-  - `http://localhost:3000/api/leads`
-- Notificaciones:
-  - `http://localhost:3000/api/notifications?username=admin`
-- Callbacks (PostgreSQL):
-  - `http://localhost:3000/api/callbacks?from=2026-02-23`
-
-## Troubleshooting Rapido (presencia / conectado)
-- Sintoma: en consola del navegador aparece `POST /api/ping 404` y usuarios salen desconectados.
-- Causa comun: backend viejo en memoria o arranque en modo incorrecto.
-- Solucion:
-  1. Confirmar que estas en backend real: usa `npm start`.
-  2. Reiniciar backend en puerto 3000:
-     - Cerrar proceso actual en 3000.
-     - Correr de nuevo `npm run db:start-local` y `npm start`.
-  3. En navegador hacer hard refresh (`Ctrl+F5`).
-  4. Si sigue igual, cerrar sesion y volver a entrar para refrescar token/sesion.
-
 ## Checklist de Arranque Correcto
-- En consola debe aparecer: `Servidor activo en http://localhost:3000`
-- `GET /api/health` debe responder `ok: true`
-- Al editar callback date en un lead, debe persistir tras recargar pantalla
-- Badge de notificaciones debe reflejar callbacks desde DB (no localStorage)
-
-## Notas de Notificaciones/Callbacks (migrado a PostgreSQL)
-- La ventana de notificaciones de `client.html` ya no depende de `localStorage`.
-- El calendario de callback guarda en DB via `PATCH /api/leads/:id` usando `callbackDate`.
-- Datos de callbacks para badge/modal salen de `GET /api/callbacks`.
+- PostgreSQL escuchando en `127.0.0.1:5433`.
+- Consola backend muestra: `Servidor activo en http://localhost:3000`.
+- `GET /api/health` responde `ok: true`.
 
 ## Archivos Clave
 - Backend: `server/index.js`
 - Conexion DB: `server/db.js`
-- Migraciones/DDL: `db/init.sql`
-- Frontend lead: `client.js`
+- Scripts DB: `scripts/start-postgres.ps1`, `scripts/stop-postgres.ps1`
+- Apagado limpio: `shutdown.bat`

@@ -230,15 +230,16 @@
   }
 
   function getStatusBadgeHtml(status, isTest) {
-    if (isTest) return '<span class="status-badge test">Test</span>';
-    const statusClass = {
-      'New Lead': 'new',
-      'Submitted to UW': 'submitted',
-      'Docs Back': 'docs',
-      'Sent to Debt Manager': 'manager',
-      'Callback Requested': 'callback'
-    }[status] || 'new';
-    return `<span class="status-badge ${statusClass}">${escapeHtml(status || '')}</span>`;
+    if (isTest) return '<span class="status-badge test" data-qf="status" data-qf-value="Test" title="Click para filtrar">Test</span>';
+    const s = String(status || '').trim();
+    const sLow = s.toLowerCase();
+    let statusClass = 'new';
+    if (sLow.includes('bad') || sLow.includes('dead') || sLow.includes('dnc') || sLow.includes('nq') || sLow.includes('reject') || sLow.includes("can't") || sLow.includes('not interested')) statusClass = 'negative';
+    else if (sLow.includes('docs')) statusClass = 'docs';
+    else if (sLow.includes('submitted') || sLow.includes('debtmanager') || sLow === 'sent to debtmanager') statusClass = 'submitted';
+    else if (sLow.includes('banking') || sLow.includes('hotlist') || sLow.includes('ca hold')) statusClass = 'manager';
+    else if (sLow.includes('attempt') || sLow.includes('contact') || sLow.includes('warm') || sLow.includes('meeting') || sLow.includes('nurture') || sLow.includes('looking for a loan') || sLow.includes('transferred') || sLow.includes('callback')) statusClass = 'callback';
+    return `<span class="status-badge ${statusClass}" data-qf="status" data-qf-value="${escapeHtml(status || '')}" title="Click para filtrar">${escapeHtml(status || '')}</span>`;
   }
 
   const BASE_CREDITOR_STATUS_CATALOG = [

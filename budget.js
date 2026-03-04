@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const DEFAULT_BUDGET = {
     budgetItems: {
       housing: {
@@ -107,11 +107,20 @@
     { id: 'budgetHardshipDetailEn', path: ['hardship', 'detailedReasonEn'], max: 5000 }
   ];
 
+  const HARDSHIP_ASSIST_TRANSLATE_DEBOUNCE_MS = 700;
+  const HARDSHIP_ASSIST_MIN_TEXT_CHARS = 4;
+  const HARDSHIP_ASSIST_MAX_TEXT_CHARS = 5000;
+
   let budgetSectionInitialized = false;
   let budgetBindingsReady = false;
   let budgetLeadIdLoaded = null;
   let budgetSaveTimer = null;
   let budgetSaving = false;
+  let hardshipAssistBound = false;
+  let hardshipAssistSyncMuted = false;
+  let hardshipAssistEnhancing = false;
+  const hardshipAssistDebounceTimers = { es: null, en: null };
+  const hardshipAssistCache = new Map();
 
   function cloneDefaultBudget() {
     return JSON.parse(JSON.stringify(DEFAULT_BUDGET));
@@ -427,6 +436,157 @@
     }, 700);
   }
 
+  function normalizeHardshipNarrative(value) {
+    return String(value || '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\u0000/g, '')
+      .trim()
+      .slice(0, HARDSHIP_ASSIST_MAX_TEXT_CHARS);
+  }
+
+  function getHardshipAssistRefs() {
+    const reasonEl = document.getElementById('budgetHardshipReason');
+    const esEl = document.getElementById('budgetHardshipDetailEs');
+    const enEl = document.getElementById('budgetHardshipDetailEn');
+    const enhanceBtn = document.getElementById('budgetHardshipEnhanceBtn');
+    if (!reasonEl || !esEl || !enEl || !enhanceBtn) return null;
+    return { reasonEl, esEl, enEl, enhanceBtn };
+  }
+
+  function setHardshipAssistStatus(message, tone = '') {
+    if (tone === 'error' && message) {
+      setBudgetStatus(String(message), 'error');
+    }
+  }
+
+  function setHardshipTextareaValue(el, nextValue) {
+    if (!el) return;
+    const normalized = normalizeHardshipNarrative(nextValue);
+    if (el.value === normalized) return;
+    hardshipAssistSyncMuted = true;
+    el.value = normalized;
+    hardshipAssistSyncMuted = false;
+  }
+
+  async function runHardshipAutoTranslate(sourceLang) {
+    if (hardshipAssistEnhancing) return;
+    const refs = getHardshipAssistRefs();
+    if (!refs) return;
+    if (!window.HardshipAssist || typeof window.HardshipAssist.translate !== 'function') return;
+
+    const lang = sourceLang === 'en' ? 'en' : 'es';
+    const sourceEl = lang === 'es' ? refs.esEl : refs.enEl;
+    const targetEl = lang === 'es' ? refs.enEl : refs.esEl;
+    const sourceText = normalizeHardshipNarrative(sourceEl.value);
+    if (sourceText.length < HARDSHIP_ASSIST_MIN_TEXT_CHARS) return;
+
+    const hardshipReason = String(refs.reasonEl.value || '');
+    const cacheKey = `${lang}|${hardshipReason}|${sourceText}`;
+
+    if (hardshipAssistCache.has(cacheKey)) {
+      if (document.activeElement !== targetEl) {
+        setHardshipTextareaValue(targetEl, hardshipAssistCache.get(cacheKey));
+        queueBudgetSave();
+      }
+      return;
+    }
+
+    try {
+      const translatedText = normalizeHardshipNarrative(
+        await window.HardshipAssist.translate({
+          sourceLang: lang,
+          text: sourceText,
+          hardshipReason
+        })
+      );
+      if (!translatedText) return;
+
+      hardshipAssistCache.set(cacheKey, translatedText);
+      if (document.activeElement === targetEl) return;
+
+      setHardshipTextareaValue(targetEl, translatedText);
+      queueBudgetSave();
+    } catch (error) {
+      setHardshipAssistStatus(error.message || 'No se pudo traducir Hardship.', 'error');
+    }
+  }
+
+  function scheduleHardshipAutoTranslate(sourceLang) {
+    const lang = sourceLang === 'en' ? 'en' : 'es';
+    if (hardshipAssistDebounceTimers[lang]) {
+      clearTimeout(hardshipAssistDebounceTimers[lang]);
+    }
+    hardshipAssistDebounceTimers[lang] = setTimeout(() => {
+      runHardshipAutoTranslate(lang);
+    }, HARDSHIP_ASSIST_TRANSLATE_DEBOUNCE_MS);
+  }
+
+  async function handleHardshipEnhanceClick() {
+    if (hardshipAssistEnhancing) return;
+    const refs = getHardshipAssistRefs();
+    if (!refs) return;
+    if (!window.HardshipAssist || typeof window.HardshipAssist.enhance !== 'function') return;
+
+    const spanishText = normalizeHardshipNarrative(refs.esEl.value);
+    const englishText = normalizeHardshipNarrative(refs.enEl.value);
+    if (spanishText.length < HARDSHIP_ASSIST_MIN_TEXT_CHARS && englishText.length < HARDSHIP_ASSIST_MIN_TEXT_CHARS) {
+      setHardshipAssistStatus('Escribe contexto de hardship antes de mejorar.', 'error');
+      return;
+    }
+
+    const activeEl = document.activeElement;
+    const activeLang = activeEl === refs.enEl ? 'en' : 'es';
+
+    hardshipAssistEnhancing = true;
+    refs.enhanceBtn.disabled = true;
+
+    try {
+      const response = await window.HardshipAssist.enhance({
+        focusLang: activeLang,
+        hardshipReason: String(refs.reasonEl.value || ''),
+        spanishText,
+        englishText
+      }) || {};
+
+      const nextEs = normalizeHardshipNarrative(response.spanishText || spanishText);
+      const nextEn = normalizeHardshipNarrative(response.englishText || englishText);
+
+      if (activeLang === 'en') {
+        setHardshipTextareaValue(refs.enEl, nextEn);
+        if (document.activeElement !== refs.esEl) setHardshipTextareaValue(refs.esEl, nextEs);
+      } else {
+        setHardshipTextareaValue(refs.esEl, nextEs);
+        if (document.activeElement !== refs.enEl) setHardshipTextareaValue(refs.enEl, nextEn);
+      }
+      queueBudgetSave();
+    } catch (error) {
+      setHardshipAssistStatus(error.message || 'No se pudo mejorar Hardship.', 'error');
+    } finally {
+      hardshipAssistEnhancing = false;
+      refs.enhanceBtn.disabled = false;
+    }
+  }
+
+  function bindHardshipAssist() {
+    if (hardshipAssistBound) return;
+    const refs = getHardshipAssistRefs();
+    if (!refs) return;
+
+    hardshipAssistBound = true;
+
+    refs.esEl.addEventListener('input', () => {
+      if (hardshipAssistSyncMuted || hardshipAssistEnhancing) return;
+      scheduleHardshipAutoTranslate('es');
+    });
+
+    refs.enEl.addEventListener('input', () => {
+      if (hardshipAssistSyncMuted || hardshipAssistEnhancing) return;
+      scheduleHardshipAutoTranslate('en');
+    });
+
+    refs.enhanceBtn.addEventListener('click', handleHardshipEnhanceClick);
+  }
+
   function activateBudgetSubtab(tabName) {
     const normalized = String(tabName || 'items').trim().toLowerCase();
     document.querySelectorAll('.budget-subtab').forEach((btn) => {
@@ -499,6 +659,8 @@
         await saveBudgetNow();
       });
     }
+
+    bindHardshipAssist();
   }
 
   async function loadBudgetData() {

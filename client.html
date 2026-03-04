@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="creditors-compact.css?v=20260302d">
   <link rel="stylesheet" href="creditors-final.css?v=20260302a">
   <link rel="stylesheet" href="creditors-redesign.css?v=20260302d">
-  <link rel="stylesheet" href="budget.css?v=20260219d">
+  <link rel="stylesheet" href="budget.css?v=20260304b">
   <style>
     :root {
       --lead-viewport-height: 100vh;
@@ -76,14 +76,14 @@
       border-radius: 8px;
     }
     
-    /* Toolbar en misma posiciÛn que dashboard */
+    /* Toolbar en misma posici√≥n que dashboard */
     .lead-floating .toolbar-wrap {
       grid-column: 2;
       grid-row: 1;
       justify-self: center;
     }
     
-    /* Home actions en misma posiciÛn */
+    /* Home actions en misma posici√≥n */
     .lead-floating .home-actions {
       grid-column: 3;
       grid-row: 1;
@@ -114,7 +114,7 @@
       flex-shrink: 0;
     }
     
-    /* SecciÛn del nombre */
+    /* Secci√≥n del nombre */
     .lead-title-section {
       display: flex;
       align-items: center;
@@ -163,7 +163,7 @@
       background: rgba(255, 255, 255, 0.1);
     }
     
-    /* BotÛn de cambio Applicant/Co-Applicant */
+    /* Bot√≥n de cambio Applicant/Co-Applicant */
     .applicant-toggle-btn {
       display: flex;
       align-items: center;
@@ -214,7 +214,7 @@
       color: #60a5fa;
     }
     
-    /* BotÛn de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
+    /* Bot√≥n de copiar nombre - solo icono, sin box (igual que copy-icon-btn) */
     .copy-btn {
       display: flex;
       align-items: center;
@@ -275,12 +275,33 @@
       border: 1px solid rgba(245, 158, 11, 0.35);
     }
 
+    .lead-status-badge-picker {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      z-index: 8;
+    }
+
+    .lead-status-badge-picker.is-open {
+      z-index: 36;
+    }
+
     .lead-status-badge-select {
-      appearance: none;
-      color-scheme: dark;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .lead-status-badge-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       font-size: 0.78rem;
       font-weight: 600;
-      padding: 6px 26px 6px 12px;
+      padding: 6px 12px 6px 12px;
       border-radius: 20px;
       border: 1px solid rgba(59, 130, 246, 0.34);
       background:
@@ -289,42 +310,62 @@
       color: #bfdbfe;
       letter-spacing: 0.2px;
       min-width: 170px;
-      max-width: 220px;
+      max-width: 240px;
       cursor: pointer;
-      position: relative;
-      z-index: 4;
-      transition: border-color 0.2s ease, transform 0.2s ease;
+      transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
     }
 
-    .lead-status-badge-select option {
-      background: #141416;
-      color: #e2e8f0;
-      font-weight: 600;
+    .lead-status-badge-trigger-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      flex: 1;
+      min-width: 0;
     }
 
-    .lead-status-badge-select:hover {
+    .lead-status-badge-trigger svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      opacity: 0.85;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .lead-status-badge-trigger:hover {
       transform: translateY(-1px);
       border-color: rgba(96, 165, 250, 0.6);
     }
 
-    .lead-status-badge-select:focus {
+    .lead-status-badge-trigger:focus {
       outline: none;
       border-color: rgba(125, 211, 252, 0.7);
       box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.2);
     }
 
-    .lead-status-badge-select:disabled {
+    .lead-status-badge-trigger:disabled {
       opacity: 0.65;
       cursor: wait;
       transform: none;
     }
 
-    .lead-status-badge-select.new {
+    .lead-status-badge-picker.is-open .lead-status-badge-trigger {
+      border-color: rgba(125, 211, 252, 0.72);
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.2);
+      transform: none;
+    }
+
+    .lead-status-badge-picker.is-open .lead-status-badge-trigger svg {
+      transform: rotate(180deg);
+      opacity: 1;
+    }
+
+    .lead-status-badge-trigger.new {
       border-color: rgba(59, 130, 246, 0.34);
       color: #bfdbfe;
     }
 
-    .lead-status-badge-select.submitted {
+    .lead-status-badge-trigger.submitted {
       border-color: rgba(16, 185, 129, 0.36);
       background:
         linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(16, 185, 129, 0.16)),
@@ -332,7 +373,7 @@
       color: #a7f3d0;
     }
 
-    .lead-status-badge-select.docs {
+    .lead-status-badge-trigger.docs {
       border-color: rgba(245, 158, 11, 0.36);
       background:
         linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(245, 158, 11, 0.16)),
@@ -340,7 +381,7 @@
       color: #fde68a;
     }
 
-    .lead-status-badge-select.manager {
+    .lead-status-badge-trigger.manager {
       border-color: rgba(139, 92, 246, 0.36);
       background:
         linear-gradient(135deg, rgba(139, 92, 246, 0.24), rgba(139, 92, 246, 0.16)),
@@ -348,7 +389,7 @@
       color: #ddd6fe;
     }
 
-    .lead-status-badge-select.callback {
+    .lead-status-badge-trigger.callback {
       border-color: rgba(236, 72, 153, 0.36);
       background:
         linear-gradient(135deg, rgba(236, 72, 153, 0.24), rgba(236, 72, 153, 0.16)),
@@ -356,12 +397,130 @@
       color: #fbcfe8;
     }
 
-    .lead-status-badge-select.negative {
+    .lead-status-badge-trigger.negative {
       border-color: rgba(239, 68, 68, 0.38);
       background:
         linear-gradient(135deg, rgba(239, 68, 68, 0.24), rgba(239, 68, 68, 0.16)),
         rgba(239, 68, 68, 0.12);
       color: #fecaca;
+    }
+
+    .lead-status-badge-panel {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      min-width: 300px;
+      max-width: 360px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(145deg, rgba(20, 24, 32, 0.96), rgba(11, 15, 23, 0.98));
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(14px) saturate(120%);
+      padding: 12px;
+      overflow: hidden;
+      z-index: 30;
+    }
+
+    .lead-status-badge-panel.hidden {
+      display: none;
+    }
+
+    .lead-status-badge-search-row {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    .lead-status-badge-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      color: rgba(148, 163, 184, 0.88);
+      pointer-events: none;
+    }
+
+    .lead-status-badge-search-input {
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.28);
+      color: #e2e8f0;
+      font-size: 0.78rem;
+      padding: 8px 10px 8px 30px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .lead-status-badge-search-input:focus {
+      border-color: rgba(125, 211, 252, 0.72);
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.18);
+    }
+
+    .lead-status-badge-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 270px;
+      overflow-y: auto;
+      padding-right: 3px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(125, 211, 252, 0.5) rgba(148, 163, 184, 0.15);
+    }
+
+    .lead-status-badge-options::-webkit-scrollbar {
+      width: 7px;
+    }
+
+    .lead-status-badge-options::-webkit-scrollbar-track {
+      background: rgba(148, 163, 184, 0.12);
+      border-radius: 999px;
+    }
+
+    .lead-status-badge-options::-webkit-scrollbar-thumb {
+      background: rgba(125, 211, 252, 0.52);
+      border-radius: 999px;
+    }
+
+    .lead-status-badge-option {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.35), rgba(51, 65, 85, 0.2));
+      color: #e2e8f0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .lead-status-badge-option:hover {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.44);
+    }
+
+    .lead-status-badge-option.is-active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.17));
+      border-color: rgba(16, 185, 129, 0.45);
+      color: #a7f3d0;
+    }
+
+    .lead-status-badge-option:focus-visible {
+      outline: none;
+      border-color: rgba(125, 211, 252, 0.75);
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.18);
+    }
+
+    .lead-status-badge-option-empty {
+      border-radius: 10px;
+      border: 1px dashed rgba(148, 163, 184, 0.3);
+      color: rgba(203, 213, 225, 0.82);
+      font-size: 0.76rem;
+      text-align: center;
+      padding: 10px;
     }
     
     /* Badge de Test */
@@ -433,7 +592,7 @@
       font-weight: 600;
     }
     
-    /* Botones de acciÛn al lado del Case ID */
+    /* Botones de acci√≥n al lado del Case ID */
     .case-id-actions {
       display: flex;
       align-items: center;
@@ -1065,7 +1224,7 @@
       background: rgba(126, 234, 252, 0.1);
     }
 
-    /* Modal de visualizaciÛn de archivos */
+    /* Modal de visualizaci√≥n de archivos */
     .file-viewer-modal {
       position: fixed;
       inset: 0;
@@ -1244,7 +1403,7 @@
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
 
-    /* Modal de clasificaciÛn de archivo */
+    /* Modal de clasificaci√≥n de archivo */
     .file-meta-modal {
       position: fixed;
       inset: 0;
@@ -2456,7 +2615,7 @@
       border-color: rgba(248, 113, 113, 0.56);
     }
     
-    /* BotÛn de copiar para Case ID - solo icono, sin box */
+    /* Bot√≥n de copiar para Case ID - solo icono, sin box */
     .copy-icon-btn {
       display: flex;
       align-items: center;
@@ -2486,7 +2645,7 @@
       color: #4ade80;
     }
     
-    /* NavegaciÛn de pestaÒas */
+    /* Navegaci√≥n de pesta√±as */
     .lead-tabs-nav {
       display: flex;
       align-items: center;
@@ -3055,7 +3214,7 @@
       font-family: 'Inter', monospace;
     }
     
-    /* BotÛn de candado toggle */
+    /* Bot√≥n de candado toggle */
     .lock-toggle-btn {
       background: transparent;
       border: none;
@@ -3240,7 +3399,7 @@
       font-weight: 600;
     }
     
-    /* SecciÛn de Meses y Monthly Payment - Minimalista */
+    /* Secci√≥n de Meses y Monthly Payment - Minimalista */
     .calc-months-section {
       display: flex;
       align-items: stretch;
@@ -3384,7 +3543,7 @@
       margin-left: 4px;
     }
     
-    /* Botones r·pidos debajo de la ruleta */
+    /* Botones r√°pidos debajo de la ruleta */
     .months-quick-buttons.minimal.under-wheel {
       display: flex;
       align-items: center;
@@ -3404,7 +3563,7 @@
       border: 1px solid rgba(126, 234, 252, 0.2);
     }
     
-    /* Botones r·pidos - sin cajas */
+    /* Botones r√°pidos - sin cajas */
     .months-quick-buttons {
       display: flex;
       gap: 12px;
@@ -4328,7 +4487,7 @@
       50% { transform: scale(1.2); opacity: 0.8; }
     }
     
-    /* DÌas deshabilitados en calendario */
+    /* D√≠as deshabilitados en calendario */
     .calendar-day.disabled {
       opacity: 0.35;
       cursor: not-allowed;
@@ -5558,8 +5717,7 @@
       border-color: rgba(245, 158, 11, 0.4);
     }
 
-    body.home-active.theme-light .lead-status-badge-select {
-      color-scheme: light;
+    body.home-active.theme-light .lead-status-badge-trigger {
       border-color: rgba(59, 130, 246, 0.3);
       background:
         linear-gradient(135deg, rgba(59, 130, 246, 0.13), rgba(59, 130, 246, 0.08)),
@@ -5567,17 +5725,17 @@
       color: #1d4ed8;
     }
 
-    body.home-active.theme-light .lead-status-badge-select option {
-      background: #ffffff;
-      color: #141416;
+    body.home-active.theme-light .lead-status-badge-picker.is-open .lead-status-badge-trigger {
+      border-color: rgba(37, 99, 235, 0.52);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.new {
+    body.home-active.theme-light .lead-status-badge-trigger.new {
       color: #1d4ed8;
       border-color: rgba(59, 130, 246, 0.34);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.submitted {
+    body.home-active.theme-light .lead-status-badge-trigger.submitted {
       color: #047857;
       border-color: rgba(16, 185, 129, 0.36);
       background:
@@ -5585,7 +5743,7 @@
         rgba(255, 255, 255, 0.9);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.docs {
+    body.home-active.theme-light .lead-status-badge-trigger.docs {
       color: #b45309;
       border-color: rgba(245, 158, 11, 0.36);
       background:
@@ -5593,7 +5751,7 @@
         rgba(255, 255, 255, 0.9);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.manager {
+    body.home-active.theme-light .lead-status-badge-trigger.manager {
       color: #6d28d9;
       border-color: rgba(139, 92, 246, 0.36);
       background:
@@ -5601,7 +5759,7 @@
         rgba(255, 255, 255, 0.9);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.callback {
+    body.home-active.theme-light .lead-status-badge-trigger.callback {
       color: #be185d;
       border-color: rgba(236, 72, 153, 0.36);
       background:
@@ -5609,12 +5767,51 @@
         rgba(255, 255, 255, 0.9);
     }
 
-    body.home-active.theme-light .lead-status-badge-select.negative {
+    body.home-active.theme-light .lead-status-badge-trigger.negative {
       color: #b91c1c;
       border-color: rgba(239, 68, 68, 0.36);
       background:
         linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.08)),
         rgba(255, 255, 255, 0.9);
+    }
+
+    body.home-active.theme-light .lead-status-badge-panel {
+      border-color: rgba(20, 20, 22, 0.14);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.96));
+      box-shadow: 0 14px 30px rgba(20, 20, 22, 0.16);
+    }
+
+    body.home-active.theme-light .lead-status-badge-search-icon {
+      color: rgba(71, 85, 105, 0.88);
+    }
+
+    body.home-active.theme-light .lead-status-badge-search-input {
+      border-color: rgba(20, 20, 22, 0.2);
+      background: rgba(255, 255, 255, 0.8);
+      color: #1f2937;
+    }
+
+    body.home-active.theme-light .lead-status-badge-option {
+      border-color: rgba(20, 20, 22, 0.16);
+      background: rgba(15, 23, 42, 0.03);
+      color: #1f2937;
+    }
+
+    body.home-active.theme-light .lead-status-badge-option:hover {
+      border-color: rgba(37, 99, 235, 0.34);
+      background: rgba(59, 130, 246, 0.12);
+      color: #1d4ed8;
+    }
+
+    body.home-active.theme-light .lead-status-badge-option.is-active {
+      border-color: rgba(16, 185, 129, 0.42);
+      background: rgba(16, 185, 129, 0.15);
+      color: #047857;
+    }
+
+    body.home-active.theme-light .lead-status-badge-option-empty {
+      border-color: rgba(20, 20, 22, 0.2);
+      color: rgba(31, 41, 55, 0.74);
     }
     
     body.home-active.theme-light .lead-test-badge {
@@ -6425,7 +6622,7 @@
       border-color: rgba(126, 234, 252, 0.6);
     }
     
-    /* Expandibles m·s compactos */
+    /* Expandibles m√°s compactos */
     .banking-expandable {
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
@@ -6512,7 +6709,7 @@
       border-color: rgba(59, 130, 246, 0.5);
     }
     
-    /* SecciÛn de guardar */
+    /* Secci√≥n de guardar */
     .banking-save-section {
       display: flex;
       align-items: center;
@@ -6578,7 +6775,7 @@
       color: #dc2626;
     }
     
-    /* TÌtulos de columna tipo lead-info-card */
+    /* T√≠tulos de columna tipo lead-info-card */
     .banking-account-column .calc-column-title,
     .banking-holder-column .calc-column-title {
       margin: 0 0 12px 0;
@@ -7011,7 +7208,7 @@
         <img src="reference/CD logo.png" alt="Cero Deuda" />
       </button>
       
-      <!-- TOOLBAR - Copiado idÈntico del dashboard -->
+      <!-- TOOLBAR - Copiado id√©ntico del dashboard -->
       <div id="toolbarWrap" class="toolbar-wrap" aria-label="Barra de accesos">
         <div id="toolbarShell" class="toolbar-shell">
           <div class="toolbar-glass-container">
@@ -7057,7 +7254,7 @@
                     id="searchClearBtn"
                     class="search-clear-btn"
                     type="button"
-                    aria-label="Limpiar b˙squeda"
+                    aria-label="Limpiar b√∫squeda"
                     tabindex="-1"
                   >
                     <svg viewBox="0 0 14 14" aria-hidden="true">
@@ -7146,7 +7343,7 @@
             <span class="accent-color-label">Color del tema</span>
             <div class="accent-swatches" role="radiogroup" aria-label="Color de acento">
               <button class="accent-swatch swatch-verde active" data-color="verde" data-theme="light" role="radio" aria-checked="true" type="button" title="Verde"></button>
-              <button class="accent-swatch swatch-oceano" data-color="oceano" data-theme="light" role="radio" aria-checked="false" type="button" title="OcÈano"></button>
+              <button class="accent-swatch swatch-oceano" data-color="oceano" data-theme="light" role="radio" aria-checked="false" type="button" title="Oc√©ano"></button>
               <button class="accent-swatch swatch-coral" data-color="coral" data-theme="light" role="radio" aria-checked="false" type="button" title="Coral"></button>
               <button class="accent-swatch swatch-morado" data-color="morado" data-theme="light" role="radio" aria-checked="false" type="button" title="Morado"></button>
               <button class="accent-swatch swatch-dorado" data-color="dorado" data-theme="light" role="radio" aria-checked="false" type="button" title="Dorado"></button>
@@ -7175,7 +7372,7 @@
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Cerrar sesiÛn</span>
+            <span>Cerrar sesi√≥n</span>
           </button>
         </div>
       </div>
@@ -7186,7 +7383,7 @@
           <div class="lead-title-section">
             <!-- Nombre editable -->
             <div class="lead-name-wrapper">
-              <!-- BotÛn de cambio Applicant/Co-Applicant -->
+              <!-- Bot√≥n de cambio Applicant/Co-Applicant -->
               <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M7 10h14l-4-4"/>
@@ -7197,7 +7394,7 @@
               
               <h1 id="leadName" class="lead-name-text" contenteditable="false" title="Click para editar"></h1>
               
-              <!-- BotÛn de copiar nombre - solo icono, sin box -->
+              <!-- Bot√≥n de copiar nombre - solo icono, sin box -->
               <button id="copyNameBtn" class="copy-btn" title="Copiar nombre">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -7209,12 +7406,45 @@
             <!-- Badge de State Type (Green/Red) -->
             <span id="stateBadge" class="lead-state-badge"></span>
 
-            <select id="leadStatusBadgeSelect" class="lead-status-badge-select" aria-label="Cambiar status del lead"></select>
+            <div id="leadStatusBadgePicker" class="lead-status-badge-picker">
+              <button
+                id="leadStatusBadgeTrigger"
+                class="lead-status-badge-trigger"
+                type="button"
+                aria-label="Cambiar status del lead"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="leadStatusBadgePanel"
+              >
+                <span id="leadStatusBadgeTriggerLabel" class="lead-status-badge-trigger-label">New Lead</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <section id="leadStatusBadgePanel" class="lead-status-badge-panel hidden" aria-label="Seleccionar status del lead" aria-hidden="true">
+                <div class="lead-status-badge-search-row">
+                  <svg class="lead-status-badge-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+                  </svg>
+                  <input
+                    id="leadStatusBadgeSearchInput"
+                    class="lead-status-badge-search-input"
+                    type="search"
+                    placeholder="Buscar status..."
+                    autocomplete="off"
+                    aria-label="Buscar status"
+                  />
+                </div>
+                <div id="leadStatusBadgeOptions" class="lead-status-badge-options" role="listbox" aria-label="Opciones de status"></div>
+              </section>
+              <select id="leadStatusBadgeSelect" class="lead-status-badge-select" aria-label="Cambiar status del lead"></select>
+            </div>
             
             <!-- Badge de Test (si aplica) -->
             <span id="testBadge" class="lead-test-badge hidden">Test</span>
 
-            <!-- Badge de relaciÛn -->
+            <!-- Badge de relaci√≥n -->
             <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
@@ -7224,7 +7454,7 @@
             </a>
           </div>
           
-          <!-- Case ID y botones de acciÛn -->
+          <!-- Case ID y botones de acci√≥n -->
           <div class="lead-case-id">
             <div class="case-id-left">
               <span class="case-label">Case ID:</span>
@@ -7248,7 +7478,7 @@
               </div>
             </div>
             
-            <!-- Botones de acciÛn al lado del Case ID -->
+            <!-- Botones de acci√≥n al lado del Case ID -->
             <div class="case-id-actions">
               <button id="pullCreditBtn" class="pull-credit-btn hidden" type="button" title="Pull Credit report">
                 Pull Credit
@@ -7266,14 +7496,14 @@
                   </div>
                   <div id="leadAssigneeSuggestions" class="lead-assignee-suggestions hidden" role="listbox" aria-label="Agentes disponibles"></div>
                 </div>
-                <button id="confirmAssigneeBtn" class="lead-assignee-confirm hidden" type="button" title="Confirmar asignaciÛn" aria-label="Confirmar asignaciÛn">
+                <button id="confirmAssigneeBtn" class="lead-assignee-confirm hidden" type="button" title="Confirmar asignaci√≥n" aria-label="Confirmar asignaci√≥n">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 6 9 17l-5-5"></path>
                   </svg>
                 </button>
               </div>
 
-              <!-- BotÛn de Archivos -->
+              <!-- Bot√≥n de Archivos -->
               <div class="files-anchor">
                 <button class="action-icon-btn" id="filesBtn" title="Archivos" aria-controls="filesPanel" aria-expanded="false">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7297,7 +7527,7 @@
                         <polyline points="17,8 12,3 7,8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      <span class="files-upload-text">Arrastra archivos aquÌ o haz clic para seleccionar (requiere clasificaciÛn)</span>
+                      <span class="files-upload-text">Arrastra archivos aqu√≠ o haz clic para seleccionar (requiere clasificaci√≥n)</span>
                       <input type="file" id="filesUploadInput" class="files-upload-input" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                     </div>
                     <!-- Files List -->
@@ -7307,8 +7537,8 @@
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                           <polyline points="14,2 14,8 20,8"/>
                         </svg>
-                        <p>No hay archivos a˙n</p>
-                        <span>Los archivos subidos aparecer·n aquÌ</span>
+                        <p>No hay archivos a√∫n</p>
+                        <span>Los archivos subidos aparecer√°n aqu√≠</span>
                       </div>
                     </div>
                   </div>
@@ -7402,7 +7632,7 @@
 
           </div>
 
-          <!-- NavegaciÛn de pestaÒas -->
+          <!-- Navegaci√≥n de pesta√±as -->
           <div class="lead-tabs-nav">
             <button class="lead-tab active" data-tab="lead">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7456,23 +7686,23 @@
 
         </header>
         
-        <!-- Contenido din·mico -->
-        <!-- SecciÛn Lead (Detalles) - Visible por defecto -->
+        <!-- Contenido din√°mico -->
+        <!-- Secci√≥n Lead (Detalles) - Visible por defecto -->
         <div id="leadSection" class="lead-content-grid">
           <div class="loading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
             </svg>
-            <p>Cargando informaciÛn del cliente...</p>
+            <p>Cargando informaci√≥n del cliente...</p>
           </div>
         </div>
         
-        <!-- SecciÛn Calculator -->
+        <!-- Secci√≥n Calculator -->
         <div id="calculatorSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <!-- Calculator Box - Estilo Tiempos y Fechas -->
           <div class="lead-info-card lead-info-card-wide calculator-main-card">
             <div class="two-column-layout calc-layout">
-              <!-- Columna Izquierda: ConfiguraciÛn -->
+              <!-- Columna Izquierda: Configuraci√≥n -->
               <div class="info-column calc-config-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -7488,7 +7718,7 @@
                     <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"/>
                     <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.8"/>
                   </svg>
-                  ConfiguraciÛn
+                  Configuraci√≥n
                 </h4>
                 
                 <div class="info-row calc-input-row">
@@ -7591,8 +7821,8 @@
                         </button>
                       </div>
                       <div class="calendar-weekdays">
-                        <span>Dom</span><span>Lun</span><span>Mar</span><span>MiÈ</span>
-                        <span>Jue</span><span>Vie</span><span>S·b</span>
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mi√©</span>
+                        <span>Jue</span><span>Vie</span><span>S√°b</span>
                       </div>
                       <div id="calcPaymentDayDays" class="calendar-days"></div>
                     </div>
@@ -7660,7 +7890,7 @@
               </div>
             </div>
             
-            <!-- SecciÛn especial: Meses y Monthly Payment - Compacto -->
+            <!-- Secci√≥n especial: Meses y Monthly Payment - Compacto -->
             <div class="calc-duration-payment-row">
               <!-- Program Duration -->
               <div class="calc-duration-compact">
@@ -7673,7 +7903,7 @@
                   </div>
                 </div>
                 
-                <!-- Botones r·pidos debajo de la ruleta -->
+                <!-- Botones r√°pidos debajo de la ruleta -->
                 <div class="months-quick-buttons minimal under-wheel">
                   <button class="months-quick-btn minimal" data-months="12">12</button>
                   <button class="months-quick-btn minimal" data-months="24">24</button>
@@ -7705,7 +7935,7 @@
           <div class="lead-info-card lead-info-card-wide payment-schedule-card">
             <div class="schedule-header">
               <h3 class="calculator-section-title" style="margin:0;padding:0;border:none;">Payment Schedule</h3>
-              <span class="plan-duration-badge" id="planDurationText">4 aÒos</span>
+              <span class="plan-duration-badge" id="planDurationText">4 a√±os</span>
             </div>
             <div class="schedule-table-container">
               <table class="schedule-table">
@@ -7727,11 +7957,11 @@
           </div>
         </div>
         
-        <!-- SecciÛn Banking -->
+        <!-- Secci√≥n Banking -->
         <div id="bankingSection" class="lead-content-grid hidden">
           <div class="lead-info-card lead-info-card-wide banking-main-card">
             <div class="two-column-layout banking-layout">
-              <!-- Columna Izquierda: InformaciÛn de la Cuenta -->
+              <!-- Columna Izquierda: Informaci√≥n de la Cuenta -->
               <div class="info-column banking-account-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -7781,7 +8011,7 @@
                   </div>
                 </div>
                 
-                <!-- Campos expandibles - SecciÛn Bank Address -->
+                <!-- Campos expandibles - Secci√≥n Bank Address -->
                 <div class="banking-expandable">
                   <button class="banking-expand-btn" data-target="bankAddressFields">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -7824,7 +8054,7 @@
                   </div>
                 </div>
                 
-                <!-- BotÛn Get Bank Details -->
+                <!-- Bot√≥n Get Bank Details -->
                 <button class="banking-action-btn" id="btnGetBankDetails">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <circle cx="11" cy="11" r="8"/>
@@ -7834,7 +8064,7 @@
                 </button>
               </div>
               
-              <!-- Columna Derecha: InformaciÛn del Titular -->
+              <!-- Columna Derecha: Informaci√≥n del Titular -->
               <div class="info-column banking-holder-column">
                 <h4 class="calc-column-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;margin-right:6px;vertical-align:middle;">
@@ -7962,7 +8192,7 @@
               </div>
             </div>
             
-            <!-- BotÛn de guardar -->
+            <!-- Bot√≥n de guardar -->
             <div class="banking-save-section">
               <button class="banking-save-btn" id="btnSaveBankingInfo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -8135,7 +8365,7 @@
                     <div class="budget-field">
                       <label for="budgetHardshipReason">Hardship Reason</label>
                       <select id="budgetHardshipReason" class="budget-select budget-hardship-reason-select">
-                        <option value="">Seleccionar razÛn...</option>
+                        <option value="">Seleccionar raz√≥n...</option>
                         <option value="loss_of_income">Loss of Income</option>
                         <option value="medical">Medical Issues</option>
                         <option value="divorce">Divorce / Separation</option>
@@ -8147,8 +8377,17 @@
                     </div>
                     <div class="budget-hardship-textareas">
                       <div class="budget-field">
-                        <label for="budgetHardshipDetailEs">Detailed Hardship Reason (EspaÒol)</label>
-                        <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situaciÛn en espaÒol..."></textarea>
+                        <div class="budget-hardship-label-row">
+                          <label for="budgetHardshipDetailEs">Detailed Hardship Reason (Espa√±ol)</label>
+                          <button id="budgetHardshipEnhanceBtn" class="budget-hardship-enhance-btn icon-only" type="button" title="Enhance Hardship" aria-label="Enhance Hardship">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M12 3l1.6 3.4L17 8l-3.4 1.6L12 13l-1.6-3.4L7 8l3.4-1.6L12 3z"></path>
+                              <path d="M18.5 12.5l0.9 1.9 1.9 0.9-1.9 0.9-0.9 1.9-0.9-1.9-1.9-0.9 1.9-0.9 0.9-1.9z"></path>
+                              <path d="M6.5 14.5l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1 1-2.2z"></path>
+                            </svg>
+                          </button>
+                        </div>
+                        <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situaci√≥n en espa√±ol..."></textarea>
                       </div>
                       <div class="budget-field">
                         <label for="budgetHardshipDetailEn">Detailed Hardship Reason (English)</label>
@@ -8195,11 +8434,11 @@
             </div>
           </div>
         </div>
-        <!-- NUEVA SECCI”N CREDITORS - REDISE—O LIQUID GLASS -->
+        <!-- NUEVA SECCI√ìN CREDITORS - REDISE√ëO LIQUID GLASS -->
         <div id="creditorsSection" class="lead-content-grid hidden" style="grid-template-columns: 1fr;">
           <div class="creditors-glass-container">
             
-            <!-- Resumen compacto + BotÛn -->
+            <!-- Resumen compacto + Bot√≥n -->
             <div class="creditors-summary-inline">
               <div class="summary-badges-wrap">
                 <div class="summary-badges" id="creditorsMainSummaryBadges">
@@ -8266,13 +8505,13 @@
                 <div class="creditors-table-container">
                   <table class="creditors-table" id="creditorsSavedTable">
                     <thead id="creditorsTableHead">
-                      <!-- Se genera din·micamente desde JS para permitir reordenar -->
+                      <!-- Se genera din√°micamente desde JS para permitir reordenar -->
                     </thead>
                     <tbody id="creditorsSavedBody">
                       <tr>
                         <td colspan="12" class="empty-cell">
                           <div class="creditors-empty-status">
-                            <span class="status-text" id="creditorsStatus">Sube reportes de crÈdito desde Archivos para extraer deudas autom·ticamente.</span>
+                            <span class="status-text" id="creditorsStatus">Sube reportes de cr√©dito desde Archivos para extraer deudas autom√°ticamente.</span>
                           </div>
                         </td>
                       </tr>
@@ -8491,7 +8730,7 @@
     </div>
   </div>
 
-  <!-- Modal de clasificaciÛn de archivo -->
+  <!-- Modal de clasificaci√≥n de archivo -->
   <div id="fileMetaModal" class="file-meta-modal hidden" aria-hidden="true">
     <div class="file-meta-modal-backdrop"></div>
     <div class="file-meta-modal-content" role="dialog" aria-modal="true" aria-labelledby="fileMetaModalTitle">
@@ -8505,7 +8744,7 @@
           <select id="fileDocType" required>
             <option value="">Seleccionar tipo...</option>
             <option value="official_document">Documento oficial</option>
-            <option value="credit_report">Reporte de crÈdito</option>
+            <option value="credit_report">Reporte de cr√©dito</option>
             <option value="income_proof">Prueba de ingresos</option>
             <option value="bank_statement">Estado de cuenta bancario</option>
             <option value="contract">Contrato</option>
@@ -8542,7 +8781,7 @@
         </button>
       </div>
       <div class="file-viewer-modal-body" id="fileViewerBody">
-        <!-- El contenido se carga din·micamente -->
+        <!-- El contenido se carga din√°micamente -->
       </div>
       <div class="file-viewer-modal-footer">
         <button id="fileViewerDownloadBtn" class="file-viewer-btn primary">
@@ -8562,10 +8801,11 @@
   <script src="credit-report-auto-extract.js?v=20260226e"></script>
   <script src="crm-helpers.js?v=20260302a"></script>
   <script src="client.js?v=20260303b"></script>
-  <script src="budget.js?v=20260222a"></script>
+  <script src="hardship-assist.js?v=20260304a"></script>
+  <script src="budget.js?v=20260304b"></script>
   <script src="quick-actions.js?v=20260226b"></script>
   <script src="creditors-redesign.js?v=20260302a"></script>
-  <!-- Notification panel ó outside toolbar to avoid transform containing-block clipping -->
+  <!-- Notification panel ‚Äî outside toolbar to avoid transform containing-block clipping -->
   <div class="notif-panel" id="clientNotifPanel" role="dialog" aria-label="Notificaciones">
     <div class="notif-panel-header">
       <span class="notif-panel-title">Notificaciones</span>

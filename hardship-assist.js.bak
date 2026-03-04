@@ -1,0 +1,422 @@
+﻿(function () {
+  // Regex helper para hacer las vocales insensibles a acentos
+  function noAcc(str) {
+    return str
+      .replace(/a/g, '[aÃ¡AÃ]')
+      .replace(/e/g, '[eÃ©EÃ‰]')
+      .replace(/i/g, '[iÃ­IÃ]')
+      .replace(/o/g, '[oÃ³OÃ“]')
+      .replace(/u/g, '[uÃºÃ¼UÃšÃœ]');
+  }
+
+  // Reglas de frases extensas para ES -> EN
+  const ES_TO_EN_PHRASE_RULES = [
+    [new RegExp('\\b' + noAcc('comenta que') + '\\b', 'gi'), 'reports that'],
+    [new RegExp('\\b' + noAcc('indica que') + '\\b', 'gi'), 'states that'],
+    [new RegExp('\\b' + noAcc('menciona que') + '\\b', 'gi'), 'mentions that'],
+    [new RegExp('\\b' + noAcc('dice que') + '\\b', 'gi'), 'says that'],
+    [new RegExp('\\b' + noAcc('empezo con las drogas') + '\\b', 'gi'), 'started using drugs'],
+    [new RegExp('\\b' + noAcc('empezo con las dfogas') + '\\b', 'gi'), 'started using drugs'],
+    [new RegExp('\\b' + noAcc('empezo a consumir') + '\\b', 'gi'), 'started using'],
+    [new RegExp('\\b' + noAcc('consumo de drogas') + '\\b', 'gi'), 'drug use'],
+    [new RegExp('\\b' + noAcc('consumia drogas') + '\\b', 'gi'), 'had substance-use issues'],
+    [new RegExp('\\b' + noAcc('consumo de sustancias') + '\\b', 'gi'), 'substance use'],
+    [new RegExp('\\b' + noAcc('dfogas') + '\\b', 'gi'), 'drugs'],
+    [new RegExp('\\b' + noAcc('drogas') + '\\b', 'gi'), 'drugs'],
+    [new RegExp('\\b' + noAcc('se quedo sin trabajo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('se quedo desempleado') + '\\b', 'gi'), 'became unemployed'],
+    [new RegExp('\\b' + noAcc('se quedo desempleada') + '\\b', 'gi'), 'became unemployed'],
+    [new RegExp('\\b' + noAcc('perdio su trabajo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('perdio el trabajo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('perdio trabajo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('perdio su empleo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('perdio el empleo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('perdio empleo') + '\\b', 'gi'), 'lost employment'],
+    [new RegExp('\\b' + noAcc('fue despedido') + '\\b', 'gi'), 'was laid off'],
+    [new RegExp('\\b' + noAcc('fue despedida') + '\\b', 'gi'), 'was laid off'],
+    [new RegExp('\\b' + noAcc('sin empleo') + '\\b', 'gi'), 'without employment'],
+    [new RegExp('\\b' + noAcc('desempleados') + '\\b', 'gi'), 'unemployed'],
+    [new RegExp('\\b' + noAcc('desempleadas') + '\\b', 'gi'), 'unemployed'],
+    [new RegExp('\\b' + noAcc('desempleado') + '\\b', 'gi'), 'unemployed'],
+    [new RegExp('\\b' + noAcc('desempleada') + '\\b', 'gi'), 'unemployed'],
+    [new RegExp('\\b' + noAcc('reduccion de horas') + '\\b', 'gi'), 'reduction in work hours'],
+    [new RegExp('\\b' + noAcc('le cortaron las horas') + '\\b', 'gi'), 'had their hours cut'],
+    [new RegExp('\\b' + noAcc('ingresos bajaron') + '\\b', 'gi'), 'income decreased'],
+    [new RegExp('\\b' + noAcc('bajaron los ingresos') + '\\b', 'gi'), 'income decreased'],
+    [new RegExp('\\b' + noAcc('recorte de sueldo') + '\\b', 'gi'), 'pay cut'],
+    [new RegExp('\\b' + noAcc('recorte de salario') + '\\b', 'gi'), 'pay cut'],
+    [new RegExp('\\b' + noAcc('no le alcanza') + '\\b', 'gi'), 'cannot cover monthly expenses'],
+    [new RegExp('\\b' + noAcc('no les alcanza') + '\\b', 'gi'), 'cannot cover monthly expenses'],
+    [new RegExp('\\b' + noAcc('no nos alcanza') + '\\b', 'gi'), 'cannot cover monthly expenses'],
+    [new RegExp('\\b' + noAcc('no alcanza') + '\\b', 'gi'), 'cannot cover monthly expenses'],
+    [new RegExp('\\b' + noAcc('no puede pagar') + '\\b', 'gi'), 'cannot make payments'],
+    [new RegExp('\\b' + noAcc('no puede hacer los pagos') + '\\b', 'gi'), 'cannot make payments'],
+    [new RegExp('\\b' + noAcc('esta atrasado') + '\\b', 'gi'), 'is behind on payments'],
+    [new RegExp('\\b' + noAcc('esta atrasada') + '\\b', 'gi'), 'is behind on payments'],
+    [new RegExp('\\b' + noAcc('atrasados con los pagos') + '\\b', 'gi'), 'behind on payments'],
+    [new RegExp('\\b' + noAcc('atrasadas con los pagos') + '\\b', 'gi'), 'behind on payments'],
+    [new RegExp('\\b' + noAcc('atrasado con los pagos') + '\\b', 'gi'), 'behind on payments'],
+    [new RegExp('\\b' + noAcc('atrasada con los pagos') + '\\b', 'gi'), 'behind on payments'],
+    [new RegExp('\\b' + noAcc('gastos medicos') + '\\b', 'gi'), 'medical expenses'],
+    [new RegExp('\\b' + noAcc('emergencia medica') + '\\b', 'gi'), 'medical emergency'],
+    [new RegExp('\\b' + noAcc('hospitalizado') + '\\b', 'gi'), 'hospitalized'],
+    [new RegExp('\\b' + noAcc('hospitalizada') + '\\b', 'gi'), 'hospitalized'],
+    [new RegExp('\\b' + noAcc('cirugia') + '\\b', 'gi'), 'surgery'],
+    [new RegExp('\\b' + noAcc('gastos inesperados') + '\\b', 'gi'), 'unexpected expenses'],
+    [new RegExp('\\b' + noAcc('costo de vida') + '\\b', 'gi'), 'cost of living'],
+    [new RegExp('\\b' + noAcc('inflacion') + '\\b', 'gi'), 'inflation'],
+    [new RegExp('\\b' + noAcc('divorcio') + '\\b', 'gi'), 'divorce'],
+    [new RegExp('\\b' + noAcc('separacion') + '\\b', 'gi'), 'separation'],
+    [new RegExp('\\b' + noAcc('fallecimiento') + '\\b', 'gi'), 'death'],
+    [new RegExp('\\b' + noAcc('murio') + '\\b', 'gi'), 'passed away'],
+    [new RegExp('\\b' + noAcc('mataron a su perro') + '\\b', 'gi'), "the client's dog was killed"],
+    [new RegExp('\\b' + noAcc('mataron a ') + '(?:el |la |los |las )?([a-z]+)\\b', 'gi'), "$1 was killed"],
+    [new RegExp('\\b' + noAcc('gasto mucho en ') + '(?:la |el |los |las )?([a-z]+)\\b', 'gi'), 'spent a lot on $1'],
+    [new RegExp('\\b' + noAcc('gastaron mucho en ') + '(?:la |el |los |las )?([a-z]+)\\b', 'gi'), 'spent a lot on $1'],
+    [new RegExp('\\b' + noAcc('gasto mucho') + '\\b', 'gi'), 'spent a lot'],
+    [new RegExp('\\b' + noAcc('gastos de veterinaria') + '\\b', 'gi'), 'vet bills'],
+    [new RegExp('\\b' + noAcc('en la veterinaria') + '\\b', 'gi'), 'at the vet'],
+    [new RegExp('\\b' + noAcc('tuvo cancer') + '\\b', 'gi'), 'had cancer'],
+    [new RegExp('\\b' + noAcc('tiene cancer') + '\\b', 'gi'), 'has cancer'],
+    [new RegExp('\\b' + noAcc('muchas deudas') + '\\b', 'gi'), 'a lot of debt'],
+    [new RegExp('\\b' + noAcc('demasiadas deudas') + '\\b', 'gi'), 'too much debt'],
+    [new RegExp('\\b' + noAcc('tarjetas maximizadas') + '\\b', 'gi'), 'maxed out cards'],
+    [new RegExp('\\b' + noAcc('tarjetas topadas') + '\\b', 'gi'), 'maxed out cards'],
+    [new RegExp('\\b' + noAcc('tarjetas al limite') + '\\b', 'gi'), 'maxed out cards'],
+    [new RegExp('\\b' + noAcc('intereses altos') + '\\b', 'gi'), 'high interest rates'],
+    [new RegExp('\\b' + noAcc('pandemia') + '\\b', 'gi'), 'pandemic'],
+    [new RegExp('\\b' + noAcc('covid 19') + '\\b', 'gi'), 'COVID-19'],
+    [new RegExp('\\b' + noAcc('covid-19') + '\\b', 'gi'), 'COVID-19'],
+    [new RegExp('\\b' + noAcc('covid') + '\\b', 'gi'), 'COVID-19'],
+    [new RegExp('\\b' + noAcc('bancarrota') + '\\b', 'gi'), 'bankruptcy'],
+    [new RegExp('\\b' + noAcc('quiebra') + '\\b', 'gi'), 'bankruptcy']
+  ];
+
+  const EN_TO_ES_PHRASE_RULES = [
+    [/\breports that\b/gi, 'comenta que'],
+    [/\bstates that\b/gi, 'indica que'],
+    [/\bmentions that\b/gi, 'menciona que'],
+    [/\bsays that\b/gi, 'dice que'],
+    [/\b(?:lost employment|lost their job|lost his job|lost her job)\b/gi, 'perdiÃ³ su trabajo'],
+    [/\b(?:became unemployed)\b/gi, 'se quedÃ³ desempleado'],
+    [/\b(?:was laid off|were laid off)\b/gi, 'fue despedido'],
+    [/\bwithout employment\b/gi, 'sin empleo'],
+    [/\bunemployed\b/gi, 'desempleado'],
+    [/\breduction in work hours\b/gi, 'reducciÃ³n de horas de trabajo'],
+    [/\bhad their hours cut\b/gi, 'le cortaron las horas'],
+    [/\bincome decreased\b/gi, 'los ingresos bajaron'],
+    [/\bpay cut\b/gi, 'recorte de sueldo'],
+    [/\bcannot cover monthly expenses\b/gi, 'no alcanza para cubrir gastos mensuales'],
+    [/\bcannot make payments\b/gi, 'no puede realizar pagos'],
+    [/\bis behind on payments\b/gi, 'estÃ¡ atrasado en pagos'],
+    [/\bbehind on payments\b/gi, 'atrasado con los pagos'],
+    [/\bmedical expenses\b/gi, 'gastos mÃ©dicos'],
+    [/\bmedical emergency\b/gi, 'emergencia mÃ©dica'],
+    [/\bhospitalized\b/gi, 'hospitalizado'],
+    [/\bsurgery\b/gi, 'cirugÃ­a'],
+    [/\bunexpected expenses\b/gi, 'gastos inesperados'],
+    [/\bcost of living\b/gi, 'costo de vida'],
+    [/\binflation\b/gi, 'inflaciÃ³n'],
+    [/\bdivorce\b/gi, 'divorcio'],
+    [/\bseparation\b/gi, 'separaciÃ³n'],
+    [/\bdeath\b/gi, 'fallecimiento'],
+    [/\bpassed away\b/gi, 'falleciÃ³'],
+    [/\bhad substance-use issues\b/gi, 'tuvo problemas de consumo de sustancias'],
+    [/\bsubstance use\b/gi, 'consumo de sustancias'],
+    [/\bthe client's dog was killed\b/gi, 'mataron a su perro'],
+    [/\ba lot of debt\b/gi, 'muchas deudas'],
+    [/\btoo much debt\b/gi, 'demasiadas deudas'],
+    [/\bmaxed out cards\b/gi, 'tarjetas maximizadas'],
+    [/\bhigh interest rates\b/gi, 'intereses altos'],
+    [/\bpandemic\b/gi, 'pandemia'],
+    [/\bcovid[- ]?19\b/gi, 'COVID-19'],
+    [/\bbankruptcy\b/gi, 'bancarrota']
+  ];
+
+  const ES_TO_EN_WORDS = {
+    'y': 'and', 'que': 'that', 'las': 'the', 'los': 'the', 'la': 'the', 'el': 'the', 'un': 'a', 'una': 'a',
+    'de': 'of', 'su': "the client's", 'sus': "the client's", 'porque': 'because', 'tambien': 'also', 
+    'actualmente': 'currently', 'tiene': 'has', 'tienen': 'have', 'tuvo': 'had', 'tuvieron': 'had',
+    'problema': 'problem', 'problemas': 'problems', 'trabajo': 'job', 'empleo': 'employment',
+    'ingreso': 'income', 'ingresos': 'income', 'pago': 'payment', 'pagos': 'payments',
+    'mensual': 'monthly', 'mensuales': 'monthly', 'gasto': 'expense', 'gastos': 'expenses', 'gastÃ³': 'spent', 'gasto mucho': 'spent a lot',
+    'deuda': 'debt', 'deudas': 'debts', 'banco': 'bank', 'bancos': 'banks', 'credito': 'credit',
+    'tarjeta': 'card', 'tarjetas': 'cards', 'prestamo': 'loan', 'prestamos': 'loans',
+    'renta': 'rent', 'alquiler': 'rent', 'hipoteca': 'mortgage', 'familia': 'family', 'hogar': 'household',
+    'enfermedad': 'illness', 'accidente': 'accident', 'medico': 'medical', 'medicos': 'medical',
+    'caro': 'expensive', 'altos': 'high', 'bajo': 'low', 'bajaron': 'decreased', 'subieron': 'increased',
+    'dinero': 'money', 'fondos': 'funds', 'ayuda': 'help', 'necesita': 'needs', 'esposo': 'husband',
+    'esposa': 'wife', 'hijo': 'son', 'hija': 'daughter', 'hijos': 'children', 'padre': 'father', 'madre': 'mother',
+    'mama': 'mother', 'mamÃ¡': 'mother', 'papa': 'father', 'papÃ¡': 'father', 'perro': 'dog', 'gato': 'cat',
+    'luego': 'then', 'despues': 'afterwards', 'en': 'in', 'con': 'with', 'por': 'for', 'para': 'for', 
+    'pero': 'but', 'como': 'as', 'cuando': 'when', 'donde': 'where', 'cancer': 'cancer', 'veterinaria': 'vet',
+    'mataron': 'killed', 'empezo': 'started', 'empezÃ³': 'started', 'fue': 'was', 'fueron': 'were', 'se quedo': 'stayed'
+  };
+
+  const EN_TO_ES_WORDS = {
+    'because': 'porque', 'also': 'tambiÃ©n', 'currently': 'actualmente', 'and': 'y',
+    'has': 'tiene', 'have': 'tienen', 'had': 'tuvo', 'problem': 'problema', 'problems': 'problemas',
+    'job': 'trabajo', 'employment': 'empleo', 'income': 'ingresos', 'payment': 'pago', 'payments': 'pagos',
+    'monthly': 'mensual', 'expense': 'gasto', 'expenses': 'gastos', 'debt': 'deuda', 'debts': 'deudas',
+    'bank': 'banco', 'banks': 'bancos', 'credit': 'crÃ©dito', 'card': 'tarjeta', 'cards': 'tarjetas',
+    'loan': 'prÃ©stamo', 'loans': 'prÃ©stamos', 'rent': 'renta', 'mortgage': 'hipoteca', 'family': 'familia',
+    'household': 'hogar', 'illness': 'enfermedad', 'accident': 'accidente', 'medical': 'mÃ©dico',
+    'expensive': 'caro', 'high': 'altos', 'low': 'bajo', 'decreased': 'bajaron', 'increased': 'subieron',
+    'money': 'dinero', 'funds': 'fondos', 'help': 'ayuda', 'needs': 'necesita', 'husband': 'esposo',
+    'wife': 'esposa', 'son': 'hijo', 'daughter': 'hija', 'children': 'hijos', 'father': 'padre', 'mother': 'madre',
+    'a': 'un', 'the': 'el', 'that': 'que', 'of': 'de', 'dog': 'perro', 'cat': 'gato', 'then': 'luego',
+    'afterwards': 'despuÃ©s', 'in': 'en', 'with': 'con', 'for': 'para', 'but': 'pero', 'as': 'como',
+    'when': 'cuando', 'where': 'donde', 'cancer': 'cÃ¡ncer', 'vet': 'veterinaria', 'killed': 'mataron',
+    'started': 'empezÃ³', 'was': 'fue', 'were': 'fueron', 'spent': 'gastÃ³', 'lot': 'mucho', 'stayed': 'se quedÃ³'
+  };
+
+  function normalizeText(value) {
+    return String(value || '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\u0000/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function applyRules(text, rules) {
+    let out = String(text || '');
+    rules.forEach(([pattern, replacement]) => {
+      out = out.replace(pattern, replacement);
+    });
+    return out;
+  }
+
+  function replaceWordMapEsToEn(text, map) {
+    let out = String(text || '');
+    // Ordenamos las llaves de mayor a menor longitud para que las frases de 2 palabras (como "gasto mucho") se reemplacen antes que las de 1.
+    const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+    sortedKeys.forEach((from) => {
+      const to = map[from];
+      const pattern = new RegExp('\\b' + noAcc(from) + '\\b', 'gi');
+      out = out.replace(pattern, to);
+    });
+    return out;
+  }
+
+  function replaceWordMapEnToEs(text, map) {
+    let out = String(text || '');
+    const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+    sortedKeys.forEach((from) => {
+      const to = map[from];
+      const pattern = new RegExp(`\\b${from}\\b`, 'gi');
+      out = out.replace(pattern, to);
+    });
+    return out;
+  }
+
+  function canonicalizeSpanish(text) {
+    let out = normalizeText(text)
+      .replace(new RegExp('\\b' + noAcc('yo|ella|ellos|ellas') + '\\b', 'gi'), 'el cliente')
+      .replace(new RegExp('\\b' + noAcc('mi') + '\\b', 'gi'), 'su')
+      .replace(new RegExp('\\b' + noAcc('mis') + '\\b', 'gi'), 'sus')
+      .replace(/el cliente\s+el cliente/gi, 'el cliente')
+      .replace(new RegExp('\\b' + noAcc('consumia drogas') + '\\b', 'gi'), 'tuvo problemas de consumo de sustancias')
+      .replace(new RegExp('\\b' + noAcc('consumo de drogas') + '\\b', 'gi'), 'consumo de sustancias');
+
+    if (!/\bel cliente\b/i.test(noAcc(out)) && out) {
+      out = `El cliente ${out.replace(/^[,.\s-]+/, '')}`;
+    }
+    return cleanupSpanish(out);
+  }
+
+  function canonicalizeEnglish(text) {
+    let out = normalizeText(text)
+      .replace(/\b(he|she|they)\b/gi, 'the client')
+      .replace(/\b(him|her|them)\b/gi, 'the client')
+      .replace(/\b(his|her|their)\b/gi, "the client's")
+      .replace(/\b(the client)\s+(the client)\b/gi, 'the client')
+      .replace(/\bdrug use\b/gi, 'substance use')
+      .replace(/\bused drugs\b/gi, 'had substance-use issues');
+
+    if (!/\bthe client\b/i.test(out) && out) {
+      out = `The client ${out.replace(/^[,.\s-]+/, '')}`;
+    }
+    return cleanupEnglish(out);
+  }
+
+  function stripLeadingSubject(text, lang) {
+    if (lang === 'es') return String(text || '').replace(/^\s*el cliente\b[\s,:-]*/i, '').trim();
+    return String(text || '').replace(/^\s*the client\b[\s,:-]*/i, '').trim();
+  }
+
+  function cleanupEnglish(text) {
+    let out = String(text || '')
+      .replace(/\s+,/g, ',')
+      .replace(/\s+\./g, '.')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\bthe client's's\b/gi, "the client's")
+      .replace(/\bthe client\s+client\b/gi, 'the client')
+      .replace(/\breports that lost employment\b/gi, 'reports losing employment')
+      .replace(/\bthe debts\b/gi, 'debts')
+      .replace(/\bmake payments debts\b/gi, 'make debt payments')
+      .replace(/\bproblems of substance use\b/gi, 'substance-use problems')
+      .replace(/^\s*(?:the client\s+)+/i, 'The client ')
+      .replace(/\bThe client The client\b/gi, 'The client')
+      .trim();
+    
+    // Capitalize first letter of sentences
+    out = out.replace(/(^\w|\.\s*\w)/g, c => c.toUpperCase());
+    
+    // Fix random capitalization in the middle of sentences
+    out = out.replace(/\bReports that\b/g, 'reports that')
+             .replace(/\bStates that\b/g, 'states that')
+             .replace(/\bMentions that\b/g, 'mentions that')
+             .replace(/\bSays that\b/g, 'says that');
+             
+    return out;
+  }
+
+  function cleanupSpanish(text) {
+    let out = String(text || '')
+      .replace(/\s+,/g, ',')
+      .replace(/\s+\./g, '.')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\bel cliente\s+cliente\b/gi, 'el cliente')
+      .replace(/^\s*(?:el cliente\s+)+/i, 'El cliente ')
+      .replace(/\bEl cliente El cliente\b/gi, 'El cliente')
+      .trim();
+      
+    // Capitalize first letter of sentences
+    out = out.replace(/(^\w|\.\s*\w)/g, c => c.toUpperCase());
+    
+    // Fix random capitalization
+    out = out.replace(/\bComenta que\b/g, 'comenta que')
+             .replace(/\bIndica que\b/g, 'indica que')
+             .replace(/\bMenciona que\b/g, 'menciona que')
+             .replace(/\bDice que\b/g, 'dice que');
+
+    return out;
+  }
+
+  function translateSpanishToEnglish(text) {
+    const source = canonicalizeSpanish(text);
+    let body = stripLeadingSubject(source, 'es');
+    body = applyRules(body, ES_TO_EN_PHRASE_RULES);
+    body = replaceWordMapEsToEn(body, ES_TO_EN_WORDS);
+    
+    // Only prepend "The client " if it's not already there
+    if (!/^\s*The client\b/i.test(body)) {
+      body = `The client ${body}`;
+    }
+    
+    return cleanupEnglish(body);
+  }
+
+  function translateEnglishToSpanish(text) {
+    const source = canonicalizeEnglish(text);
+    let body = stripLeadingSubject(source, 'en');
+    body = applyRules(body, EN_TO_ES_PHRASE_RULES);
+    body = replaceWordMapEnToEs(body, EN_TO_ES_WORDS);
+    
+    // Only prepend "El cliente " if it's not already there
+    if (!/^\s*El cliente\b/i.test(body)) {
+      body = `El cliente ${body}`;
+    }
+    
+    return cleanupSpanish(body);
+  }
+
+  function enhanceSpanish(text) {
+    let out = canonicalizeSpanish(text)
+      .replace(new RegExp('\\b' + noAcc('no puede pagar') + '\\b', 'gi'), 'no puede realizar pagos')
+      .replace(new RegExp('\\b' + noAcc('se quedo sin trabajo') + '\\b', 'gi'), 'perdiÃ³ su trabajo')
+      .replace(new RegExp('\\b' + noAcc('esta atrasad[oa]') + '\\b', 'gi'), 'estÃ¡ atrasado en pagos');
+    return cleanupSpanish(out);
+  }
+
+  function enhanceEnglish(text) {
+    let out = canonicalizeEnglish(text)
+      .replace(/\bcannot pay\b/gi, 'cannot make payments')
+      .replace(/\bis late\b/gi, 'is behind on payments')
+      .replace(/\blost his job\b/gi, 'lost employment')
+      .replace(/\blost her job\b/gi, 'lost employment');
+    return cleanupEnglish(out);
+  }
+
+  function applyContextHeuristics(text, contextReason, lang) {
+    if (!contextReason) return text;
+    let out = text;
+    const reason = String(contextReason).toLowerCase();
+
+    if (lang === 'en') {
+      if (reason.includes('loss of income') || reason.includes('job')) {
+         if (!out.toLowerCase().includes('employment') && !out.toLowerCase().includes('income')) {
+             out += ' due to loss of income';
+         }
+      } else if (reason.includes('medical')) {
+         if (!out.toLowerCase().includes('medical')) {
+             out += ' due to medical expenses';
+         }
+      } else if (reason.includes('divorce') || reason.includes('separation')) {
+         if (!out.toLowerCase().includes('divorce') && !out.toLowerCase().includes('separation')) {
+             out += ' due to marital separation';
+         }
+      }
+    } else if (lang === 'es') {
+       if (reason.includes('loss of income') || reason.includes('job')) {
+         if (!out.toLowerCase().includes('ingreso') && !out.toLowerCase().includes('empleo') && !out.toLowerCase().includes('trabajo')) {
+             out += ' debido a la pÃ©rdida de ingresos';
+         }
+      } else if (reason.includes('medical')) {
+         if (!out.toLowerCase().includes('medic') && !out.toLowerCase().includes('salud')) {
+             out += ' debido a gastos mÃ©dicos';
+         }
+      } else if (reason.includes('divorce') || reason.includes('separation')) {
+         if (!out.toLowerCase().includes('divorci') && !out.toLowerCase().includes('separaci')) {
+             out += ' debido a una separaciÃ³n matrimonial';
+         }
+      }
+    }
+    return out;
+  }
+
+  function translate({ sourceLang, text, hardshipReason }) {
+    const lang = String(sourceLang || '').toLowerCase() === 'en' ? 'en' : 'es';
+    const input = normalizeText(text);
+    if (!input) return '';
+    let translated = lang === 'es'
+      ? translateSpanishToEnglish(input)
+      : translateEnglishToSpanish(input);
+    
+    translated = applyContextHeuristics(translated, hardshipReason, lang === 'es' ? 'en' : 'es');
+    return translated;
+  }
+
+  function enhance({ spanishText, englishText, focusLang, hardshipReason }) {
+    const focus = String(focusLang || '').toLowerCase() === 'en' ? 'en' : 'es';
+    const srcEs = normalizeText(spanishText);
+    const srcEn = normalizeText(englishText);
+
+    let outEs = srcEs;
+    let outEn = srcEn;
+
+    if (focus === 'en') {
+      const baseEn = srcEn || translateSpanishToEnglish(srcEs);
+      outEn = enhanceEnglish(baseEn);
+      outEn = applyContextHeuristics(outEn, hardshipReason, 'en');
+      outEs = translateEnglishToSpanish(outEn);
+    } else {
+      const baseEs = srcEs || translateEnglishToSpanish(srcEn);
+      outEs = enhanceSpanish(baseEs);
+      outEs = applyContextHeuristics(outEs, hardshipReason, 'es');
+      outEn = translateSpanishToEnglish(outEs);
+    }
+
+    return {
+      spanishText: cleanupSpanish(outEs),
+      englishText: cleanupEnglish(outEn)
+    };
+  }
+
+  window.HardshipAssist = {
+    normalizeText,
+    translate,
+    enhance
+  };
+})();

@@ -7,6 +7,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
+const deepl = require('deepl-node');
 
 // Cargar .env desde el directorio padre (raíz del proyecto)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -18,6 +19,13 @@ const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = path.join(__dirname, '..');
 const PUBLIC_API_PATHS = new Set(['/health', '/auth/login', '/auth/refresh', '/auth/logout']);
 const ACCESS_TOKEN_EXPIRES_IN = cleanText(process.env.JWT_EXPIRES_IN, 40) || '15m';
+
+// Configurar DeepL si hay API Key
+let deeplTranslator = null;
+if (process.env.DEEPL_API_KEY) {
+  deeplTranslator = new deepl.Translator(process.env.DEEPL_API_KEY);
+  console.log('[Sistema] DeepL API configurada correctamente.');
+}
 const REFRESH_COOKIE_NAME = 'project_gw_refresh_token';
 const REFRESH_COOKIE_PATH = '/api/auth';
 const REFRESH_TOKEN_TTL_DAYS = parsePositiveInt(process.env.REFRESH_TOKEN_TTL_DAYS, 14, 1, 60);
@@ -326,6 +334,18 @@ const zipLookupCache = new Map();
 const CREDIT_REPORT_AI_TIMEOUT_MS = 25000;
 const CREDIT_REPORT_AI_MAX_TEXT_CHARS = 120000;
 const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
+const HARDSHIP_AI_TIMEOUT_MS = 20000;
+const HARDSHIP_AI_MAX_TEXT_CHARS = 5000;
+const HARDSHIP_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
+const HARDSHIP_REASON_LABELS = {
+  loss_of_income: 'Loss of Income',
+  medical: 'Medical Issues',
+  divorce: 'Divorce / Separation',
+  inflation: 'Inflation / Cost of Living',
+  business_failure: 'Business Failure',
+  unexpected_expenses: 'Unexpected Expenses',
+  other: 'Other'
+};
 const PIPELINE_STAGE_CATALOG = [
   { key: 'new', label: 'Nuevo', order: 1, terminal: false },
   { key: 'contact', label: 'Contacto', order: 2, terminal: false },
@@ -3559,6 +3579,187 @@ function parseAiJsonResponse(text) {
   }
 }
 
+function extractGeminiCandidateText(payload) {
+  return (payload?.candidates || [])
+    .flatMap((candidate) => candidate?.content?.parts || [])
+    .map((part) => part?.text || '')
+    .find((value) => String(value || '').trim().length > 0) || '';
+}
+
+function normalizeHardshipAiText(value, maxLength = HARDSHIP_AI_MAX_TEXT_CHARS) {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u0000/g, '')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeHardshipSourceLang(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'es' || normalized === 'en') return normalized;
+  return '';
+}
+
+function resolveHardshipReasonLabel(reasonValue, reasonLabelValue) {
+  const explicitLabel = cleanText(reasonLabelValue, 120);
+  if (explicitLabel) return explicitLabel;
+  const reasonKey = cleanText(reasonValue, 80).toLowerCase();
+  return HARDSHIP_REASON_LABELS[reasonKey] || 'General Hardship';
+}
+
+async function translateHardshipNarrative({ sourceLang, text, hardshipReasonLabel }) {
+  const normalizedSourceLang = normalizeHardshipSourceLang(sourceLang);
+  const sourceText = normalizeHardshipAiText(text);
+
+  if (deeplTranslator) {
+    try {
+      const targetLang = normalizedSourceLang === 'es' ? 'en-US' : 'es'; // DeepL requires specific EN variant for some cases, using en-US
+      const result = await deeplTranslator.translateText(sourceText, normalizedSourceLang === 'es' ? 'es' : 'en', targetLang);
+      console.log(`[Sistema] Texto traducido exitosamente usando DeepL API (${normalizedSourceLang} -> ${targetLang})`);
+      
+      // Aplicar formato de canonical subject
+      let translatedText = result.text.trim();
+      const subject = targetLang === 'es' ? 'El cliente ' : 'The client ';
+      
+      // Cleanup básico para DeepL
+      translatedText = translatedText.replace(/^el cliente\b/i, '').replace(/^the client\b/i, '').trim();
+      translatedText = translatedText.replace(/^(comenta que|reports that|indica que|states that|dice que|says that)/i, (match) => match.toLowerCase());
+      
+      return { translatedText: `${subject}${translatedText}`, source: 'deepl' };
+    } catch (error) {
+      console.warn('[Sistema] Falla en la traducción con DeepL API. Haciendo fallback a Gemini...', error.message);
+    }
+  } else {
+    console.log('[Sistema] DeepL API no configurado, utilizando Gemini directamente.');
+  }
+
+  // Fallback to Gemini
+  const translatedText = await translateHardshipNarrativeWithGemini({ sourceLang, text, hardshipReasonLabel });
+  return { translatedText, source: 'gemini' };
+}
+
+async function translateHardshipNarrativeWithGemini({ sourceLang, text, hardshipReasonLabel }) {
+  const apiKey = toNullableText(process.env.GEMINI_API_KEY, 300);
+  if (!apiKey) {
+    const error = new Error('GEMINI_API_KEY no esta configurada.');
+    error.code = 'AI_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const normalizedSourceLang = normalizeHardshipSourceLang(sourceLang);
+  if (!normalizedSourceLang) {
+    const error = new Error('sourceLang debe ser es o en.');
+    error.code = 'AI_BAD_REQUEST';
+    throw error;
+  }
+
+  const sourceText = normalizeHardshipAiText(text);
+  if (sourceText.length < 2) {
+    const error = new Error('El texto para traducir es insuficiente.');
+    error.code = 'AI_BAD_REQUEST';
+    throw error;
+  }
+
+  const targetLang = normalizedSourceLang === 'es' ? 'en' : 'es';
+  const canonicalSubject = targetLang === 'es' ? 'El cliente' : 'The client';
+  const prompt = [
+    'You are an expert bilingual hardship writer for debt settlement intake.',
+    'Return ONLY valid JSON in this exact format:',
+    '{"translatedText":""}',
+    '',
+    'Rules:',
+    '- Translate with high semantic precision and fluent grammar.',
+    '- Keep all facts, dates, amounts, debts, and timeline details.',
+    '- Do not invent details.',
+    '- Output must be in target language only.',
+    `- Rewrite debtor references with canonical subject: "${canonicalSubject}".`,
+    '- Replace personal names and pronouns tied to the debtor with the canonical subject when applicable.',
+    '- Keep a coherent professional tone suitable for hardship documentation.',
+    '- No markdown, no extra keys, no extra text.',
+    '',
+    `Hardship category: ${cleanText(hardshipReasonLabel, 120) || 'General Hardship'}`,
+    `Source language: ${normalizedSourceLang === 'es' ? 'Spanish' : 'English'}`,
+    `Target language: ${targetLang === 'es' ? 'Spanish' : 'English'}`,
+    '',
+    'Input narrative:',
+    sourceText
+  ].join('\n');
+
+  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS });
+  const candidateText = extractGeminiCandidateText(payload);
+  const parsed = parseAiJsonResponse(candidateText);
+  const translatedText = normalizeHardshipAiText(
+    parsed?.translatedText || parsed?.translation || parsed?.text || candidateText
+  );
+
+  if (!translatedText) {
+    throw new Error('La IA no devolvio traduccion valida.');
+  }
+
+  return translatedText;
+}
+
+async function enhanceHardshipNarrativeWithGemini({ spanishText, englishText, hardshipReasonLabel }) {
+  const apiKey = toNullableText(process.env.GEMINI_API_KEY, 300);
+  if (!apiKey) {
+    const error = new Error('GEMINI_API_KEY no esta configurada.');
+    error.code = 'AI_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const inputEs = normalizeHardshipAiText(spanishText);
+  const inputEn = normalizeHardshipAiText(englishText);
+  if (inputEs.length < 2 && inputEn.length < 2) {
+    const error = new Error('Debes enviar texto de hardship en al menos un idioma.');
+    error.code = 'AI_BAD_REQUEST';
+    throw error;
+  }
+
+  const prompt = [
+    'You are an expert bilingual hardship writer for debt settlement intake.',
+    'Return ONLY valid JSON in this exact format:',
+    '{"spanishText":"","englishText":""}',
+    '',
+    'Task: produce two aligned hardship narratives (Spanish and English).',
+    '',
+    'Rules:',
+    '- Preserve factual meaning from input. Do not invent events, dates, or amounts.',
+    '- Make both outputs coherent, professional, and mutually consistent.',
+    '- Rewrite debtor references using canonical subject only: "El cliente" in Spanish and "The client" in English.',
+    '- Remove personal names and convert pronouns related to debtor into the canonical subject.',
+    '- Keep concise but complete wording appropriate for hardship review.',
+    '- No markdown, no extra keys, no extra text.',
+    '',
+    `Hardship category: ${cleanText(hardshipReasonLabel, 120) || 'General Hardship'}`,
+    '',
+    'Spanish input:',
+    inputEs || '[empty]',
+    '',
+    'English input:',
+    inputEn || '[empty]'
+  ].join('\n');
+
+  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS });
+  const candidateText = extractGeminiCandidateText(payload);
+  const parsed = parseAiJsonResponse(candidateText);
+
+  const outEs = normalizeHardshipAiText(
+    parsed?.spanishText || parsed?.es || parsed?.detailedReasonEs || ''
+  );
+  const outEn = normalizeHardshipAiText(
+    parsed?.englishText || parsed?.en || parsed?.detailedReasonEn || ''
+  );
+
+  if (!outEs && !outEn) {
+    throw new Error('La IA no devolvio texto mejorado valido.');
+  }
+
+  return {
+    spanishText: outEs || inputEs,
+    englishText: outEn || inputEn
+  };
+}
+
 function normalizeAiMoneyValue(value) {
   if (value === undefined || value === null) return 0;
   const normalized = Number(String(value).replace(/[^0-9.-]/g, ''));
@@ -3845,10 +4046,7 @@ async function analyzeCreditReportWithGemini({ text, sourceReport }) {
 
   const payload = await geminiRequestWithRetry(apiKey, CREDIT_REPORT_AI_MODEL, prompt, { timeoutMs: CREDIT_REPORT_AI_TIMEOUT_MS });
 
-  const candidateText = (payload?.candidates || [])
-    .flatMap((candidate) => candidate?.content?.parts || [])
-    .map((part) => part?.text || '')
-    .find((value) => String(value || '').trim().length > 0) || '';
+  const candidateText = extractGeminiCandidateText(payload);
 
   const parsed = parseAiJsonResponse(candidateText);
   if (!parsed) {
@@ -8514,6 +8712,73 @@ app.delete('/api/leads/:id', async (req, res) => {
     res.status(500).json({ message: 'Error al eliminar lead.' });
   } finally {
     client.release();
+  }
+});
+
+// ============================================
+// ENDPOINT: HARDSHIP AI ASSIST
+// ============================================
+
+app.post('/api/hardship/assist', async (req, res) => {
+  const operation = cleanText(req.body?.operation, 20).toLowerCase();
+  if (!['translate', 'enhance'].includes(operation)) {
+    return res.status(400).json({ message: 'operation debe ser translate o enhance.' });
+  }
+
+  const hardshipReasonLabel = resolveHardshipReasonLabel(
+    req.body?.hardshipReason,
+    req.body?.hardshipReasonLabel
+  );
+
+  try {
+    if (operation === 'translate') {
+      const sourceLang = normalizeHardshipSourceLang(req.body?.sourceLang);
+      if (!sourceLang) {
+        return res.status(400).json({ message: 'sourceLang debe ser es o en.' });
+      }
+
+      const translatedText = await translateHardshipNarrative({
+        sourceLang,
+        text: req.body?.text,
+        hardshipReasonLabel
+      });
+
+      return res.json({
+        operation: 'translate',
+        sourceLang,
+        targetLang: sourceLang === 'es' ? 'en' : 'es',
+        ...translatedText
+      });
+    }
+
+    const enhanced = await enhanceHardshipNarrativeWithGemini({
+      spanishText: req.body?.spanishText,
+      englishText: req.body?.englishText,
+      hardshipReasonLabel
+    });
+
+    return res.json({
+      operation: 'enhance',
+      spanishText: enhanced.spanishText,
+      englishText: enhanced.englishText,
+      source: 'gemini'
+    });
+  } catch (error) {
+    if (error.code === 'AI_BAD_REQUEST') {
+      return res.status(400).json({ message: error.message || 'Solicitud de hardship invalida.' });
+    }
+    if (error.code === 'AI_NOT_CONFIGURED') {
+      return res.status(503).json({ message: 'IA no configurada: falta GEMINI_API_KEY.' });
+    }
+    if (error.code === 'AI_TIMEOUT') {
+      return res.status(504).json({ message: error.message || 'Tiempo de espera agotado en hardship AI.' });
+    }
+    if (error.code === 'AI_RATE_LIMIT' || error.httpStatus === 429) {
+      return res.status(429).json({ message: 'Limite de peticiones alcanzado. Intenta de nuevo en unos segundos.' });
+    }
+
+    console.error('Error en hardship AI assist:', error);
+    return res.status(500).json({ message: error.message || 'Error procesando hardship AI.' });
   }
 });
 

@@ -186,6 +186,69 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.budget-hardship-enhance-btn {
+  border: 1px solid rgba(196, 181, 253, 0.45);
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.34), rgba(59, 130, 246, 0.18));
+  color: rgba(237, 233, 254, 0.97);
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+}
+
+.budget-hardship-enhance-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  flex-shrink: 0;
+}
+
+.budget-hardship-enhance-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(76, 29, 149, 0.28);
+  border-color: rgba(221, 214, 254, 0.68);
+}
+
+.budget-hardship-enhance-btn:disabled {
+  opacity: 0.62;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.budget-hardship-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.budget-hardship-label-row label {
+  margin: 0;
+}
+
+.budget-hardship-enhance-btn.icon-only {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.budget-hardship-enhance-btn.icon-only svg {
+  width: 11px;
+  height: 11px;
+}
+
 .budget-card-group h4 {
   margin: 0;
   font-size: 0.75rem;
@@ -445,6 +508,17 @@ body.home-active.theme-light .budget-card-group h4 {
 
 body.home-active.theme-light .budget-card-head {
   border-bottom-color: rgba(20, 20, 22, 0.1);
+}
+
+body.home-active.theme-light .budget-hardship-enhance-btn {
+  border-color: rgba(109, 40, 217, 0.35);
+  background: linear-gradient(135deg, rgba(109, 40, 217, 0.12), rgba(37, 99, 235, 0.08));
+  color: #5b21b6;
+}
+
+body.home-active.theme-light .budget-hardship-enhance-btn:hover {
+  border-color: rgba(109, 40, 217, 0.48);
+  box-shadow: 0 8px 16px rgba(109, 40, 217, 0.18);
 }
 
 body.home-active.theme-light .budget-inner-tab {
