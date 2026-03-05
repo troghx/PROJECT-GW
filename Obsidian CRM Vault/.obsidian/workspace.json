@@ -13,12 +13,24 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_Fases/Plan Maestro - CRM.md",
+                "file": "02_Estrategia/Analisis Repo - Netlify + Neon.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Plan Maestro - CRM"
+              "title": "Analisis Repo - Netlify + Neon"
+            }
+          },
+          {
+            "id": "99d4dddc7485fcca",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.12.4"
+              },
+              "icon": "lucide-book-up",
+              "title": "Registro de cambios 1.12.4"
             }
           }
         ]

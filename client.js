@@ -540,14 +540,24 @@
       return options.map((option) => {
         const label = option || 'Seleccionar';
         const isSelected = option === selected ? ' selected' : '';
-        return `<option value="${option}"${isSelected}>${label}</option>`;
+        return `<button type="button" class="budget-custom-option${isSelected}" data-select="bestTimeSelect" data-value="${escapeHtml(option)}">${escapeHtml(label)}</button>`;
       }).join('');
     }
 
     function syncBestTimeSelectValue(sourceLead = currentLeadData) {
       const bestTimeSelect = document.getElementById('bestTimeSelect');
       if (!bestTimeSelect) return;
-      bestTimeSelect.value = normalizeBestTimeValue(sourceLead?.best_time);
+      const normalizedVal = normalizeBestTimeValue(sourceLead?.best_time);
+      bestTimeSelect.value = normalizedVal;
+      
+      const valSpan = document.getElementById('bestTimeSelectValue');
+      const drop = document.getElementById('dropdown-bestTimeSelect');
+      if (valSpan && drop) {
+        const opt = drop.querySelector(`.budget-custom-option[data-value="${normalizedVal}"]`);
+        valSpan.textContent = opt ? opt.textContent : (normalizedVal || 'Seleccionar');
+        drop.querySelectorAll('.budget-custom-option').forEach(o => o.classList.remove('selected'));
+        if (opt) opt.classList.add('selected');
+      }
     }
 
     function updateIncludeCoappToggleVisual(isChecked) {
@@ -5508,6 +5518,51 @@
         }
       });
     }
+
+    function initCustomDropdowns() {
+      document.addEventListener('click', (e) => {
+        const wrap = e.target.closest('.budget-custom-select-wrap');
+        const trigger = e.target.closest('.budget-custom-trigger');
+        const option = e.target.closest('.budget-custom-option');
+
+        if (trigger && wrap) {
+          e.stopPropagation();
+          const dropdown = wrap.querySelector('.budget-custom-dropdown');
+          const isHidden = dropdown.classList.contains('hidden');
+          
+          document.querySelectorAll('.budget-custom-dropdown').forEach(d => d.classList.add('hidden'));
+          document.querySelectorAll('.budget-custom-trigger').forEach(t => t.classList.remove('active'));
+
+          if (isHidden) {
+            dropdown.classList.remove('hidden');
+            trigger.classList.add('active');
+          }
+        } else if (option && wrap) {
+          e.stopPropagation();
+          const dropdown = wrap.querySelector('.budget-custom-dropdown');
+          const triggerEl = wrap.querySelector('.budget-custom-trigger');
+          const hiddenInput = wrap.querySelector('input[type="hidden"]');
+          const valSpan = wrap.querySelector('.budget-custom-value');
+          const options = wrap.querySelectorAll('.budget-custom-option');
+          
+          options.forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          
+          hiddenInput.value = option.dataset.value;
+          if (valSpan) valSpan.textContent = option.textContent;
+          
+          dropdown.classList.add('hidden');
+          triggerEl.classList.remove('active');
+          
+          hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          document.querySelectorAll('.budget-custom-dropdown').forEach(d => d.classList.add('hidden'));
+          document.querySelectorAll('.budget-custom-trigger').forEach(t => t.classList.remove('active'));
+        }
+      });
+    }
+    
+    initCustomDropdowns();
     
     function makeFieldEditable(field, fieldName) {
       if (field.querySelector('input')) return; // Ya esta en modo edicion
@@ -5729,6 +5784,7 @@
     let lastSavedCalcConfigSignature = '';
     let calculatorInitialized = false;
     let currentMonths = 48;
+    let currentPaymentFrequency = 'monthly';
     let calcPaymentDayCalendarDate = new Date();
     let selectedCalcPaymentDay = null;
 
@@ -5754,6 +5810,8 @@
       const bankFee = Number(config?.bankFee ?? DEFAULT_CALC_CONFIG.bankFee);
       const months = Number(config?.months ?? DEFAULT_CALC_CONFIG.months);
       const legalPlanEnabled = Boolean(config?.legalPlanEnabled);
+      const rawFreq = String(config?.paymentFrequency || 'monthly').toLowerCase().trim();
+      const paymentFrequency = ['monthly', 'bimonthly', 'biweekly'].includes(rawFreq) ? rawFreq : 'monthly';
 
       return {
         totalDebt: Number.isFinite(totalDebt) && totalDebt >= 0 ? Number(totalDebt.toFixed(2)) : DEFAULT_CALC_CONFIG.totalDebt,
@@ -5765,7 +5823,8 @@
           : DEFAULT_CALC_CONFIG.programFeePercent,
         bankFee: Number.isFinite(bankFee) && bankFee > 0 ? Number(bankFee.toFixed(2)) : DEFAULT_CALC_CONFIG.bankFee,
         months: Number.isInteger(months) ? Math.min(120, Math.max(6, months)) : DEFAULT_CALC_CONFIG.months,
-        legalPlanEnabled
+        legalPlanEnabled,
+        paymentFrequency
       };
     }
 
@@ -5791,7 +5850,8 @@
         months: lead?.calc_months,
         legalPlanEnabled: legalPlanFromLead === undefined || legalPlanFromLead === null
           ? getStateBasedDefaultLegalPlan(lead)
-          : Boolean(legalPlanFromLead)
+          : Boolean(legalPlanFromLead),
+        paymentFrequency: lead?.calc_payment_frequency
       });
       normalized.programFeePercent = getStateBasedProgramFeePercent(lead);
       return normalized;
@@ -5817,7 +5877,8 @@
         normalized.programFeePercent.toFixed(2),
         normalized.bankFee.toFixed(2),
         String(normalized.months),
-        normalized.legalPlanEnabled ? '1' : '0'
+        normalized.legalPlanEnabled ? '1' : '0',
+        normalized.paymentFrequency
       ].join('|');
     }
 
@@ -5834,7 +5895,8 @@
         programFeePercent: parsePercent(programFeeInput?.value),
         bankFee: parseCurrency(bankFeeInput?.value),
         months: currentMonths,
-        legalPlanEnabled: legalSwitch?.classList.contains('active')
+        legalPlanEnabled: legalSwitch?.classList.contains('active'),
+        paymentFrequency: currentPaymentFrequency
       });
       normalized.programFeePercent = getStateBasedProgramFeePercent();
       return normalized;
@@ -5848,7 +5910,8 @@
         calcProgramFeePercent: normalized.programFeePercent,
         calcBankFee: normalized.bankFee,
         calcMonths: normalized.months,
-        calcLegalPlanEnabled: normalized.legalPlanEnabled
+        calcLegalPlanEnabled: normalized.legalPlanEnabled,
+        calcPaymentFrequency: normalized.paymentFrequency
       };
     }
 
@@ -5898,8 +5961,17 @@
       if (hiddenMonths) hiddenMonths.value = String(normalized.months);
 
       currentMonths = normalized.months;
+      currentPaymentFrequency = normalized.paymentFrequency;
       if (legalSwitch) {
         legalSwitch.classList.toggle('active', normalized.legalPlanEnabled);
+      }
+      const freqHidden = document.getElementById('calcPaymentFrequency');
+      if (freqHidden) freqHidden.value = normalized.paymentFrequency;
+      const freqGroup = document.getElementById('calcFrequencyGroup');
+      if (freqGroup) {
+        freqGroup.querySelectorAll('.calc-freq-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.freq === normalized.paymentFrequency);
+        });
       }
       updateLegalPlanStateHint();
     }
@@ -6001,6 +6073,21 @@
           calculateAll();
         });
       }
+      // Selector de frecuencia de pago
+      const freqGroup = document.getElementById('calcFrequencyGroup');
+      if (freqGroup) {
+        freqGroup.addEventListener('click', (e) => {
+          const btn = e.target.closest('.calc-freq-btn');
+          if (!btn || btn.classList.contains('active')) return;
+          freqGroup.querySelectorAll('.calc-freq-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentPaymentFrequency = btn.dataset.freq;
+          const hiddenFreq = document.getElementById('calcPaymentFrequency');
+          if (hiddenFreq) hiddenFreq.value = currentPaymentFrequency;
+          calculateAll();
+        });
+      }
+
       // Selector de primer deposito (monthly payment day)
       initCalcPaymentDayCalendar();
 
@@ -6025,9 +6112,11 @@
       const copyMonthlyPayment = document.getElementById('copyMonthlyPayment');
       if (copyMonthlyPayment) {
         copyMonthlyPayment.addEventListener('click', () => {
-          const months = currentMonths;
+          const freq = currentPaymentFrequency || 'monthly';
+          const payments = getPaymentCount(currentMonths, freq);
           const amount = document.getElementById('resultMonthlyPayment').textContent;
-          const textToCopy = months + ' ' + amount;
+          const freqTag = freq === 'bimonthly' ? 'bi-monthly' : freq === 'biweekly' ? 'bi-weekly' : 'monthly';
+          const textToCopy = payments + ' ' + freqTag + ' ' + amount;
           navigator.clipboard.writeText(textToCopy).then(() => {
             copyMonthlyPayment.classList.add('copied');
             showToast('Copiado: ' + textToCopy, 'success');
@@ -6538,6 +6627,24 @@
       }
     }
 
+    function getPaymentCount(months, frequency) {
+      if (frequency === 'bimonthly') return months * 2;
+      if (frequency === 'biweekly') return Math.round(months * 26 / 12);
+      return months;
+    }
+
+    function getPaymentsPerMonth(frequency) {
+      if (frequency === 'bimonthly') return 2;
+      if (frequency === 'biweekly') return 26 / 12;
+      return 1;
+    }
+
+    function getFrequencyLabel(frequency) {
+      if (frequency === 'bimonthly') return 'Bi-Monthly';
+      if (frequency === 'biweekly') return 'Bi-Weekly';
+      return 'Monthly';
+    }
+
     function calculateAll() {
       const totalDebtInput = document.getElementById('calcTotalDebt');
       const settlementInput = document.getElementById('calcSettlementPercent');
@@ -6590,13 +6697,16 @@
       // Total del programa
       const totalProgram = estimatedSettlement + programFees + totalLegalFees + totalBankFees;
       
-      // Pago mensual
-      const monthlyPayment = totalProgram / months;
-      
+      // Pago según frecuencia
+      const frequency = currentPaymentFrequency || 'monthly';
+      const totalPayments = getPaymentCount(months, frequency);
+      const paymentsPerMonth = getPaymentsPerMonth(frequency);
+      const monthlyPayment = totalProgram / totalPayments;
+
       // Ahorros (comparando con pagar la deuda completa)
       const totalSavings = totalDebt - estimatedSettlement;
       const totalEstimatedSavings = totalDebt - totalProgram;
-      const monthlyPaymentSavings = monthlyPayment - monthlyLegalFee - monthlyBankFee;
+      const monthlyPaymentSavings = monthlyPayment - (monthlyLegalFee / paymentsPerMonth) - (monthlyBankFee / paymentsPerMonth);
       
       // Actualizar resultados en UI
       resultSettlementEl.textContent = formatCurrency(estimatedSettlement);
@@ -6616,8 +6726,19 @@
         bankInitialPayment.value = monthlyPayment.toFixed(2);
       }
       
+      // Labels dinámicos según frecuencia
+      const freqLabel = getFrequencyLabel(frequency);
+      const paymentLabelEl = document.querySelector('.monthly-payment-label-minimal');
+      if (paymentLabelEl) paymentLabelEl.textContent = freqLabel + ' Payment';
+      const savingsLabelEl = document.querySelector('#resultMonthlyPaymentSavings')?.closest('.info-row')?.querySelector('.info-row-label');
+      if (savingsLabelEl) savingsLabelEl.textContent = freqLabel + ' Payment Savings';
+      const dayLabelEl = document.getElementById('calcPaymentDayLabel');
+      if (dayLabelEl) dayLabelEl.textContent = frequency === 'monthly' ? 'Monthly Payment Day' : 'First Payment Day';
+
       // Generar tabla de pagos
-      generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlyPaymentSavings, firstMonthBankFee);
+      const perPaymentBankFee = monthlyBankFee / paymentsPerMonth;
+      const firstPaymentBankFee = perPaymentBankFee + startupBankFee;
+      generatePaymentSchedule(totalPayments, monthlyPayment, monthlyLegalFee / paymentsPerMonth, perPaymentBankFee, monthlyPaymentSavings, firstPaymentBankFee, frequency);
       if (typeof window.refreshBudgetDetailsFromCalculator === 'function') {
         window.refreshBudgetDetailsFromCalculator();
       }
@@ -6627,50 +6748,71 @@
     window.calculateAll = calculateAll;
     window.queuePersistCalculatorConfig = queuePersistCalculatorConfig;
     
-    function generatePaymentSchedule(months, monthlyPayment, monthlyLegalFee, monthlyBankFee, monthlyPaymentSavings, firstMonthBankFee) {
+    function generatePaymentSchedule(totalPayments, paymentAmount, perPaymentLegalFee, perPaymentBankFee, perPaymentSavings, firstMonthBankFee, frequency) {
       const tbody = document.getElementById('scheduleTableBody');
       if (!tbody) return;
-      
+
       let html = '';
       const selectedDateValue = document.getElementById('calcFirstDepositDate')?.value || '';
       const selectedStartDate = parseISODate(selectedDateValue);
       const baseDate = selectedStartDate || new Date();
       const firstMonthOffset = selectedStartDate ? 0 : 1;
       const paymentDay = baseDate.getDate();
-      
-      for (let i = 1; i <= Math.min(months, 48); i++) {
-        const paymentDate = addMonthsWithDayClamp(baseDate, (i - 1) + firstMonthOffset, paymentDay);
-        const scheduleBankFee = i === 1 ? firstMonthBankFee : monthlyBankFee;
-        
+      const maxRows = 60;
+
+      for (let i = 1; i <= Math.min(totalPayments, maxRows); i++) {
+        let paymentDate;
+
+        if (frequency === 'biweekly') {
+          const startDate = selectedStartDate
+            ? new Date(baseDate)
+            : addMonthsWithDayClamp(baseDate, 1, paymentDay);
+          paymentDate = new Date(startDate);
+          paymentDate.setDate(paymentDate.getDate() + (i - 1) * 14);
+        } else if (frequency === 'bimonthly') {
+          const monthIndex = Math.floor((i - 1) / 2);
+          const isSecondPayment = (i - 1) % 2 === 1;
+          const monthDate = addMonthsWithDayClamp(baseDate, monthIndex + firstMonthOffset, paymentDay);
+          if (isSecondPayment) {
+            const secondDay = Math.min(paymentDay + 15, new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate());
+            paymentDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), secondDay);
+          } else {
+            paymentDate = monthDate;
+          }
+        } else {
+          paymentDate = addMonthsWithDayClamp(baseDate, (i - 1) + firstMonthOffset, paymentDay);
+        }
+
+        const scheduleBankFee = i === 1 ? firstMonthBankFee : perPaymentBankFee;
+
         const dateStr = paymentDate.toLocaleDateString('en-US', {
           month: '2-digit',
           day: '2-digit',
           year: 'numeric'
         });
-        
+
         html += `
           <tr>
             <td>${i}</td>
             <td>${dateStr}</td>
-            <td class="mono">${formatCurrency(monthlyPayment)}</td>
-            <td class="mono">${formatCurrency(monthlyLegalFee)}</td>
+            <td class="mono">${formatCurrency(paymentAmount)}</td>
+            <td class="mono">${formatCurrency(perPaymentLegalFee)}</td>
             <td class="mono">${formatCurrency(scheduleBankFee)}</td>
-            <td class="mono savings">${formatCurrency(monthlyPaymentSavings)}</td>
+            <td class="mono savings">${formatCurrency(perPaymentSavings)}</td>
           </tr>
         `;
       }
-      
-      // Si hay más de 48 meses, agregar indicador de truncamiento
-      if (months > 48) {
+
+      if (totalPayments > maxRows) {
         html += `
           <tr>
             <td colspan="6" style="text-align:center;color:rgba(255,255,255,0.5);padding:12px;">
-              ... y ${months - 48} pagos más
+              ... y ${totalPayments - maxRows} pagos más
             </td>
           </tr>
         `;
       }
-      
+
       tbody.innerHTML = html;
     }
     
@@ -7256,10 +7398,15 @@
             </div>
             <div class="info-row">
               <span class="info-row-label">Best time to call</span>
-              <div class="lead-best-time-select-wrap">
-                <select class="lead-best-time-select" id="bestTimeSelect" data-field="best_time" aria-label="Best time to call">
+              <div class="budget-custom-select-wrap" id="wrap-bestTimeSelect">
+                <input type="hidden" id="bestTimeSelect" data-field="best_time" value="${escapeHtml(normalizeBestTimeValue(lead.best_time))}">
+                <button type="button" class="budget-custom-trigger" id="trigger-bestTimeSelect">
+                  <span id="bestTimeSelectValue" class="budget-custom-value">${escapeHtml(normalizeBestTimeValue(lead.best_time) || 'Seleccionar')}</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="budget-custom-chevron"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="budget-custom-dropdown hidden" id="dropdown-bestTimeSelect">
                   ${renderBestTimeSelectOptions(lead.best_time)}
-                </select>
+                </div>
               </div>
             </div>
           </div>
@@ -9443,6 +9590,16 @@
       const element = document.getElementById(id);
       if (element) {
         element.value = value || '';
+        
+        // Sync custom dropdown if exists
+        const valSpan = document.getElementById(id + 'Value');
+        const drop = document.getElementById('dropdown-' + id);
+        if (valSpan && drop) {
+          const opt = drop.querySelector(`.budget-custom-option[data-value="${element.value}"]`);
+          valSpan.textContent = opt ? opt.textContent : (element.value || 'Seleccionar');
+          drop.querySelectorAll('.budget-custom-option').forEach(o => o.classList.remove('selected'));
+          if (opt) opt.classList.add('selected');
+        }
       }
     }
     

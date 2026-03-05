@@ -427,7 +427,7 @@ const LEAD_SELECT_COLUMNS = `
   id, case_id, full_name, co_applicant_name, co_applicant_email, co_applicant_home_phone, co_applicant_cell_phone, co_applicant_dob, co_applicant_ssn,
   co_applicant_currently_employed, co_applicant_employer_name, co_applicant_occupation, co_applicant_self_employed,
   include_coapp_in_contract, fico_score_applicant, fico_score_coapp,
-  calc_total_debt, calc_settlement_percent, calc_program_fee_percent, calc_bank_fee, calc_months, calc_legal_plan_enabled,
+  calc_total_debt, calc_settlement_percent, calc_program_fee_percent, calc_bank_fee, calc_months, calc_legal_plan_enabled, calc_payment_frequency,
   email, phone, home_phone, cell_phone,
   source, state_code, dob, ssn, address_street, city, zip_code, best_time,
   currently_employed, employer_name, occupation, self_employed,
@@ -454,6 +454,7 @@ const LEAD_AUDIT_UNDOABLE_COLUMNS = new Set([
   'calc_bank_fee',
   'calc_months',
   'calc_legal_plan_enabled',
+  'calc_payment_frequency',
   'email',
   'phone',
   'home_phone',
@@ -491,7 +492,8 @@ const LEAD_AUDIT_PAYMENT_FIELDS = new Set([
   'calc_program_fee_percent',
   'calc_bank_fee',
   'calc_months',
-  'calc_legal_plan_enabled'
+  'calc_legal_plan_enabled',
+  'calc_payment_frequency'
 ]);
 
 function getStateTypeFromCode(stateCode) {
@@ -3235,6 +3237,16 @@ function parseLeadPatchBody(body = {}) {
     const normalizedCalcLegalPlanEnabled = normalizeBoolean(calcLegalPlanEnabled, 'calcLegalPlanEnabled');
     if (!normalizedCalcLegalPlanEnabled.ok) return normalizedCalcLegalPlanEnabled;
     changes.calc_legal_plan_enabled = normalizedCalcLegalPlanEnabled.value;
+  }
+
+  const calcPaymentFrequency = pickFirstDefined(body, ['calcPaymentFrequency', 'calc_payment_frequency', 'paymentFrequency']);
+  if (calcPaymentFrequency !== undefined) {
+    const allowed = ['monthly', 'bimonthly', 'biweekly'];
+    const normalized = String(calcPaymentFrequency || '').toLowerCase().trim();
+    if (!allowed.includes(normalized)) {
+      return { ok: false, status: 400, message: `calcPaymentFrequency debe ser uno de: ${allowed.join(', ')}` };
+    }
+    changes.calc_payment_frequency = normalized;
   }
 
   const includeCoappInContract = pickFirstDefined(body, ['includeCoappInContract', 'include_coapp_in_contract']);

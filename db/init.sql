@@ -433,6 +433,21 @@ BEGIN
   ALTER TABLE leads ALTER COLUMN calc_legal_plan_enabled SET NOT NULL;
 END $$;
 
+-- Migracion: Agregar calc_payment_frequency
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'leads' AND column_name = 'calc_payment_frequency'
+  ) THEN
+    ALTER TABLE leads ADD COLUMN calc_payment_frequency VARCHAR(12);
+  END IF;
+
+  UPDATE leads SET calc_payment_frequency = 'monthly' WHERE calc_payment_frequency IS NULL;
+  ALTER TABLE leads ALTER COLUMN calc_payment_frequency SET DEFAULT 'monthly';
+  ALTER TABLE leads ALTER COLUMN calc_payment_frequency SET NOT NULL;
+END $$;
+
 -- Migracion: Agregar y normalizar include_coapp_in_contract
 DO $$
 BEGIN

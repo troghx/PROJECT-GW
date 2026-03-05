@@ -421,8 +421,23 @@
       z-index: 30;
     }
 
+    .lead-status-badge-panel {
+      transform-origin: top right;
+      transition:
+        opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
     .lead-status-badge-panel.hidden {
-      display: none;
+      display: block !important;
+      opacity: 0;
+      transform: scaleY(0.88) translateY(-8px);
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        transform 0.25s ease,
+        visibility 0s linear 0.25s;
     }
 
     .lead-status-badge-search-row {
@@ -687,6 +702,22 @@
       box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
       padding: 4px;
       z-index: 35;
+      transform-origin: top right;
+      transition:
+        opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
+    .lead-assignee-suggestions.hidden {
+      display: block !important;
+      opacity: 0;
+      transform: scaleY(0.88) translateY(-6px);
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        transform 0.25s ease,
+        visibility 0s linear 0.25s;
     }
 
     .lead-assignee-option {
@@ -797,8 +828,26 @@
       padding: 22px;
     }
 
+    .pull-credit-modal {
+      transition:
+        opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
+    .pull-credit-modal .pull-credit-modal-content {
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
     .pull-credit-modal.hidden {
-      display: none;
+      display: flex !important;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        visibility 0s linear 0.25s;
+    }
+    .pull-credit-modal.hidden .pull-credit-modal-content {
+      transform: scale(0.92) translateY(12px);
+      transition: transform 0.25s ease;
     }
 
     .pull-credit-modal-backdrop {
@@ -966,6 +1015,22 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
       z-index: 5000;
       overflow: visible;
+      transform-origin: top right;
+      transition:
+        opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
+    .files-panel.hidden {
+      display: flex !important;
+      opacity: 0;
+      transform: scale(0.92) translateY(-8px);
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        transform 0.25s ease,
+        visibility 0s linear 0.25s;
     }
 
     .files-panel::before {
@@ -1568,6 +1633,22 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
       z-index: 5000;
       overflow: hidden;
+      transform-origin: top right;
+      transition:
+        opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
+    .notes-panel.hidden {
+      display: flex !important;
+      opacity: 0;
+      transform: scale(0.92) translateY(-8px);
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        transform 0.25s ease,
+        visibility 0s linear 0.25s;
     }
 
     .email-panel {
@@ -1588,6 +1669,22 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
       z-index: 5000;
       overflow: visible;
+      transform-origin: top right;
+      transition:
+        opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        visibility 0s linear 0s;
+    }
+    .email-panel.hidden {
+      display: flex !important;
+      opacity: 0;
+      transform: scale(0.92) translateY(-8px);
+      pointer-events: none;
+      visibility: hidden;
+      transition:
+        opacity 0.25s ease,
+        transform 0.25s ease,
+        visibility 0s linear 0.25s;
     }
 
     .email-panel::before {
@@ -3357,6 +3454,38 @@
       position: relative;
     }
     
+    /* Payment Frequency segmented control */
+    .calc-freq-group {
+      display: flex;
+      gap: 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(126, 234, 252, 0.15);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .calc-freq-btn {
+      padding: 5px 10px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.55);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .calc-freq-btn:hover {
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(126, 234, 252, 0.08);
+    }
+    .calc-freq-btn.active {
+      color: #0d1117;
+      background: #7eeafc;
+      font-weight: 600;
+    }
+
     .calc-payment-day-trigger {
       min-width: clamp(150px, 24vw, 220px);
       justify-content: space-between;
@@ -3839,6 +3968,22 @@
       color: rgba(0, 0, 0, 0.6);
     }
     
+    body.home-active.theme-light .calc-freq-group {
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+    body.home-active.theme-light .calc-freq-btn {
+      color: rgba(0, 0, 0, 0.45);
+    }
+    body.home-active.theme-light .calc-freq-btn:hover {
+      color: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.06);
+    }
+    body.home-active.theme-light .calc-freq-btn.active {
+      color: #fff;
+      background: #3b82f6;
+    }
+
     body.home-active.theme-light .lock-toggle-btn {
       color: rgba(0, 0, 0, 0.3);
     }
@@ -7794,8 +7939,18 @@
                   </div>
                 </div>
                 
+                <div class="info-row">
+                  <span class="info-row-label">Payment Frequency</span>
+                  <div class="calc-freq-group" id="calcFrequencyGroup">
+                    <button type="button" class="calc-freq-btn active" id="calcFreqMonthly" data-freq="monthly">Monthly</button>
+                    <button type="button" class="calc-freq-btn" id="calcFreqBimonthly" data-freq="bimonthly">Bi-Monthly</button>
+                    <button type="button" class="calc-freq-btn" id="calcFreqBiweekly" data-freq="biweekly">Bi-Weekly</button>
+                  </div>
+                  <input type="hidden" id="calcPaymentFrequency" value="monthly">
+                </div>
+
                 <div class="info-row calc-payment-day-row">
-                  <span class="info-row-label">Monthly Payment Day</span>
+                  <span class="info-row-label" id="calcPaymentDayLabel">Monthly Payment Day</span>
                   <div class="calc-payment-day-wrapper">
                     <button id="calcPaymentDayTrigger" class="liquid-glass-btn calc-payment-day-trigger" type="button">
                       <span id="calcPaymentDayDisplay" class="calc-payment-day-display">Seleccionar fecha</span>
@@ -7989,11 +8144,16 @@
                 
                 <div class="info-row banking-row">
                   <span class="info-row-label">Account Type</span>
-                  <div class="banking-select-wrap">
-                    <select class="banking-select" id="bankAccountType">
-                      <option value="Checking">Checking</option>
-                      <option value="Savings">Savings</option>
-                    </select>
+                  <div class="budget-custom-select-wrap" id="wrap-bankAccountType">
+                    <input type="hidden" id="bankAccountType" value="Checking">
+                    <button type="button" class="budget-custom-trigger" id="trigger-bankAccountType">
+                      <span id="bankAccountTypeValue" class="budget-custom-value">Checking</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="budget-custom-chevron"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="budget-custom-dropdown hidden" id="dropdown-bankAccountType">
+                      <button type="button" class="budget-custom-option selected" data-select="bankAccountType" data-value="Checking">Checking</button>
+                      <button type="button" class="budget-custom-option" data-select="bankAccountType" data-value="Savings">Savings</button>
+                    </div>
                   </div>
                 </div>
                 
@@ -8260,11 +8420,18 @@
                         <h5>Housing</h5>
                         <div class="budget-field">
                           <label for="budgetHousingType">Rent / Own</label>
-                          <select id="budgetHousingType" class="budget-select">
-                            <option value="">Seleccionar</option>
-                            <option value="rent">Rent</option>
-                            <option value="own">Own</option>
-                          </select>
+                          <div class="budget-custom-select-wrap" id="wrap-budgetHousingType">
+                            <input type="hidden" id="budgetHousingType" value="">
+                            <button type="button" class="budget-custom-trigger" id="trigger-budgetHousingType">
+                              <span id="budgetHousingTypeValue" class="budget-custom-value">Seleccionar</span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="budget-custom-chevron"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                            <div class="budget-custom-dropdown hidden" id="dropdown-budgetHousingType">
+                              <button type="button" class="budget-custom-option" data-select="budgetHousingType" data-value="">Seleccionar</button>
+                              <button type="button" class="budget-custom-option" data-select="budgetHousingType" data-value="rent">Rent</button>
+                              <button type="button" class="budget-custom-option" data-select="budgetHousingType" data-value="own">Own</button>
+                            </div>
+                          </div>
                         </div>
                         <div class="budget-field"><label for="budgetHousingPayment">Housing Payment</label><div class="budget-money"><span>$</span><input id="budgetHousingPayment" type="text" inputmode="decimal" /></div></div>
                         <div class="budget-field"><label for="budgetHomeInsurance">Home Owners Insurance</label><div class="budget-money"><span>$</span><input id="budgetHomeInsurance" type="text" inputmode="decimal" /></div></div>
@@ -8364,28 +8531,28 @@
                   <div class="budget-hardship-grid">
                     <div class="budget-field">
                       <label for="budgetHardshipReason">Hardship Reason</label>
-                      <select id="budgetHardshipReason" class="budget-select budget-hardship-reason-select">
-                        <option value="">Seleccionar razón...</option>
-                        <option value="loss_of_income">Loss of Income</option>
-                        <option value="medical">Medical Issues</option>
-                        <option value="divorce">Divorce / Separation</option>
-                        <option value="inflation">Inflation / Cost of Living</option>
-                        <option value="business_failure">Business Failure</option>
-                        <option value="unexpected_expenses">Unexpected Expenses</option>
-                        <option value="other">Other</option>
-                      </select>
+                      <div class="budget-custom-select-wrap" id="wrap-budgetHardshipReason">
+                        <input type="hidden" id="budgetHardshipReason" value="">
+                        <button type="button" class="budget-custom-trigger" id="trigger-budgetHardshipReason">
+                          <span id="budgetHardshipReasonValue" class="budget-custom-value">Seleccionar razón...</span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="budget-custom-chevron"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="budget-custom-dropdown hidden" id="dropdown-budgetHardshipReason">
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="">Seleccionar razón...</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="loss_of_income">Loss of Income</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="medical">Medical Issues</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="divorce">Divorce / Separation</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="inflation">Inflation / Cost of Living</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="business_failure">Business Failure</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="unexpected_expenses">Unexpected Expenses</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="other">Other</button>
+                        </div>
+                      </div>
                     </div>
                     <div class="budget-hardship-textareas">
                       <div class="budget-field">
                         <div class="budget-hardship-label-row">
                           <label for="budgetHardshipDetailEs">Detailed Hardship Reason (Español)</label>
-                          <button id="budgetHardshipEnhanceBtn" class="budget-hardship-enhance-btn icon-only" type="button" title="Enhance Hardship" aria-label="Enhance Hardship">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M12 3l1.6 3.4L17 8l-3.4 1.6L12 13l-1.6-3.4L7 8l3.4-1.6L12 3z"></path>
-                              <path d="M18.5 12.5l0.9 1.9 1.9 0.9-1.9 0.9-0.9 1.9-0.9-1.9-1.9-0.9 1.9-0.9 0.9-1.9z"></path>
-                              <path d="M6.5 14.5l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1 1-2.2z"></path>
-                            </svg>
-                          </button>
                         </div>
                         <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situación en español..."></textarea>
                       </div>

@@ -236,6 +236,19 @@
       const el = document.getElementById(id);
       if (!el) return;
       el.value = String(getByPath(data, path, '') || '');
+      
+      // Update custom dropdown UI if it exists
+      const valSpan = document.getElementById(id + 'Value');
+      if (valSpan) {
+        const drop = document.getElementById('dropdown-' + id);
+        if (drop) {
+          const opt = drop.querySelector(`.budget-custom-option[data-value="${el.value}"]`);
+          valSpan.textContent = opt ? opt.textContent : (id === 'budgetHousingType' ? 'Seleccionar' : 'Seleccionar razón...');
+          
+          drop.querySelectorAll('.budget-custom-option').forEach(o => o.classList.remove('selected'));
+          if (opt) opt.classList.add('selected');
+        }
+      }
     });
 
     TEXT_FIELD_MAP.forEach(({ id, path }) => {
@@ -449,7 +462,7 @@
     const esEl = document.getElementById('budgetHardshipDetailEs');
     const enEl = document.getElementById('budgetHardshipDetailEn');
     const enhanceBtn = document.getElementById('budgetHardshipEnhanceBtn');
-    if (!reasonEl || !esEl || !enEl || !enhanceBtn) return null;
+    if (!reasonEl || !esEl || !enEl) return null;
     return { reasonEl, esEl, enEl, enhanceBtn };
   }
 
@@ -546,7 +559,7 @@
     const activeLang = activeEl === refs.enEl ? 'en' : 'es';
 
     hardshipAssistEnhancing = true;
-    refs.enhanceBtn.disabled = true;
+    if (refs.enhanceBtn) refs.enhanceBtn.disabled = true;
 
     try {
       const response = await window.HardshipAssist.enhance({
@@ -571,7 +584,7 @@
       setHardshipAssistStatus(error.message || 'No se pudo mejorar Hardship.', 'error');
     } finally {
       hardshipAssistEnhancing = false;
-      refs.enhanceBtn.disabled = false;
+      if (refs.enhanceBtn) refs.enhanceBtn.disabled = false;
     }
   }
 
@@ -592,7 +605,9 @@
       scheduleHardshipAutoTranslate('en');
     });
 
-    refs.enhanceBtn.addEventListener('click', handleHardshipEnhanceClick);
+    if (refs.enhanceBtn) {
+      refs.enhanceBtn.addEventListener('click', handleHardshipEnhanceClick);
+    }
   }
 
   function activateBudgetSubtab(tabName) {
