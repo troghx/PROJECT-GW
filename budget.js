@@ -496,7 +496,15 @@
         await window.HardshipAssist.translate({
           sourceLang: lang,
           text: sourceText,
-          hardshipReason
+          hardshipReason,
+          onUpgrade: (apiText) => {
+            const upgraded = normalizeHardshipNarrative(apiText);
+            if (!upgraded) return;
+            hardshipAssistCache.set(cacheKey, upgraded);
+            if (document.activeElement === targetEl) return;
+            setHardshipTextareaValue(targetEl, upgraded);
+            queueBudgetSave();
+          }
         })
       );
       if (!translatedText) return;

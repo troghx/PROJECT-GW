@@ -334,7 +334,8 @@ const zipLookupCache = new Map();
 const CREDIT_REPORT_AI_TIMEOUT_MS = 25000;
 const CREDIT_REPORT_AI_MAX_TEXT_CHARS = 120000;
 const CREDIT_REPORT_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
-const HARDSHIP_AI_TIMEOUT_MS = 20000;
+const HARDSHIP_AI_TIMEOUT_MS = 10000;
+const HARDSHIP_AI_MAX_RETRIES = 1;
 const HARDSHIP_AI_MAX_TEXT_CHARS = 5000;
 const HARDSHIP_AI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
 const HARDSHIP_REASON_LABELS = {
@@ -3611,31 +3612,39 @@ async function translateHardshipNarrative({ sourceLang, text, hardshipReasonLabe
   const normalizedSourceLang = normalizeHardshipSourceLang(sourceLang);
   const sourceText = normalizeHardshipAiText(text);
 
-  if (deeplTranslator) {
-    try {
-      const targetLang = normalizedSourceLang === 'es' ? 'en-US' : 'es'; // DeepL requires specific EN variant for some cases, using en-US
-      const result = await deeplTranslator.translateText(sourceText, normalizedSourceLang === 'es' ? 'es' : 'en', targetLang);
-      console.log(`[Sistema] Texto traducido exitosamente usando DeepL API (${normalizedSourceLang} -> ${targetLang})`);
-      
-      // Aplicar formato de canonical subject
-      let translatedText = result.text.trim();
-      const subject = targetLang === 'es' ? 'El cliente ' : 'The client ';
-      
-      // Cleanup básico para DeepL
-      translatedText = translatedText.replace(/^el cliente\b/i, '').replace(/^the client\b/i, '').trim();
-      translatedText = translatedText.replace(/^(comenta que|reports that|indica que|states that|dice que|says that)/i, (match) => match.toLowerCase());
-      
-      return { translatedText: `${subject}${translatedText}`, source: 'deepl' };
-    } catch (error) {
-      console.warn('[Sistema] Falla en la traducción con DeepL API. Haciendo fallback a Gemini...', error.message);
-    }
-  } else {
-    console.log('[Sistema] DeepL API no configurado, utilizando Gemini directamente.');
+  if (!sourceText || sourceText.length < 2) {
+    const error = new Error('El texto para traducir es insuficiente.');
+    error.code = 'AI_BAD_REQUEST';
+    throw error;
   }
 
-  // Fallback to Gemini
-  const translatedText = await translateHardshipNarrativeWithGemini({ sourceLang, text, hardshipReasonLabel });
-  return { translatedText, source: 'gemini' };
+  if (!deeplTranslator) {
+    const error = new Error('DeepL API no configurada. Agregue DEEPL_API_KEY al archivo .env');
+    error.code = 'AI_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const targetLang = normalizedSourceLang === 'es' ? 'en-US' : 'es';
+  const result = await deeplTranslator.translateText(sourceText, normalizedSourceLang === 'es' ? 'es' : 'en', targetLang);
+  console.log(`[Sistema] Texto traducido exitosamente usando DeepL API (${normalizedSourceLang} -> ${targetLang})`);
+
+  let translatedText = result.text.trim();
+  const subjectEs = /^el cliente\b/i;
+  const subjectEn = /^the client\b/i;
+  const isTargetEs = targetLang === 'es';
+  const subjectPattern = isTargetEs ? subjectEs : subjectEn;
+  const subject = isTargetEs ? 'El cliente ' : 'The client ';
+
+  if (subjectPattern.test(translatedText)) {
+    translatedText = translatedText.replace(subjectPattern, '').trim();
+    translatedText = translatedText.replace(/^(comenta que|reports that|indica que|states that|dice que|says that)/i, (match) => match.toLowerCase());
+    translatedText = `${subject}${translatedText}`;
+  } else if (!/^(the |el |la |los |las )/i.test(translatedText)) {
+    translatedText = translatedText.charAt(0).toLowerCase() + translatedText.slice(1);
+    translatedText = `${subject}${translatedText}`;
+  }
+
+  return { translatedText, source: 'deepl' };
 }
 
 async function translateHardshipNarrativeWithGemini({ sourceLang, text, hardshipReasonLabel }) {
@@ -3685,7 +3694,7 @@ async function translateHardshipNarrativeWithGemini({ sourceLang, text, hardship
     sourceText
   ].join('\n');
 
-  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS });
+  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS, maxRetries: HARDSHIP_AI_MAX_RETRIES });
   const candidateText = extractGeminiCandidateText(payload);
   const parsed = parseAiJsonResponse(candidateText);
   const translatedText = normalizeHardshipAiText(
@@ -3739,7 +3748,7 @@ async function enhanceHardshipNarrativeWithGemini({ spanishText, englishText, ha
     inputEn || '[empty]'
   ].join('\n');
 
-  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS });
+  const payload = await geminiRequestWithRetry(apiKey, HARDSHIP_AI_MODEL, prompt, { timeoutMs: HARDSHIP_AI_TIMEOUT_MS, maxRetries: HARDSHIP_AI_MAX_RETRIES });
   const candidateText = extractGeminiCandidateText(payload);
   const parsed = parseAiJsonResponse(candidateText);
 
@@ -3934,7 +3943,7 @@ function normalizeAiCreditorEntry(entry, sourceReport) {
   };
 }
 
-const GEMINI_FALLBACK_MODELS = ['gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+const GEMINI_FALLBACK_MODELS = ['gemini-2.0-flash-lite', 'gemini-2.5-flash-preview-05-20'];
 
 async function geminiRequestWithRetry(apiKey, model, prompt, { timeoutMs = 25000, maxRetries = 4 } = {}) {
   const modelsToTry = [model, ...GEMINI_FALLBACK_MODELS.filter(m => m !== model)];

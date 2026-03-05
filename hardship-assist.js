@@ -37,11 +37,37 @@
     [rx('tarjetas al limite'), 'maxed out cards'],
     [rx('intereses altos'), 'high interest rates'],
     [rx('altos intereses'), 'high interest rates'],
+    // Tarjetas (más específicas primero)
+    [rx('ya no puede realizar los pagos de las tarjetas'), 'can no longer make card payments'],
+    [rx('ya no puede hacer los pagos de las tarjetas'), 'can no longer make card payments'],
+    [rx('no puede realizar los pagos de las tarjetas'), 'cannot make card payments'],
+    [rx('no puede hacer los pagos de las tarjetas'), 'cannot make card payments'],
+    [rx('los pagos de las tarjetas'), 'card payments'],
+    [rx('pagos de las tarjetas'), 'card payments'],
+    // Formas verbales compuestas (ha/han + participio)
+    [rx('no ha podido trabajar'), 'has not been able to work'],
+    [rx('no ha podido pagar'), 'has not been able to pay'],
+    [rx('no ha podido conseguir'), 'has not been able to find'],
+    [rx('no ha podido'), 'has not been able to'],
+    [rx('no han podido'), 'have not been able to'],
+    [rx('ha podido'), 'has been able to'],
+    [rx('ha tenido que'), 'has had to'],
+    [rx('ha tenido'), 'has had'],
+    [rx('ha estado'), 'has been'],
+    [rx('ha sido'), 'has been'],
+    [rx('ha perdido'), 'has lost'],
+    [rx('ha buscado'), 'has sought'],
+    [rx('han tenido'), 'have had'],
+    [rx('ha dejado de trabajar'), 'has stopped working'],
+    [rx('dejo de trabajar'), 'stopped working'],
+    [rx('no puede trabajar'), 'cannot work'],
+    // Pagos genéricos
     [rx('ya no puede realizar pagos'), 'can no longer make payments'],
     [rx('ya no puede hacer los pagos'), 'can no longer make payments'],
     [rx('ya no puede pagar'), 'can no longer make payments'],
     [rx('no puede realizar pagos'), 'cannot make payments'],
     [rx('no puede hacer los pagos'), 'cannot make payments'],
+    [rx('para pagar'), 'to pay'],
     [rx('no puede pagar'), 'cannot make payments'],
     [rx('esta atrasado'), 'is behind on payments'],
     [rx('esta atrasada'), 'is behind on payments'],
@@ -125,7 +151,42 @@
     [rx('covid-19'), 'COVID-19'],
     [rx('covid'), 'COVID-19'],
     [rx('bancarrota'), 'bankruptcy'],
-    [rx('quiebra'), 'bankruptcy']
+    [rx('quiebra'), 'bankruptcy'],
+
+    // Conectores (desde que, debido a que, para + infinitivo)
+    [rx('desde que'), 'since'],
+    [rx('desde hace'), 'for the past'],
+    [rx('debido a que se divorcio'), 'because of the divorce'],
+    [rx('debido a que se separo'), 'because of the separation'],
+    [rx('debido a que'), 'because'],
+    [rx('para cubrir'), 'to cover'],
+    [rx('para pedir'), 'to request'],
+    [rx('pedir prestamos'), 'take out loans'],
+    [rx('pedir prestado'), 'borrow'],
+    // Conectores causales (antes de word map para evitar "debido a the")
+    [rx('debido a las'), 'due to'],
+    [rx('debido a los'), 'due to'],
+    [rx('debido a la'), 'due to'],
+    [rx('debido al'), 'due to the'],
+    [rx('debido a'), 'due to'],
+    [rx('a causa de las'), 'because of'],
+    [rx('a causa de los'), 'because of'],
+    [rx('a causa de la'), 'because of'],
+    [rx('a causa de'), 'because of'],
+    [rx('por culpa de'), 'because of'],
+
+    // Artículo + sustantivo (evitar "the drugs", "the debts", etc.)
+    [rx('las drogas'), 'drugs'],
+    [rx('la droga'), 'drugs'],
+    [rx('las deudas'), 'debts'],
+    [rx('los pagos'), 'payments'],
+    [rx('los gastos'), 'expenses'],
+    [rx('los intereses'), 'interest rates'],
+    [rx('las tarjetas'), 'cards'],
+    [rx('el dinero'), 'money'],
+    [rx('la familia'), 'the family'],
+    [rx('la renta'), 'rent'],
+    [rx('el alquiler'), 'rent']
   ];
 
   const EN_TO_ES_PHRASE_RULES = [
@@ -169,13 +230,38 @@
     [/\bhigh interest rates\b/gi, 'altos intereses'],
     [/\bpandemic\b/gi, 'pandemia'],
     [/\bcovid[- ]?19\b/gi, 'COVID-19'],
-    [/\bbankruptcy\b/gi, 'bancarrota']
+    [/\bbankruptcy\b/gi, 'bancarrota'],
+    [/\bdue to\b/gi, 'debido a'],
+    [/\bbecause of\b/gi, 'a causa de'],
+    [/\breports losing employment\b/gi, 'comenta que perdió su trabajo'],
+    [/\breports that the client lost employment\b/gi, 'comenta que perdió su trabajo'],
+    [/\bcan no longer make card payments\b/gi, 'ya no puede hacer los pagos de las tarjetas'],
+    [/\bcannot make card payments\b/gi, 'no puede hacer los pagos de las tarjetas'],
+    [/\bcard payments\b/gi, 'pagos de las tarjetas'],
+    [/\bdrugs?\b/gi, 'drogas'],
+    [/\bseeks help\b/gi, 'busca ayuda'],
+    [/\bsought help\b/gi, 'buscó ayuda'],
+    [/\bspent a lot\b/gi, 'gastó mucho'],
+    [/\bvet bills?\b/gi, 'gastos de veterinaria'],
+    [/\bhas not been able to work\b/gi, 'no ha podido trabajar'],
+    [/\bhas not been able to pay\b/gi, 'no ha podido pagar'],
+    [/\bhas not been able to\b/gi, 'no ha podido'],
+    [/\bhave not been able to\b/gi, 'no han podido'],
+    [/\bhas been able to\b/gi, 'ha podido'],
+    [/\bhas had to\b/gi, 'ha tenido que'],
+    [/\bhas been\b/gi, 'ha estado'],
+    [/\bcannot work\b/gi, 'no puede trabajar'],
+    [/\bstopped working\b/gi, 'dejó de trabajar'],
+    [/\bthat is why\b/gi, 'por eso'],
+    [/\bgot into debt\b/gi, 'se endeudó'],
+    [/\bin debt\b/gi, 'endeudado'],
+    [/\bcannot cover monthly expenses\b/gi, 'no alcanza para cubrir gastos mensuales']
   ];
 
   const ES_TO_EN_WORDS = {
     'y': 'and', 'que': 'that', 'las': 'the', 'los': 'the', 'la': 'the', 'el': 'the', 'un': 'a', 'una': 'a',
     'de': 'of', 'su': "the client's", 'sus': "the client's", 'porque': 'because', 'tambien': 'also', 
-    'actualmente': 'currently', 'tiene': 'has', 'tienen': 'have', 'tuvo': 'had', 'tuvieron': 'had',
+    'actualmente': 'currently', 'tengo': 'has', 'tiene': 'has', 'tienen': 'have', 'tuvo': 'had', 'tuvieron': 'had',
     'problema': 'problem', 'problemas': 'problems', 'trabajo': 'job', 'empleo': 'employment',
     'ingreso': 'income', 'ingresos': 'income', 'pago': 'payment', 'pagos': 'payments',
     'mensual': 'monthly', 'mensuales': 'monthly', 'gasto': 'expense', 'gastos': 'expenses', 'gastó': 'spent',
@@ -189,8 +275,20 @@
     'mama': 'mother', 'mamá': 'mother', 'papa': 'father', 'papá': 'father', 'perro': 'dog', 'gato': 'cat',
     'luego': 'then', 'despues': 'afterwards', 'en': 'in', 'con': 'with', 'por': 'for', 'para': 'for', 
     'pero': 'but', 'como': 'as', 'cuando': 'when', 'donde': 'where', 'cancer': 'cancer', 'veterinaria': 'vet',
-    'mataron': 'killed', 'empezo': 'started', 'empezó': 'started', 'fue': 'was', 'fueron': 'were', 
-    'quedo': 'stayed', 'quedó': 'stayed', 'ya no': 'no longer', 'ya': 'already'
+    'mataron': 'killed', 'empezo': 'started', 'empezó': 'started', 'fue': 'was', 'fueron': 'were',
+    'quedo': 'stayed', 'quedó': 'stayed', 'ya no': 'no longer', 'ya': 'already',
+    'pagar': 'pay', 'paga': 'pays', 'pagando': 'paying', 'mucho': 'a lot', 'muy': 'very',
+    'mas': 'more', 'menos': 'less', 'todo': 'everything', 'todos': 'all', 'nada': 'nothing',
+    'solo': 'only', 'ahora': 'now', 'antes': 'before', 'desde': 'since', 'hasta': 'until',
+    'sin': 'without', 'ni': 'nor', 'otra': 'another', 'otro': 'another', 'cada': 'every',
+    'trabajar': 'work', 'trabajando': 'working', 'trabajaba': 'was working',
+    'podido': 'been able', 'puede': 'can', 'pudo': 'could', 'poder': 'be able to',
+    'ha': 'has', 'han': 'have', 'sido': 'been', 'estado': 'been', 'hecho': 'done',
+    'conseguir': 'find', 'conseguido': 'found', 'vivir': 'live', 'viviendo': 'living',
+    'comer': 'eat', 'comprar': 'buy', 'mantener': 'maintain', 'cubrir': 'cover',
+    'suficiente': 'enough', 'dificil': 'difficult', 'imposible': 'impossible',
+    'situacion': 'situation', 'momento': 'moment', 'tiempo': 'time', 'meses': 'months',
+    'años': 'years', 'dias': 'days', 'semanas': 'weeks'
   };
 
   const EN_TO_ES_WORDS = {
@@ -204,7 +302,7 @@
     'expensive': 'caro', 'high': 'altos', 'low': 'bajo', 'decreased': 'bajaron', 'increased': 'subieron',
     'money': 'dinero', 'funds': 'fondos', 'help': 'ayuda', 'needs': 'necesita', 'husband': 'esposo',
     'wife': 'esposa', 'son': 'hijo', 'daughter': 'hija', 'children': 'hijos', 'father': 'padre', 'mother': 'madre',
-    'a': 'un', 'the': 'el', 'that': 'que', 'of': 'de', 'dog': 'perro', 'cat': 'gato', 'then': 'luego',
+    'dog': 'perro', 'cat': 'gato', 'then': 'luego',
     'afterwards': 'después', 'in': 'en', 'with': 'con', 'for': 'para', 'but': 'pero', 'as': 'como',
     'when': 'cuando', 'where': 'donde', 'cancer': 'cáncer', 'vet': 'veterinaria', 'killed': 'mataron',
     'started': 'empezó', 'was': 'fue', 'were': 'fueron', 'spent': 'gastó', 'no longer': 'ya no', 'stayed': 'quedó'
@@ -249,16 +347,30 @@
     return out;
   }
 
-  function canonicalizeSpanish(text) {
-    let out = normalizeText(text)
-      .replace(new RegExp(bL + noAcc('yo|ella|ellos|ellas') + bR, 'gi'), 'el cliente')
-      .replace(new RegExp(bL + noAcc('mi') + bR, 'gi'), 'su')
-      .replace(new RegExp(bL + noAcc('mis') + bR, 'gi'), 'sus')
-      .replace(/el cliente\s+el cliente/gi, 'el cliente')
-      .replace(new RegExp(bL + noAcc('consumia drogas') + bR, 'gi'), 'tuvo problemas de consumo de sustancias')
-      .replace(new RegExp(bL + noAcc('consumo de drogas') + bR, 'gi'), 'consumo de sustancias');
+  // Verbos/partículas que indican que "el" precedente es pronombre (él), no artículo
+  const PRONOUN_VERB_PATTERN = '(?:comenta|indica|menciona|dice|tiene|tuvo|fue|se\\b|no\\b|ya\\b|est[aá]|perdi[oó]|trabaja|busca|pudo|puede|necesita|hizo|qued[oó]|tambi[eé]n|actualmente|le\\b)';
 
-    if (!new RegExp(bL + 'el cliente' + bR, 'i').test(noAcc(out)) && out) {
+  function canonicalizeSpanish(text) {
+    let out = normalizeText(text);
+
+    // Pronombres estándar → "el cliente"
+    out = out.replace(new RegExp(bL + noAcc('yo|ella|ellos|ellas') + bR, 'gi'), 'el cliente');
+
+    // "el/él" como pronombre antes de verbos (no artículo antes de sustantivo)
+    out = out.replace(new RegExp(bL + noAcc('el') + '(?=\\s+' + PRONOUN_VERB_PATTERN + ')', 'gi'), 'el cliente');
+
+    // Posesivos
+    out = out.replace(new RegExp(bL + noAcc('mi') + bR, 'gi'), 'su');
+    out = out.replace(new RegExp(bL + noAcc('mis') + bR, 'gi'), 'sus');
+
+    // Dedup
+    out = out.replace(/el cliente\s+el cliente/gi, 'el cliente');
+
+    // Sanitizar drogas → sustancias
+    out = out.replace(new RegExp(bL + noAcc('consumia drogas') + bR, 'gi'), 'tuvo problemas de consumo de sustancias');
+    out = out.replace(new RegExp(bL + noAcc('consumo de drogas') + bR, 'gi'), 'consumo de sustancias');
+
+    if (!new RegExp(bL + noAcc('el cliente') + bR, 'i').test(out) && out) {
       out = `El cliente ${out.replace(/^[,.\s-]+/, '')}`;
     }
     return cleanupSpanish(out);
@@ -292,16 +404,26 @@
       .replace(/\bthe client's's\b/gi, "the client's")
       .replace(/\bthe client\s+client\b/gi, 'the client')
       .replace(/\breports that lost employment\b/gi, 'reports losing employment')
+      .replace(/\bstates that lost employment\b/gi, 'states that the client lost employment')
+      // "reports that got/lost/became..." → insertar sujeto faltante
+      .replace(/\b(reports|states|mentions|says) that (got|lost|became|was|had|has|is|cannot|can)\b/gi, '$1 that the client $2')
       .replace(/\bthe debts\b/gi, 'debts')
       .replace(/\bmake payments debts\b/gi, 'make debt payments')
       .replace(/\bproblems of substance use\b/gi, 'substance-use problems')
+      // "The client the reports..." → strip stray article from "el" pronoun leakage
+      .replace(/\bthe client the (?=[a-z])/gi, 'The client ')
       .replace(/^\s*(?:the client\s+)+/i, 'The client ')
       .replace(/\bThe client The client\b/gi, 'The client')
+      // Strip orphaned articles: "due to the drugs" → "due to drugs"
+      .replace(/\b(due to|because of) the (?=[a-z])/gi, '$1 ')
       .trim();
     
+    // "a" → "an" before vowel sounds
+    out = out.replace(/\ba ([aeiou])/gi, 'an $1');
+
     // Capitalize first letter of sentences
     out = out.replace(/(^\w|\.\s*\w)/g, c => c.toUpperCase());
-    
+
     // Fix random capitalization in the middle of sentences
     out = out.replace(/\bReports that\b/g, 'reports that')
              .replace(/\bStates that\b/g, 'states that')
@@ -380,32 +502,38 @@
     if (!contextReason) return text;
     let out = text;
     const reason = String(contextReason).toLowerCase();
+    const lower = out.toLowerCase();
+
+    // No agregar contexto si el texto ya tiene una cláusula causal
+    if (/\b(due to|because of?|caused by|as a result|debido a|a causa de|por culpa de)\b/i.test(out)) {
+      return out;
+    }
 
     if (lang === 'en') {
       if (reason.includes('loss of income') || reason.includes('job')) {
-         if (!out.toLowerCase().includes('employment') && !out.toLowerCase().includes('income')) {
+         if (!lower.includes('employment') && !lower.includes('income') && !lower.includes('job')) {
              out += ' due to loss of income';
          }
       } else if (reason.includes('medical')) {
-         if (!out.toLowerCase().includes('medical')) {
+         if (!lower.includes('medical') && !lower.includes('hospital') && !lower.includes('surgery')) {
              out += ' due to medical expenses';
          }
       } else if (reason.includes('divorce') || reason.includes('separation')) {
-         if (!out.toLowerCase().includes('divorce') && !out.toLowerCase().includes('separation')) {
+         if (!lower.includes('divorce') && !lower.includes('separation') && !lower.includes('separated')) {
              out += ' due to marital separation';
          }
       }
     } else if (lang === 'es') {
        if (reason.includes('loss of income') || reason.includes('job')) {
-         if (!out.toLowerCase().includes('ingreso') && !out.toLowerCase().includes('empleo') && !out.toLowerCase().includes('trabajo')) {
+         if (!lower.includes('ingreso') && !lower.includes('empleo') && !lower.includes('trabajo')) {
              out += ' debido a la pérdida de ingresos';
          }
       } else if (reason.includes('medical')) {
-         if (!out.toLowerCase().includes('medic') && !out.toLowerCase().includes('salud')) {
+         if (!lower.includes('medic') && !lower.includes('salud') && !lower.includes('hospital')) {
              out += ' debido a gastos médicos';
          }
       } else if (reason.includes('divorce') || reason.includes('separation')) {
-         if (!out.toLowerCase().includes('divorci') && !out.toLowerCase().includes('separaci')) {
+         if (!lower.includes('divorci') && !lower.includes('separaci')) {
              out += ' debido a una separación matrimonial';
          }
       }
@@ -413,11 +541,47 @@
     return out;
   }
 
-  async function translate({ sourceLang, text, hardshipReason }) {
+  function translateLocal(input, lang, hardshipReason) {
+    let translated = lang === 'es'
+      ? translateSpanishToEnglish(input)
+      : translateEnglishToSpanish(input);
+    const targetLang = lang === 'es' ? 'en' : 'es';
+    translated = applyContextHeuristics(translated, hardshipReason, targetLang);
+    return translated;
+  }
+
+  async function translate({ sourceLang, text, hardshipReason, onUpgrade }) {
     const lang = String(sourceLang || '').toLowerCase() === 'en' ? 'en' : 'es';
     const input = normalizeText(text);
     if (!input) return '';
 
+    // Traducción local instantánea
+    const localResult = translateLocal(input, lang, hardshipReason);
+
+    // Si hay callback onUpgrade, devolver local inmediatamente y mejorar en background
+    if (typeof onUpgrade === 'function') {
+      fetch('/api/hardship/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'translate',
+          sourceLang: lang,
+          text: input,
+          hardshipReason: hardshipReason
+        })
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          if (ok && data.translatedText && data.translatedText !== localResult) {
+            onUpgrade(data.translatedText);
+          }
+        })
+        .catch(() => {}); // local ya fue aplicado, silenciar error de API
+
+      return localResult;
+    }
+
+    // Modo síncrono (sin onUpgrade): intentar API, fallback a local
     try {
       const response = await fetch('/api/hardship/assist', {
         method: 'POST',
@@ -431,16 +595,10 @@
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'API Error');
-
-      return data.translatedText || '';
+      return data.translatedText || localResult;
     } catch (err) {
-      console.warn('[HardshipAssist] API translate failed, falling back to local:', err);
-      let translated = lang === 'es'
-        ? translateSpanishToEnglish(input)
-        : translateEnglishToSpanish(input);
-      
-      translated = applyContextHeuristics(translated, hardshipReason, lang === 'es' ? 'en' : 'es');
-      return translated;
+      console.warn('[HardshipAssist] API translate failed, using local:', err.message);
+      return localResult;
     }
   }
 
