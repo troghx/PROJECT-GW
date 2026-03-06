@@ -9402,6 +9402,58 @@ app.delete('/api/leads/:id/creditors/:creditorId', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINTS: CREDITOR CATALOG
+// ============================================
+
+app.get('/api/settings/creditor-catalog', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nombre, estatus, notas
+       FROM global_creditor_catalog
+       ORDER BY nombre ASC`
+    );
+    return res.json(rows);
+  } catch (error) {
+    console.error('Error al obtener catalogo de acreedores:', error);
+    return res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+});
+
+app.put('/api/settings/creditor-catalog', async (req, res) => {
+  const entries = Array.isArray(req.body) ? req.body : [];
+  try {
+    // Basic sync: delete all and insert new ones to keep it simple, or upsert.
+    // For safety, we will clear and insert since it's a full sync from frontend.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('TRUNCATE TABLE global_creditor_catalog RESTART IDENTITY');
+      
+      for (const entry of entries) {
+        if (!entry.nombre) continue;
+        await client.query(
+          `INSERT INTO global_creditor_catalog (nombre, estatus, notas)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (nombre) DO NOTHING`,
+          [entry.nombre, entry.estatus || 'aceptable', entry.notas || '']
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    
+    return res.json({ message: 'Catálogo de acreedores actualizado correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar catalogo de acreedores:', error);
+    return res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+});
+
+// ============================================
 // ENDPOINTS: BANKING INFORMATION
 // ============================================
 

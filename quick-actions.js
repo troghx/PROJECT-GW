@@ -85,8 +85,15 @@
     try {
       localStorage.setItem(CREDITOR_CATALOG_STORAGE_KEY, JSON.stringify(entries));
     } catch (_error) {
-      // noop: localStorage full o restringido
+      // noop
     }
+    
+    // Also sync to server so it is shared across all users
+    fetch('/api/settings/creditor-catalog', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entries)
+    }).catch(e => console.error('Error al sincronizar catalogo de acreedores:', e));
   }
 
   function syncCatalogWithHelpers(entries) {
@@ -140,6 +147,18 @@
       ...entry,
       id: index + 1
     }));
+    
+    // Async remote fetch to update the local cache
+    fetch('/api/settings/creditor-catalog')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const remoteMerged = mergeCatalogWithStored(withIds, data);
+          setCreditorCatalog(remoteMerged, { persist: true });
+        }
+      })
+      .catch(err => console.error('Error fetching global creditor catalog:', err));
+      
     persistCreditorCatalog(withIds);
     return withIds;
   }

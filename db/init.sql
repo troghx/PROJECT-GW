@@ -2176,3 +2176,15 @@ JOIN permission_catalog pc ON pc.key = m.permission_key
 ON CONFLICT (role, permission_key) DO UPDATE
 SET allowed = EXCLUDED.allowed,
     updated_at = CURRENT_TIMESTAMP;
+
+-- ============================================
+-- TABLA: Catalogo global de acreedores (aceptables / no aceptables)
+-- ============================================
+CREATE TABLE IF NOT EXISTS global_creditor_catalog (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(180) UNIQUE NOT NULL,
+  estatus VARCHAR(60) NOT NULL DEFAULT 'aceptable',
+  notas TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
