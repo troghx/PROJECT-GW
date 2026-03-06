@@ -9847,8 +9847,16 @@ async function startServer() {
   });
 }
 
-startServer().catch((error) => {
-  console.error('Error de arranque:', error.message);
-  process.exit(1);
-});
+if (!process.env.NETLIFY && !process.env.LAMBDA_TASK_ROOT) {
+  startServer().catch((error) => {
+    console.error('Error de arranque:', error.message);
+    process.exit(1);
+  });
+} else {
+  // Inicialización ligera para Serverless
+  getJwtSecret();
+  runMigrations().catch(e => console.error("Serverless mig error:", e));
+}
+
+module.exports = app;
 
