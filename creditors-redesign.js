@@ -854,7 +854,20 @@
     return normalizeLastPaymentDate(source);
   }
 
-  function extractBalance(line) {
+  function extractBalance(line, preferredColumnIndex = 0, colsCount = 1) {
+    if (/^\s*(?:(?:Current|Account|Unpaid|Payoff)\s+)?(?:Balance|Amount)s?[:\s]*/i.test(line)) {
+      const vals = extractCurrencyValuesIncludingZero(line);
+      if (vals.length > 0) {
+        if (vals.length >= colsCount && colsCount > 1) {
+          const vpc = Math.floor(vals.length / colsCount);
+          return vals[preferredColumnIndex * vpc];
+        } else if (vals.length > preferredColumnIndex) {
+          return vals[preferredColumnIndex];
+        }
+        return vals[0];
+      }
+    }
+
     const patterns = [
       /^\s*Balance[:\s]*\$?([0-9,]+\.?\d*)/i,
       /^\s*(?:Current|Account)\s+Balance[:\s]*\$?([0-9,]+\.?\d*)/i,
@@ -1129,7 +1142,7 @@
     return '';
   }
 
-  function extractHeaderDebtNearAccount(lines, accountIndex) {
+  function extractHeaderDebtNearAccount(lines, accountIndex, preferredColumnIndex = 0, colsCount = 1) {
     const monthPattern = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i;
     const start = Math.max(0, accountIndex - 14);
     const end = Math.min(lines.length - 1, accountIndex + 5);
@@ -1150,28 +1163,46 @@
         continue;
       }
 
-      const balance = extractBalance(line);
+      const balance = extractBalance(line, preferredColumnIndex, colsCount);
       if (balance > best) best = balance;
 
       const currencyValues = extractCurrencyValuesIncludingZero(line);
       if (currencyValues.length && isLikelyCreditorLine(line)) {
-        best = Math.max(best, currencyValues[0]);
+        if (currencyValues.length >= colsCount && colsCount > 1) {
+          const vpc = Math.floor(currencyValues.length / colsCount);
+          best = Math.max(best, currencyValues[preferredColumnIndex * vpc]);
+        } else if (currencyValues.length > preferredColumnIndex) {
+          best = Math.max(best, currencyValues[preferredColumnIndex]);
+        } else {
+          best = Math.max(best, currencyValues[0]);
+        }
       }
 
       if (hasExplicitBalanceLabel && /^(?:\$?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*){2,4}$/i.test(line)) {
         const nearValues = extractCurrencyValuesIncludingZero(line);
         if (nearValues.length) {
-          if (explicitBalanceMode === 'highest' && nearValues.length >= 2) {
-            return Math.min(nearValues[0], nearValues[1]);
+          let candidate = nearValues[0];
+          if (nearValues.length >= colsCount && colsCount > 1) {
+            const vpc = Math.floor(nearValues.length / colsCount);
+            candidate = nearValues[preferredColumnIndex * vpc];
+          } else if (nearValues.length > preferredColumnIndex) {
+            candidate = nearValues[preferredColumnIndex];
           }
-          return nearValues[0];
+          return candidate;
         }
       }
 
       if (!currencyValues.length && /\d+\.\d{2}/.test(line) && !monthPattern.test(line)) {
         const looseValues = extractLooseMoneyValues(line);
         if (looseValues.length && /^(?:\$?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*){1,4}$/.test(line)) {
-          best = Math.max(best, looseValues[0]);
+          if (looseValues.length >= colsCount && colsCount > 1) {
+            const vpc = Math.floor(looseValues.length / colsCount);
+            best = Math.max(best, looseValues[preferredColumnIndex * vpc]);
+          } else if (looseValues.length > preferredColumnIndex) {
+            best = Math.max(best, looseValues[preferredColumnIndex]);
+          } else {
+            best = Math.max(best, looseValues[0]);
+          }
         }
       }
     }
@@ -1429,6 +1460,27 @@
         }
       }
 
+      let preferredColumnIndex = 0;
+      let colsCount = 1;
+      for (let cursor = blockStart; cursor <= blockEnd; cursor += 1) {
+        const dateMatches = [];
+        const regex = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/gi;
+        let match;
+        while ((match = regex.exec(lines[cursor])) !== null) {
+          const time = new Date(match[0]).getTime();
+          if (!Number.isNaN(time)) dateMatches.push(time);
+        }
+        if (dateMatches.length >= 2 && dateMatches.length <= 4) {
+          colsCount = dateMatches.length;
+          let maxIdx = 0;
+          for (let k = 1; k < dateMatches.length; k++) {
+            if (dateMatches[k] > dateMatches[maxIdx]) maxIdx = k;
+          }
+          preferredColumnIndex = maxIdx;
+          break;
+        }
+      }
+
       let accountNumber = '';
       const accountScanStart = Math.max(blockStart, accountIndex - 2);
       const accountScanEnd = Math.min(blockEnd, accountIndex + 12);
@@ -1603,8 +1655,11 @@
 
           if (nearValues.length) {
             let candidate = nearValues[0];
-            if (waitingBalanceMode === 'highest' && nearValues.length >= 2) {
-              candidate = Math.min(nearValues[0], nearValues[1]);
+            if (nearValues.length >= colsCount && colsCount > 1) {
+              const vpc = Math.floor(nearValues.length / colsCount);
+              candidate = nearValues[preferredColumnIndex * vpc];
+            } else if (nearValues.length > preferredColumnIndex) {
+              candidate = nearValues[preferredColumnIndex];
             }
 
             if (creditor.debtSourceRank < 3 || creditor.debtAmount <= 0) {
@@ -1633,7 +1688,7 @@
           continue;
         }
 
-        const balance = extractBalance(line);
+        const balance = extractBalance(line, preferredColumnIndex, colsCount);
         if (balance > creditor.debtAmount) {
           if (creditor.debtSourceRank < 3 || creditor.debtAmount <= 0) {
             creditor.debtAmount = balance;
@@ -1682,7 +1737,7 @@
         }
       }
 
-      const headerDebt = extractHeaderDebtNearAccount(lines, accountIndex);
+      const headerDebt = extractHeaderDebtNearAccount(lines, accountIndex, preferredColumnIndex, colsCount);
       if (!hasExplicitDebtSignal && headerDebt > creditor.debtAmount) {
         creditor.debtAmount = headerDebt;
         if (creditor.debtSourceRank < 1) {
