@@ -1374,6 +1374,15 @@ body.theme-light .lead-suggestion-count {
   gap: 10px;
 }
 
+.account-stack {
+  --account-trigger-size: 42px;
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
 .session-handle-tag {
   display: inline-flex;
   align-items: center;
@@ -1516,7 +1525,7 @@ body.theme-light .lead-suggestion-count {
 
 .account-menu {
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(var(--account-trigger-size) + 12px);
   right: 0;
   min-width: 200px;
   padding: 14px;
@@ -1747,6 +1756,53 @@ body.theme-light .lead-suggestion-count {
 
 .account-action-btn:active {
   transform: translateX(2px) scale(0.98);
+}
+
+.account-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(235, 245, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 180ms ease, transform 180ms ease, opacity 180ms ease;
+}
+
+.account-lang-toggle:hover {
+  color: rgba(255, 255, 255, 0.96);
+  transform: translateY(-1px);
+}
+
+.account-lang-toggle:active {
+  transform: translateY(0);
+}
+
+.account-lang-toggle .lang-toggle-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.account-lang-toggle .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--accent, #39b0ff);
+  stroke: currentColor;
+}
+
+.account-lang-toggle:focus-visible {
+  outline: 2px solid rgba(126, 234, 252, 0.75);
+  outline-offset: 4px;
+  border-radius: 999px;
 }
 
 .logout-btn {
@@ -3022,6 +3078,14 @@ body.home-active.theme-light .account-menu-title {
 
 body.home-active.theme-light .account-menu {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+body.home-active.theme-light .account-lang-toggle {
+  color: rgba(16, 42, 66, 0.7);
+}
+
+body.home-active.theme-light .account-lang-toggle:hover {
+  color: rgba(16, 42, 66, 0.98);
 }
 
 body.home-active.theme-light .theme-inline-toggle {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7371,15 +7371,15 @@
                     <circle cx="12" cy="9" r="3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M5 21C5 17.134 8.13401 14 12 14C15.866 14 19 17.134 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  <span>Leads</span>
+                  <span data-i18n="nav.leads">Leads</span>
                 </button>
 
-                <button id="calendarBtn" class="tool-btn" type="button" aria-label="Calendario" onclick="window.location.href='index.html#calendar'">
+                <button id="calendarBtn" class="tool-btn" type="button" aria-label="Calendario" onclick="window.location.href='index.html#calendar'" data-i18n-aria="nav.calendar">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="16" rx="3" />
                     <path d="M3 9h18M8 3v4M16 3v4" />
                   </svg>
-                  <span>Calendario</span>
+                  <span data-i18n="nav.calendar">Calendario</span>
                 </button>
               </div>
 
@@ -7393,6 +7393,7 @@
                     class="home-search-input"
                     type="search"
                     placeholder="Buscar cliente..."
+                    data-i18n-placeholder="nav.search"
                     aria-label="Buscar"
                     autocomplete="off"
                   />
@@ -7430,7 +7431,7 @@
                       <path d="M12 3a5 5 0 0 0-5 5v2.2c0 1.1-.4 2.1-1.1 2.9L4.8 14.3a1 1 0 0 0 .7 1.7h13a1 1 0 0 0 .7-1.7l-1.1-1.2a4.2 4.2 0 0 1-1.1-2.9V8a5 5 0 0 0-5-5Z" />
                       <path d="M10 18a2 2 0 0 0 4 0" />
                     </svg>
-                    <span>Notifs</span>
+                    <span data-i18n="nav.notifs">Notifs</span>
                     <span class="notif-badge" id="clientNotifBadge" aria-hidden="true"></span>
                   </button>
                 </div>
@@ -7440,7 +7441,7 @@
                     <rect x="3" y="5" width="18" height="14" rx="2" />
                     <path d="m4 7 8 6 8-6" />
                   </svg>
-                  <span>Correos</span>
+                  <span data-i18n="nav.emails">Correos</span>
                 </button>
               </div>
             </div>
@@ -7451,22 +7452,31 @@
       <!-- Account Actions -->
       <div class="home-actions" aria-label="Cuenta y ajustes">
         <span id="sessionHandleTag" class="session-handle-tag hidden" aria-live="polite"></span>
-        <button
-          id="accountBtn"
-          class="account-icon-btn"
-          type="button"
-          aria-label="Cuenta"
-          aria-haspopup="true"
-          aria-expanded="false"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="8" r="4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 20C4 16.6863 6.68629 14 10 14H14C17.3137 14 20 16.6863 20 20" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+        <div class="account-stack">
+          <button
+            id="accountBtn"
+            class="account-icon-btn"
+            type="button"
+            aria-label="Cuenta"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 20C4 16.6863 6.68629 14 10 14H14C17.3137 14 20 16.6863 20 20" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
 
-        <div id="accountMenu" class="account-menu hidden" role="menu" aria-label="Ajustes de cuenta">
-          <p class="account-menu-title">Ajustes rapidos</p>
+          <button id="langToggleBtn" class="account-lang-toggle" type="button" title="Switch to Spanish" onclick="window.i18n && window.i18n.toggleLang()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span class="lang-toggle-label">EN</span>
+          </button>
+
+          <div id="accountMenu" class="account-menu hidden" role="menu" aria-label="Ajustes de cuenta">
+          <p class="account-menu-title" data-i18n="nav.quickSettings">Ajustes rapidos</p>
 
           <label class="theme-inline-toggle" for="themeSwitch" aria-label="Cambiar tema">
             <input id="themeSwitch" class="theme-switch-input" type="checkbox" aria-label="Toggle de tema" />
@@ -7486,7 +7496,7 @@
           </label>
 
           <div class="accent-color-picker" id="accentColorPicker">
-            <span class="accent-color-label">Color del tema</span>
+            <span class="accent-color-label" data-i18n="nav.themeColor">Color del tema</span>
             <div class="accent-swatches" role="radiogroup" aria-label="Color de acento">
               <button class="accent-swatch swatch-verde active" data-color="verde" data-theme="light" role="radio" aria-checked="true" type="button" title="Verde"></button>
               <button class="accent-swatch swatch-oceano" data-color="oceano" data-theme="light" role="radio" aria-checked="false" type="button" title="Océano"></button>
@@ -7509,7 +7519,7 @@
               <path d="M3.5 19c0-2.4 2-4.4 4.5-4.4h2c2.5 0 4.5 2 4.5 4.4"></path>
               <path d="M14 19c0-1.9 1.5-3.5 3.4-3.5h.3c1.9 0 3.3 1.3 3.3 3"></path>
             </svg>
-            <span>Gestionar usuarios</span>
+            <span data-i18n="nav.manageUsers">Gestionar usuarios</span>
           </button>
 
           <button id="logoutBtn" class="logout-btn" type="button" role="menuitem">
@@ -7518,8 +7528,9 @@
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Cerrar sesión</span>
+            <span data-i18n="nav.logout">Cerrar sesión</span>
           </button>
+          </div>
         </div>
       </div>
 
@@ -7530,13 +7541,13 @@
             <!-- Nombre editable -->
             <div class="lead-name-wrapper">
               <!-- Botón de cambio Applicant/Co-Applicant -->
-              <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant">
+              <button id="applicantToggleBtn" class="applicant-toggle-btn" title="Cambiar a Co-Applicant" data-i18n-title="lead.toggleApplicant">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M7 10h14l-4-4"/>
                   <path d="M17 14H3l4 4"/>
                 </svg>
               </button>
-              <span id="applicantTypeLabel" class="applicant-type-label">Applicant</span>
+              <span id="applicantTypeLabel" class="applicant-type-label" data-i18n="common.applicant">Applicant</span>
               
               <h1 id="leadName" class="lead-name-text" contenteditable="false" title="Click para editar"></h1>
               
@@ -7558,6 +7569,7 @@
                 class="lead-status-badge-trigger"
                 type="button"
                 aria-label="Cambiar status del lead"
+                data-i18n-aria="lead.changeStatus"
                 aria-haspopup="listbox"
                 aria-expanded="false"
                 aria-controls="leadStatusBadgePanel"
@@ -7567,7 +7579,7 @@
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </button>
-              <section id="leadStatusBadgePanel" class="lead-status-badge-panel hidden" aria-label="Seleccionar status del lead" aria-hidden="true">
+              <section id="leadStatusBadgePanel" class="lead-status-badge-panel hidden" aria-label="Seleccionar status del lead" aria-hidden="true" data-i18n-aria="lead.selectStatus">
                 <div class="lead-status-badge-search-row">
                   <svg class="lead-status-badge-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <circle cx="11" cy="11" r="7"></circle>
@@ -7578,8 +7590,10 @@
                     class="lead-status-badge-search-input"
                     type="search"
                     placeholder="Buscar status..."
+                    data-i18n-placeholder="status.searchStatus"
                     autocomplete="off"
                     aria-label="Buscar status"
+                    data-i18n-aria="status.searchStatus"
                   />
                 </div>
                 <div id="leadStatusBadgeOptions" class="lead-status-badge-options" role="listbox" aria-label="Opciones de status"></div>
@@ -7591,7 +7605,7 @@
             <span id="testBadge" class="lead-test-badge hidden">Test</span>
 
             <!-- Badge de relación -->
-            <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado">
+            <a id="relatedLeadBadge" class="lead-related-badge hidden" href="#" title="Abrir lead relacionado" data-i18n-title="lead.openRelated">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4"/>
                 <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"/>
@@ -7603,9 +7617,9 @@
           <!-- Case ID y botones de acción -->
           <div class="lead-case-id">
             <div class="case-id-left">
-              <span class="case-label">Case ID:</span>
+              <span class="case-label" data-i18n="lead.caseId">Case ID:</span>
               <span id="caseNumber" class="case-number"></span>
-              <button id="copyCaseBtn" class="copy-icon-btn" title="Copiar Case ID">
+              <button id="copyCaseBtn" class="copy-icon-btn" title="Copiar Case ID" data-i18n-title="lead.copyCaseId">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -7627,14 +7641,14 @@
             <!-- Botones de acción al lado del Case ID -->
             <div class="case-id-actions">
               <button id="pullCreditBtn" class="pull-credit-btn hidden" type="button" title="Pull Credit report">
-                Pull Credit
+                <span data-i18n="lead.pullCredit">Pull Credit</span>
               </button>
               <div class="lead-assignee-wrap">
                 <div class="lead-assignee-meta">
-                  <span class="lead-assignee-label">Assigned To</span>
+                  <span class="lead-assignee-label" data-i18n="lead.assignedTo">Assigned To</span>
                   <div class="lead-assignee-combo">
-                    <input id="leadAssigneeInput" class="lead-assignee-input" type="search" placeholder="Buscar agente..." autocomplete="off" aria-label="Buscar agente para asignar" aria-haspopup="listbox" aria-expanded="false" aria-controls="leadAssigneeSuggestions" />
-                    <button id="leadAssigneeToggleBtn" class="lead-assignee-toggle" type="button" title="Ver agentes" aria-label="Ver agentes">
+                    <input id="leadAssigneeInput" class="lead-assignee-input" type="search" placeholder="Buscar agente..." autocomplete="off" aria-label="Buscar agente para asignar" aria-haspopup="listbox" aria-expanded="false" aria-controls="leadAssigneeSuggestions" data-i18n-placeholder="lead.searchAgent" data-i18n-aria="lead.searchAgent" />
+                    <button id="leadAssigneeToggleBtn" class="lead-assignee-toggle" type="button" title="Ver agentes" aria-label="Ver agentes" data-i18n-title="lead.viewAgents" data-i18n-aria="lead.viewAgents">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="6 9 12 15 18 9"></polyline>
                       </svg>
@@ -7642,7 +7656,7 @@
                   </div>
                   <div id="leadAssigneeSuggestions" class="lead-assignee-suggestions hidden" role="listbox" aria-label="Agentes disponibles"></div>
                 </div>
-                <button id="confirmAssigneeBtn" class="lead-assignee-confirm hidden" type="button" title="Confirmar asignación" aria-label="Confirmar asignación">
+                <button id="confirmAssigneeBtn" class="lead-assignee-confirm hidden" type="button" title="Confirmar asignación" aria-label="Confirmar asignación" data-i18n-title="lead.confirmAssign" data-i18n-aria="lead.confirmAssign">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 6 9 17l-5-5"></path>
                   </svg>
@@ -7651,7 +7665,7 @@
 
               <!-- Botón de Archivos -->
               <div class="files-anchor">
-                <button class="action-icon-btn" id="filesBtn" title="Archivos" aria-controls="filesPanel" aria-expanded="false">
+                <button class="action-icon-btn" id="filesBtn" title="Archivos" aria-controls="filesPanel" aria-expanded="false" data-i18n-title="action.files">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14,2 14,8 20,8"/>
@@ -7660,10 +7674,10 @@
                     <polyline points="10,9 9,9 8,9"/>
                   </svg>
                 </button>
-                <section id="filesPanel" class="files-panel hidden" aria-label="Archivos del lead">
+                <section id="filesPanel" class="files-panel hidden" aria-label="Archivos del lead" data-i18n-aria="files.title">
                   <div class="files-panel-header">
-                    <span class="files-panel-title">Archivos</span>
-                    <button class="files-panel-close modal-close-mac" id="filesCloseBtn" type="button" title="Cerrar archivos"></button>
+                    <span class="files-panel-title" data-i18n="files.title">Archivos</span>
+                    <button class="files-panel-close modal-close-mac" id="filesCloseBtn" type="button" title="Cerrar archivos" data-i18n-title="files.close"></button>
                   </div>
                   <div class="files-panel-body">
                     <!-- Upload Zone -->
@@ -7673,7 +7687,7 @@
                         <polyline points="17,8 12,3 7,8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      <span class="files-upload-text">Arrastra archivos aquí o haz clic para seleccionar (requiere clasificación)</span>
+                      <span class="files-upload-text" data-i18n="files.dropzone">Arrastra archivos aquí o haz clic para seleccionar (requiere clasificación)</span>
                       <input type="file" id="filesUploadInput" class="files-upload-input" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                     </div>
                     <!-- Files List -->
@@ -7683,8 +7697,8 @@
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                           <polyline points="14,2 14,8 20,8"/>
                         </svg>
-                        <p>No hay archivos aún</p>
-                        <span>Los archivos subidos aparecerán aquí</span>
+                        <p data-i18n="files.empty">No hay archivos aún</p>
+                        <span data-i18n="files.emptySub">Los archivos subidos aparecerán aquí</span>
                       </div>
                     </div>
                   </div>
@@ -7696,16 +7710,16 @@
                 </svg>
               </button>
               <div class="email-anchor">
-                <button class="action-icon-btn" id="emailBtn" title="Enviar Email" aria-controls="emailPanel" aria-expanded="false">
+                <button class="action-icon-btn" id="emailBtn" title="Enviar Email" aria-controls="emailPanel" aria-expanded="false" data-i18n-title="action.sendEmail">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                     <polyline points="22,6 12,13 2,6"/>
                   </svg>
                 </button>
-                <section id="emailPanel" class="email-panel hidden" aria-label="Opciones de correo">
+                <section id="emailPanel" class="email-panel hidden" aria-label="Opciones de correo" data-i18n-aria="email.title">
                   <div class="email-panel-header">
-                    <span class="email-panel-title">Correos</span>
-                    <button class="email-panel-close modal-close-mac" id="emailCloseBtn" type="button" title="Cerrar correos"></button>
+                    <span class="email-panel-title" data-i18n="email.title">Correos</span>
+                    <button class="email-panel-close modal-close-mac" id="emailCloseBtn" type="button" title="Cerrar correos" data-i18n-title="email.close"></button>
                   </div>
                   <div class="email-panel-body">
                     <button id="emailCreateBtn" class="email-option-btn" type="button">
@@ -7716,8 +7730,8 @@
                         </svg>
                       </span>
                       <span class="email-option-text">
-                        <span class="email-option-title">Crear nuevo correo</span>
-                        <span class="email-option-subtitle">Abrir redaccion para este lead</span>
+                        <span class="email-option-title" data-i18n="email.compose">Crear nuevo correo</span>
+                        <span class="email-option-subtitle" data-i18n="email.composeSub">Abrir redaccion para este lead</span>
                       </span>
                     </button>
                     <button id="emailSendContractBtn" class="email-option-btn" type="button">
@@ -7730,45 +7744,45 @@
                         </svg>
                       </span>
                       <span class="email-option-text">
-                        <span id="emailSendContractBtnTitle" class="email-option-title">Generar contrato</span>
-                        <span id="emailSendContractBtnSubtitle" class="email-option-subtitle">Crear PDF del contrato en Files</span>
+                        <span id="emailSendContractBtnTitle" class="email-option-title" data-i18n="email.genContract">Generar contrato</span>
+                        <span id="emailSendContractBtnSubtitle" class="email-option-subtitle" data-i18n="email.genContractSub">Crear PDF del contrato en Files</span>
                       </span>
                     </button>
                   </div>
                 </section>
               </div>
               <div class="notes-anchor">
-                <button class="action-icon-btn" id="notesBtn" title="Notas" aria-controls="notesPanel" aria-expanded="false">
+                <button class="action-icon-btn" id="notesBtn" title="Notas" aria-controls="notesPanel" aria-expanded="false" data-i18n-title="action.notes">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <section id="notesPanel" class="notes-panel hidden" aria-label="Notas del lead">
+                <section id="notesPanel" class="notes-panel hidden" aria-label="Notas del lead" data-i18n-aria="notes.title">
                   <div class="notes-panel-header">
-                    <span class="notes-panel-title">Notas</span>
-                    <button class="notes-panel-close modal-close-mac" id="notesCloseBtn" type="button" title="Cerrar notas"></button>
+                    <span class="notes-panel-title" data-i18n="notes.title">Notas</span>
+                    <button class="notes-panel-close modal-close-mac" id="notesCloseBtn" type="button" title="Cerrar notas" data-i18n-title="notes.close"></button>
                   </div>
                   <div class="notes-panel-body">
                     <div id="notesComposerWrap" class="hidden">
-                      <label class="notes-composer-label" for="notesComposerTextarea">Nueva nota</label>
-                      <textarea id="notesComposerTextarea" class="notes-composer" placeholder="Escribe una nota y presiona Agregar..."></textarea>
+                      <label class="notes-composer-label" for="notesComposerTextarea" data-i18n="notes.new">Nueva nota</label>
+                      <textarea id="notesComposerTextarea" class="notes-composer" placeholder="Escribe una nota y presiona Agregar..." data-i18n-placeholder="notes.placeholder"></textarea>
                     </div>
                     <div class="notes-actions-row">
-                      <button id="notesAddBtn" class="notes-btn primary" type="button">Agregar nota</button>
-                      <span id="notesStatus" class="notes-save-status">Sin notas</span>
+                      <button id="notesAddBtn" class="notes-btn primary" type="button" data-i18n="notes.add">Agregar nota</button>
+                      <span id="notesStatus" class="notes-save-status" data-i18n="notes.empty">Sin notas</span>
                     </div>
                     <div id="notesList" class="notes-feed" aria-live="polite"></div>
                     <div class="notes-templates-block">
                       <div class="notes-templates-header">
-                        <span class="notes-templates-title">Templates</span>
+                        <span class="notes-templates-title" data-i18n="notes.templates">Templates</span>
                       </div>
-                      <select id="notesTemplateSelect" class="notes-template-select" aria-label="Seleccionar template">
-                        <option value="">Seleccionar template...</option>
+                      <select id="notesTemplateSelect" class="notes-template-select" aria-label="Seleccionar template" data-i18n-aria="notes.selectTemplate">
+                        <option value="" data-i18n="notes.selectTemplate">Seleccionar template...</option>
                       </select>
                       <div class="notes-template-actions notes-template-actions-clean">
-                        <button id="notesTemplateUseBtn" class="notes-btn" type="button">Usar</button>
-                        <button id="notesTemplateManageBtn" class="notes-btn" type="button">Editar mis templates</button>
+                        <button id="notesTemplateUseBtn" class="notes-btn" type="button" data-i18n="action.use">Usar</button>
+                        <button id="notesTemplateManageBtn" class="notes-btn" type="button" data-i18n="notes.editTemplates">Editar mis templates</button>
                       </div>
                     </div>
                   </div>
@@ -7785,7 +7799,7 @@
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              Lead
+              <span data-i18n="tab.lead">Lead</span>
             </button>
             <button class="lead-tab" data-tab="creditors">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7793,7 +7807,7 @@
                 <circle cx="9" cy="7" r="4"/>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
-              Creditors
+              <span data-i18n="tab.creditors">Creditors</span>
             </button>
             <button class="lead-tab" data-tab="budget">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7809,7 +7823,7 @@
                 <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.9"/>
                 <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.9"/>
               </svg>
-              Budget
+              <span data-i18n="tab.budget">Budget</span>
             </button>
             <button class="lead-tab" data-tab="calculator">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7818,14 +7832,14 @@
                 <line x1="16" y1="14" x2="16" y2="14"/>
                 <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>
               </svg>
-              Calculator
+              <span data-i18n="tab.calculator">Calculator</span>
             </button>
             <button class="lead-tab" data-tab="banking">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="5" width="20" height="14" rx="2"/>
                 <line x1="2" y1="10" x2="22" y2="10"/>
               </svg>
-              Banking
+              <span data-i18n="tab.banking">Banking</span>
             </button>
           </div>
           
@@ -7839,7 +7853,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
             </svg>
-            <p>Cargando información del cliente...</p>
+            <p data-i18n="status.loadingClient">Cargando información del cliente...</p>
           </div>
         </div>
         
@@ -7864,19 +7878,19 @@
                     <ellipse cx="20" cy="3.5" rx="1.5" ry="2" fill="#4ade80" opacity="0.8"/>
                     <ellipse cx="15.5" cy="5" rx="1.2" ry="1.8" fill="#4ade80" opacity="0.8"/>
                   </svg>
-                  Configuración
+                  <span data-i18n="calc.configuration">Configuración</span>
                 </h4>
                 
                 <div class="info-row calc-input-row">
-                  <span class="info-row-label">Total Debt</span>
-                  <div class="calc-input-minimal copy-on-click" id="copyTotalDebt" title="Click para copiar">
+                  <span class="info-row-label" data-i18n="calc.totalDebt">Total Debt</span>
+                  <div class="calc-input-minimal copy-on-click" id="copyTotalDebt" title="Click para copiar" data-i18n-title="calc.copyTotalDebt">
                     <span class="calc-input-prefix">$</span>
                     <input type="text" class="calc-input-field" id="calcTotalDebt" value="0.00" readonly>
                   </div>
                 </div>
                 
                 <div class="info-row calc-input-row">
-                  <span class="info-row-label">Estimated Settlement</span>
+                  <span class="info-row-label" data-i18n="calc.estimatedSettlement">Estimated Settlement</span>
                   <div class="calc-input-minimal protected" data-field="settlementPercent">
                     <button class="lock-toggle-btn" data-target="calcSettlementPercent" title="Click para desbloquear">
                       <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -7894,7 +7908,7 @@
                 </div>
                 
                 <div class="info-row calc-input-row">
-                  <span class="info-row-label">Program Fee</span>
+                  <span class="info-row-label" data-i18n="calc.programFee">Program Fee</span>
                   <div class="calc-input-minimal protected" data-field="programFeePercent">
                     <button class="lock-toggle-btn" data-target="calcProgramFeePercent" title="Click para desbloquear">
                       <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -7912,7 +7926,7 @@
                 </div>
                 
                 <div class="info-row calc-input-row">
-                  <span class="info-row-label">Monthly Bank Fee</span>
+                  <span class="info-row-label" data-i18n="calc.monthlyBankFee">Monthly Bank Fee</span>
                   <div class="calc-input-minimal protected" data-field="bankFee">
                     <button class="lock-toggle-btn" data-target="calcBankFee" title="Click para desbloquear">
                       <svg class="lock-icon-svg locked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -7930,10 +7944,10 @@
                 </div>
                 
                 <div class="info-row">
-                  <span class="info-row-label">Legal Plan</span>
+                  <span class="info-row-label" data-i18n="calc.legalPlan">Legal Plan</span>
                   <div class="calc-toggle-wrapper-inline" id="calcLegalPlanToggle">
                     <span id="calcLegalPlanStateHint" class="calc-legal-state-hint hidden" aria-live="polite"></span>
-                    <span class="calc-toggle-label-small">Incluir ($24.99/mes)</span>
+                    <span class="calc-toggle-label-small" data-i18n="calc.includeLegal">Incluir ($24.99/mes)</span>
                     <div class="calc-toggle" id="calcLegalPlanSwitch">
                       <div class="calc-toggle-thumb"></div>
                     </div>
@@ -7941,20 +7955,20 @@
                 </div>
                 
                 <div class="info-row">
-                  <span class="info-row-label">Payment Frequency</span>
+                  <span class="info-row-label" data-i18n="calc.paymentFrequency">Payment Frequency</span>
                   <div class="calc-freq-group" id="calcFrequencyGroup">
-                    <button type="button" class="calc-freq-btn active" id="calcFreqMonthly" data-freq="monthly">Monthly</button>
-                    <button type="button" class="calc-freq-btn" id="calcFreqBimonthly" data-freq="bimonthly">Bi-Monthly</button>
-                    <button type="button" class="calc-freq-btn" id="calcFreqBiweekly" data-freq="biweekly">Bi-Weekly</button>
+                    <button type="button" class="calc-freq-btn active" id="calcFreqMonthly" data-freq="monthly" data-i18n="calc.monthly">Monthly</button>
+                    <button type="button" class="calc-freq-btn" id="calcFreqBimonthly" data-freq="bimonthly" data-i18n="calc.biMonthly">Bi-Monthly</button>
+                    <button type="button" class="calc-freq-btn" id="calcFreqBiweekly" data-freq="biweekly" data-i18n="calc.biWeekly">Bi-Weekly</button>
                   </div>
                   <input type="hidden" id="calcPaymentFrequency" value="monthly">
                 </div>
 
                 <div class="info-row calc-payment-day-row">
-                  <span class="info-row-label" id="calcPaymentDayLabel">Monthly Payment Day</span>
+                  <span class="info-row-label" id="calcPaymentDayLabel" data-i18n="calc.paymentDay">Monthly Payment Day</span>
                   <div class="calc-payment-day-wrapper">
                     <button id="calcPaymentDayTrigger" class="liquid-glass-btn calc-payment-day-trigger" type="button">
-                      <span id="calcPaymentDayDisplay" class="calc-payment-day-display">Seleccionar fecha</span>
+                      <span id="calcPaymentDayDisplay" class="calc-payment-day-display" data-i18n="client.selectDate">Seleccionar fecha</span>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                         <line x1="16" y1="2" x2="16" y2="6"/>
@@ -8374,14 +8388,14 @@
               <div class="budget-toolbar-left">
                 <h3 class="budget-toolbar-title">Budget Workspace</h3>
                 <div class="budget-subtabs" id="budgetSubtabs">
-                  <button type="button" class="budget-subtab active" data-budget-tab="items">Budget Items</button>
-                  <button type="button" class="budget-subtab" data-budget-tab="income">Income</button>
-                  <button type="button" class="budget-subtab" data-budget-tab="hardship">Hardship</button>
+                  <button type="button" class="budget-subtab active" data-budget-tab="items" data-i18n="budget.items">Budget Items</button>
+                  <button type="button" class="budget-subtab" data-budget-tab="income" data-i18n="budget.income">Income</button>
+                  <button type="button" class="budget-subtab" data-budget-tab="hardship" data-i18n="budget.hardship">Hardship</button>
                 </div>
               </div>
               <div class="budget-toolbar-actions">
                 <span id="budgetSaveStatus" class="budget-save-status">Sin cambios</span>
-                <button id="budgetSaveBtn" type="button" class="budget-save-btn">Guardar Budget</button>
+                <button id="budgetSaveBtn" type="button" class="budget-save-btn" data-i18n="budget.save">Guardar Budget</button>
               </div>
             </div>
 
@@ -8479,22 +8493,22 @@
               <section class="budget-panel" data-budget-panel="income">
                 <article class="budget-card-group budget-card-group-merged budget-income-box">
                   <div class="budget-card-head">
-                    <h4>Income</h4>
+                    <h4 data-i18n="budget.income">Income</h4>
                     <div class="budget-inner-tabs">
                       <button type="button" class="budget-inner-tab active" data-budget-inner-group="income" data-budget-inner-tab="applicant">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-3.3 3.4-5 7-5s6.3 1.7 7 5"/></svg>
-                        <span>Applicant</span>
+                        <span data-i18n="common.applicant">Applicant</span>
                       </button>
                       <button type="button" class="budget-inner-tab" data-budget-inner-group="income" data-budget-inner-tab="coapp">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M3.5 20c.6-3 2.9-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><path d="M14 19.6c.5-2.2 2.1-3.5 4.2-3.5 1 0 2 .3 2.8 1"/></svg>
-                        <span>Co-Applicant</span>
+                        <span data-i18n="common.coApplicant">Co-Applicant</span>
                       </button>
                     </div>
                   </div>
                   <div class="budget-inner-panels">
                     <section class="budget-inner-panel active" data-budget-inner-group="income" data-budget-inner-panel="applicant">
                       <div class="budget-category-block">
-                        <h5>Applicant Income</h5>
+                        <h5 data-i18n="budget.applicantIncome">Applicant Income</h5>
                         <div class="budget-field"><label for="budgetIncomeApplicantNetMonthly">Net Monthly Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantNetMonthly" type="text" inputmode="decimal" /></div></div>
                         <div class="budget-field"><label for="budgetIncomeApplicantSocialSecurity">Social Security</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantSocialSecurity" type="text" inputmode="decimal" /></div></div>
                         <div class="budget-field"><label for="budgetIncomeApplicantAlimony">Alimony</label><div class="budget-money"><span>$</span><input id="budgetIncomeApplicantAlimony" type="text" inputmode="decimal" /></div></div>
@@ -8508,7 +8522,7 @@
                     </section>
                     <section class="budget-inner-panel" data-budget-inner-group="income" data-budget-inner-panel="coapp">
                       <div class="budget-category-block">
-                        <h5>Co-Applicant Income</h5>
+                        <h5 data-i18n="budget.coApplicantIncome">Co-Applicant Income</h5>
                         <div class="budget-field"><label for="budgetIncomeCoappNetMonthly">Net Monthly Income</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappNetMonthly" type="text" inputmode="decimal" /></div></div>
                         <div class="budget-field"><label for="budgetIncomeCoappSocialSecurity">Social Security</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappSocialSecurity" type="text" inputmode="decimal" /></div></div>
                         <div class="budget-field"><label for="budgetIncomeCoappAlimony">Alimony</label><div class="budget-money"><span>$</span><input id="budgetIncomeCoappAlimony" type="text" inputmode="decimal" /></div></div>
@@ -8527,19 +8541,19 @@
               <section class="budget-panel" data-budget-panel="hardship">
                 <article class="budget-card-group budget-card-group-merged">
                   <div class="budget-card-head">
-                    <h4>Hardship</h4>
+                    <h4 data-i18n="budget.hardship">Hardship</h4>
                   </div>
                   <div class="budget-hardship-grid">
                     <div class="budget-field">
-                      <label for="budgetHardshipReason">Hardship Reason</label>
+                      <label for="budgetHardshipReason" data-i18n="budget.hardshipReason">Hardship Reason</label>
                       <div class="budget-custom-select-wrap" id="wrap-budgetHardshipReason">
                         <input type="hidden" id="budgetHardshipReason" value="">
                         <button type="button" class="budget-custom-trigger" id="trigger-budgetHardshipReason">
-                          <span id="budgetHardshipReasonValue" class="budget-custom-value">Seleccionar razón...</span>
+                          <span id="budgetHardshipReasonValue" class="budget-custom-value" data-i18n="budget.selectReason">Seleccionar razón...</span>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="budget-custom-chevron"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
                         <div class="budget-custom-dropdown hidden" id="dropdown-budgetHardshipReason">
-                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="">Seleccionar razón...</button>
+                          <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="" data-i18n="budget.selectReason">Seleccionar razón...</button>
                           <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="loss_of_income">Loss of Income</button>
                           <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="medical">Medical Issues</button>
                           <button type="button" class="budget-custom-option" data-select="budgetHardshipReason" data-value="divorce">Divorce / Separation</button>
@@ -8553,13 +8567,13 @@
                     <div class="budget-hardship-textareas">
                       <div class="budget-field">
                         <div class="budget-hardship-label-row">
-                          <label for="budgetHardshipDetailEs">Detailed Hardship Reason (Español)</label>
+                          <label for="budgetHardshipDetailEs" data-i18n="budget.detailEs">Detailed Hardship Reason (Español)</label>
                         </div>
-                        <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situación en español..."></textarea>
+                        <textarea id="budgetHardshipDetailEs" class="budget-textarea" rows="5" placeholder="Describe la situación en español..." data-i18n-placeholder="budget.placeholderEs"></textarea>
                       </div>
                       <div class="budget-field">
-                        <label for="budgetHardshipDetailEn">Detailed Hardship Reason (English)</label>
-                        <textarea id="budgetHardshipDetailEn" class="budget-textarea" rows="5" placeholder="Describe the situation in English..."></textarea>
+                        <label for="budgetHardshipDetailEn" data-i18n="budget.detailEn">Detailed Hardship Reason (English)</label>
+                        <textarea id="budgetHardshipDetailEn" class="budget-textarea" rows="5" placeholder="Describe the situation in English..." data-i18n-placeholder="budget.placeholderEn"></textarea>
                       </div>
                     </div>
                   </div>
@@ -8568,7 +8582,7 @@
                 </div>
               </div>
               <aside class="info-column budget-details-column" aria-label="Budget details">
-                <h4>Budget Details</h4>
+                <h4 data-i18n="budget.details">Budget Details</h4>
                 <div class="info-row">
                   <span class="info-row-label">Total Monthly Income</span>
                   <span class="info-row-value mono" id="budgetDetailTotalIncome">$0.00</span>
@@ -8785,31 +8799,31 @@
     <div class="email-compose-backdrop" data-close-email-modal="composer"></div>
     <div class="email-compose-content" role="dialog" aria-modal="true" aria-labelledby="emailComposerTitle">
       <div class="email-compose-header">
-        <h3 id="emailComposerTitle" class="email-compose-title">Nuevo correo</h3>
-        <button class="email-compose-close modal-close-mac" id="emailComposerCloseBtn" type="button" title="Cerrar"></button>
+        <h3 id="emailComposerTitle" class="email-compose-title" data-i18n="email.compose">Nuevo correo</h3>
+        <button class="email-compose-close modal-close-mac" id="emailComposerCloseBtn" type="button" title="Cerrar" data-i18n-title="action.close"></button>
       </div>
       <form id="emailComposerForm" class="email-compose-body">
         <div class="email-compose-grid">
           <label class="email-compose-field full">
-            <span class="email-compose-label">Para</span>
+            <span class="email-compose-label" data-i18n="template.to">Para</span>
             <input id="emailComposerTo" class="email-compose-input" type="email" maxlength="200" placeholder="cliente@dominio.com" required>
           </label>
           <label class="email-compose-field full">
-            <span class="email-compose-label">CC (separados por coma)</span>
+            <span class="email-compose-label" data-i18n="template.cc">CC (separados por coma)</span>
             <input id="emailComposerCc" class="email-compose-input" type="text" maxlength="600" placeholder="gerencia@dominio.com, supervisor@dominio.com">
           </label>
           <label class="email-compose-field full">
-            <span class="email-compose-label">Asunto</span>
+            <span class="email-compose-label" data-i18n="template.subject">Asunto</span>
             <input id="emailComposerSubject" class="email-compose-input" type="text" maxlength="240" required>
           </label>
           <label class="email-compose-field full">
-            <span class="email-compose-label">Mensaje</span>
+            <span class="email-compose-label" data-i18n="template.message">Mensaje</span>
             <textarea id="emailComposerBody" class="email-compose-textarea" maxlength="12000" required></textarea>
           </label>
         </div>
         <div class="email-compose-footer">
-          <button id="emailComposerCancelBtn" class="email-compose-btn" type="button">Cancelar</button>
-          <button id="emailComposerSendBtn" class="email-compose-btn primary" type="submit">Enviar correo</button>
+          <button id="emailComposerCancelBtn" class="email-compose-btn" type="button" data-i18n="action.cancel">Cancelar</button>
+          <button id="emailComposerSendBtn" class="email-compose-btn primary" type="submit" data-i18n="client.sendEmail">Enviar correo</button>
         </div>
       </form>
     </div>
@@ -8819,31 +8833,31 @@
     <div class="email-compose-backdrop" data-close-email-modal="contract"></div>
     <div class="email-compose-content contract-compose-content" role="dialog" aria-modal="true" aria-labelledby="contractComposerTitle" style="max-width:960px;width:92vw;">
       <div class="email-compose-header">
-        <h3 id="contractComposerTitle" class="email-compose-title">Contrato generado</h3>
-        <button class="email-compose-close modal-close-mac" id="contractComposerCloseBtn" type="button" title="Cerrar"></button>
+        <h3 id="contractComposerTitle" class="email-compose-title" data-i18n="client.contractGeneratedTitle">Contrato generado</h3>
+        <button class="email-compose-close modal-close-mac" id="contractComposerCloseBtn" type="button" title="Cerrar" data-i18n-title="action.close"></button>
       </div>
       <div class="email-compose-body contract-compose-layout">
         <div class="contract-contact-top">
           <div class="email-contract-contact-item">
-            <small>Telefono del cliente</small>
+            <small data-i18n="client.clientPhone">Telefono del cliente</small>
             <span id="contractContactPhone">No disponible</span>
           </div>
           <div class="email-contract-contact-item">
-            <small>Email del cliente</small>
+            <small data-i18n="client.clientEmail">Email del cliente</small>
             <span id="contractContactEmail">No disponible</span>
           </div>
         </div>
         <div class="contract-pdf-preview-wrap">
           <div id="contractPdfState" class="contract-pdf-state hidden" aria-live="polite">
             <div class="contract-pdf-spinner" aria-hidden="true"></div>
-            <p id="contractPdfStateText" class="contract-pdf-state-text">Generando contrato...</p>
+            <p id="contractPdfStateText" class="contract-pdf-state-text" data-i18n="client.generatingContract">Generando contrato...</p>
           </div>
           <iframe id="contractPdfFrame" class="contract-pdf-frame" title="Vista previa del contrato"></iframe>
         </div>
         <div class="contract-actions-row">
-          <button id="contractRegenerateBtn" class="email-compose-btn" type="button">Regenerar contrato</button>
-          <button id="contractSendEmailBtn" class="email-compose-btn primary" type="button">Enviar contrato</button>
-          <button id="contractComposerCancelBtn" class="email-compose-btn" type="button">Cerrar</button>
+          <button id="contractRegenerateBtn" class="email-compose-btn" type="button" data-i18n="client.regenerateContract">Regenerar contrato</button>
+          <button id="contractSendEmailBtn" class="email-compose-btn primary" type="button" data-i18n="client.sendContract">Enviar contrato</button>
+          <button id="contractComposerCancelBtn" class="email-compose-btn" type="button" data-i18n="action.close">Cerrar</button>
         </div>
       </div>
     </div>
@@ -8852,19 +8866,19 @@
   <div id="pullCreditModal" class="pull-credit-modal hidden" aria-hidden="true">
     <div id="pullCreditModalBackdrop" class="pull-credit-modal-backdrop"></div>
     <div class="pull-credit-modal-content" role="dialog" aria-modal="true" aria-labelledby="pullCreditModalTitle">
-      <button class="modal-close-mac pull-credit-modal-close" id="pullCreditModalCloseBtn" type="button" title="Cerrar"></button>
+      <button class="modal-close-mac pull-credit-modal-close" id="pullCreditModalCloseBtn" type="button" title="Cerrar" data-i18n-title="action.close"></button>
       <div class="pull-credit-modal-header">
-        <h3 id="pullCreditModalTitle" class="pull-credit-modal-title">Pull Credit Report</h3>
-        <p class="pull-credit-modal-subtitle">Selecciona de quien quieres ejecutar el credit pull.</p>
+        <h3 id="pullCreditModalTitle" class="pull-credit-modal-title" data-i18n="lead.pullCredit">Pull Credit Report</h3>
+        <p class="pull-credit-modal-subtitle" data-i18n="client.pullCreditChoose">Selecciona de quien quieres ejecutar el credit pull.</p>
       </div>
       <div class="pull-credit-modal-actions">
         <button id="pullCreditApplicantBtn" class="pull-credit-option-btn" type="button">
-          <strong>Applicant</strong>
+          <strong data-i18n="common.applicant">Applicant</strong>
           <small id="pullCreditApplicantText">-</small>
         </button>
         <button id="pullCreditCoappBtn" class="pull-credit-option-btn" type="button">
-          <strong>Co-Applicant</strong>
-          <small id="pullCreditCoappText">Completa datos del coapp para habilitar.</small>
+          <strong data-i18n="common.coApplicant">Co-Applicant</strong>
+          <small id="pullCreditCoappText" data-i18n="client.completeCoapp">Completa datos del coapp para habilitar.</small>
         </button>
       </div>
     </div>
@@ -8873,25 +8887,25 @@
   <div id="notesTemplatesModal" class="notes-templates-modal hidden" aria-hidden="true">
     <div id="notesTemplatesModalBackdrop" class="notes-templates-modal-backdrop"></div>
     <div class="notes-templates-modal-content" role="dialog" aria-modal="true" aria-labelledby="notesTemplatesModalTitle">
-      <button class="modal-close-mac notes-templates-modal-close" id="notesTemplatesModalClose" type="button" title="Cerrar"></button>
+      <button class="modal-close-mac notes-templates-modal-close" id="notesTemplatesModalClose" type="button" title="Cerrar" data-i18n-title="action.close"></button>
       <div class="notes-templates-modal-header">
-        <h3 id="notesTemplatesModalTitle">Editar mis templates</h3>
+        <h3 id="notesTemplatesModalTitle" data-i18n="notes.editTemplates">Editar mis templates</h3>
       </div>
       <div class="notes-templates-modal-body">
         <div class="notes-templates-manager-list">
-          <label class="notes-templates-manager-label" for="notesTemplatesManagerSelect">Mis templates</label>
-          <select id="notesTemplatesManagerSelect" class="notes-templates-manager-select" size="8" aria-label="Lista de templates"></select>
-          <button id="notesTemplatesManagerNewBtn" class="notes-btn" type="button">Nuevo</button>
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerSelect" data-i18n="notes.myTemplates">Mis templates</label>
+          <select id="notesTemplatesManagerSelect" class="notes-templates-manager-select" size="8" aria-label="Lista de templates" data-i18n-aria="notes.templatesListAria"></select>
+          <button id="notesTemplatesManagerNewBtn" class="notes-btn" type="button" data-i18n="action.add">Nuevo</button>
         </div>
         <div class="notes-templates-manager-editor">
-          <label class="notes-templates-manager-label" for="notesTemplatesManagerName">Nombre</label>
-          <input id="notesTemplatesManagerName" class="notes-templates-manager-input" type="text" maxlength="120" placeholder="Ej: Contacto inicial" />
-          <label class="notes-templates-manager-label" for="notesTemplatesManagerContent">Contenido</label>
-          <textarea id="notesTemplatesManagerContent" class="notes-templates-manager-textarea" maxlength="5000" placeholder="Escribe el contenido del template..."></textarea>
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerName" data-i18n="template.name">Nombre</label>
+          <input id="notesTemplatesManagerName" class="notes-templates-manager-input" type="text" maxlength="120" placeholder="Ej: Contacto inicial" data-i18n-placeholder="template.namePlaceholder" />
+          <label class="notes-templates-manager-label" for="notesTemplatesManagerContent" data-i18n="template.content">Contenido</label>
+          <textarea id="notesTemplatesManagerContent" class="notes-templates-manager-textarea" maxlength="5000" placeholder="Escribe el contenido del template..." data-i18n-placeholder="template.contentPlaceholder"></textarea>
           <div class="notes-templates-manager-actions">
-            <button id="notesTemplatesManagerSaveBtn" class="notes-btn primary" type="button">Guardar</button>
-            <button id="notesTemplatesManagerSaveAsNewBtn" class="notes-btn" type="button">Guardar como nuevo</button>
-            <button id="notesTemplatesManagerDeleteBtn" class="notes-btn danger" type="button">Eliminar</button>
+            <button id="notesTemplatesManagerSaveBtn" class="notes-btn primary" type="button" data-i18n="action.save">Guardar</button>
+            <button id="notesTemplatesManagerSaveAsNewBtn" class="notes-btn" type="button" data-i18n="template.saveAsNew">Guardar como nuevo</button>
+            <button id="notesTemplatesManagerDeleteBtn" class="notes-btn danger" type="button" data-i18n="action.delete">Eliminar</button>
           </div>
         </div>
       </div>
@@ -8903,33 +8917,33 @@
     <div class="file-meta-modal-backdrop"></div>
     <div class="file-meta-modal-content" role="dialog" aria-modal="true" aria-labelledby="fileMetaModalTitle">
       <div class="file-meta-modal-header">
-        <h3 id="fileMetaModalTitle">Clasificar archivo</h3>
-        <p class="file-meta-modal-subtitle" id="fileMetaFileName">Archivo</p>
+        <h3 id="fileMetaModalTitle" data-i18n="files.classifyTitle">Clasificar archivo</h3>
+        <p class="file-meta-modal-subtitle" id="fileMetaFileName" data-i18n="files.classifyFile">Archivo</p>
       </div>
       <form id="fileMetaForm" class="file-meta-modal-form">
         <div class="file-meta-field">
-          <label for="fileDocType">Tipo de archivo</label>
+          <label for="fileDocType" data-i18n="files.fileType">Tipo de archivo</label>
           <select id="fileDocType" required>
-            <option value="">Seleccionar tipo...</option>
-            <option value="official_document">Documento oficial</option>
-            <option value="credit_report">Reporte de crédito</option>
-            <option value="income_proof">Prueba de ingresos</option>
-            <option value="bank_statement">Estado de cuenta bancario</option>
-            <option value="contract">Contrato</option>
-            <option value="other">Otro</option>
+            <option value="" data-i18n="files.selectType">Seleccionar tipo...</option>
+            <option value="official_document" data-i18n="files.categoryOfficialDocument">Documento oficial</option>
+            <option value="credit_report" data-i18n="files.categoryCreditReport">Reporte de credito</option>
+            <option value="income_proof" data-i18n="files.categoryIncomeProof">Prueba de ingresos</option>
+            <option value="bank_statement" data-i18n="files.categoryBankStatement">Estado de cuenta bancario</option>
+            <option value="contract" data-i18n="files.categoryContract">Contrato</option>
+            <option value="other" data-i18n="files.categoryOther">Otro</option>
           </select>
         </div>
         <div class="file-meta-field hidden" id="fileCreditPartyWrap">
-          <label for="fileCreditParty">La deuda corresponde a</label>
+          <label for="fileCreditParty" data-i18n="files.debtBelongsTo">La deuda corresponde a</label>
           <select id="fileCreditParty">
-            <option value="">Seleccionar parte...</option>
-            <option value="applicant">Applicant</option>
-            <option value="coapp">Co-Applicant</option>
+            <option value="" data-i18n="files.selectParty">Seleccionar parte...</option>
+            <option value="applicant" data-i18n="common.applicant">Applicant</option>
+            <option value="coapp" data-i18n="common.coApplicant">Co-Applicant</option>
           </select>
         </div>
         <div class="file-meta-modal-actions">
-          <button type="button" class="file-meta-modal-btn" id="fileMetaCancelBtn">Cancelar</button>
-          <button type="submit" class="file-meta-modal-btn primary">Guardar</button>
+          <button type="button" class="file-meta-modal-btn" id="fileMetaCancelBtn" data-i18n="action.cancel">Cancelar</button>
+          <button type="submit" class="file-meta-modal-btn primary" data-i18n="action.save">Guardar</button>
         </div>
       </form>
     </div>
@@ -8940,8 +8954,8 @@
     <div class="file-viewer-modal-backdrop" onclick="closeFileViewer()"></div>
     <div class="file-viewer-modal-content">
       <div class="file-viewer-modal-header">
-        <span id="fileViewerTitle" class="file-viewer-modal-title">Vista previa</span>
-        <button class="file-viewer-modal-close" onclick="closeFileViewer()" title="Cerrar">
+        <span id="fileViewerTitle" class="file-viewer-modal-title" data-i18n="files.previewTitle">Vista previa</span>
+        <button class="file-viewer-modal-close" onclick="closeFileViewer()" title="Cerrar" data-i18n-title="files.viewerClose">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -8958,7 +8972,7 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Descargar
+          <span data-i18n="action.download">Descargar</span>
         </button>
       </div>
     </div>
@@ -8968,18 +8982,19 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="credit-report-auto-extract.js?v=20260226e"></script>
   <script src="crm-helpers.js?v=20260302a"></script>
-  <script src="client.js?v=20260303b"></script>
+  <script src="i18n.js?v=20260307a"></script>
+  <script src="client.js?v=20260307a"></script>
   <script src="hardship-assist.js?v=20260304a"></script>
   <script src="budget.js?v=20260304b"></script>
   <script src="quick-actions.js?v=20260226b"></script>
   <script src="creditors-redesign.js?v=20260302a"></script>
   <!-- Notification panel — outside toolbar to avoid transform containing-block clipping -->
-  <div class="notif-panel" id="clientNotifPanel" role="dialog" aria-label="Notificaciones">
+  <div class="notif-panel" id="clientNotifPanel" role="dialog" aria-label="Notificaciones" data-i18n-aria="notif.title">
     <div class="notif-panel-header">
-      <span class="notif-panel-title">Notificaciones</span>
+      <span class="notif-panel-title" data-i18n="notif.title">Notificaciones</span>
     </div>
     <div class="notif-list" id="clientNotifList">
-      <p class="notif-empty">ni un grillo por estas lineas zzzz</p>
+      <p class="notif-empty" data-i18n="empty.notifs">ni un grillo por estas lineas zzzz</p>
     </div>
   </div>
 </body>

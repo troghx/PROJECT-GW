@@ -691,7 +691,7 @@ function getInitialAccentColor(owner, theme = getCurrentThemeMode()) {
 let _notifOpen = false;
 let _notifListEventsBound = false;
 let _notifUnreadCount = 0;
-const NOTIF_EMPTY_TEXT = 'ni un grillo por estas lineas zzzz';
+function NOTIF_EMPTY_TEXT() { return (typeof t === 'function') ? t('empty.notifs') : 'ni un grillo por estas lineas zzzz'; }
 
 function _syncNotifRefs() {
   if (!notifPanel) notifPanel = document.getElementById('notifPanel');
@@ -702,7 +702,7 @@ function _syncNotifRefs() {
 
 function _renderNotifEmptyState() {
   if (!notifList) return;
-  notifList.innerHTML = `<p class="notif-empty">${NOTIF_EMPTY_TEXT}</p>`;
+  notifList.innerHTML = `<p class="notif-empty">${NOTIF_EMPTY_TEXT()}</p>`;
 }
 
 function isToolbarExpanded() {
@@ -1301,10 +1301,10 @@ function ensureUsersAdminPermissionsMenu() {
       const targetUser = data?.user || adminUsersCache.find((entry) => Number(entry.id) === userId);
       const permissionRows = Array.isArray(data?.permissions) ? data.permissions : [];
       renderUsersAdminPermissionsMenu(menu, targetUser, permissionRows);
-      showToast(data?.message || 'Permiso actualizado.', 'success');
+      showToast(data?.message || t('toast.permissionUpdated'), 'success');
     } catch (error) {
       checkbox.checked = !checkbox.checked;
-      showToast(error.message || 'No se pudo actualizar el permiso.', 'error');
+      showToast(error.message || t('toast.permissionError'), 'error');
     } finally {
       checkbox.disabled = false;
     }
@@ -1540,7 +1540,7 @@ async function updateUserRoleFromBadge(userId, nextRoleValue) {
   const identity = getSessionIdentity();
   const selfUsername = String(identity.username || '').trim().toLowerCase();
   if (selfUsername && targetUsername && selfUsername === targetUsername && nextRole !== 'admin') {
-    showToast('No puedes degradar tu propio usuario admin.', 'error');
+    showToast(t('toast.cantDemoteSelf'), 'error');
     return;
   }
 
@@ -1550,7 +1550,7 @@ async function updateUserRoleFromBadge(userId, nextRoleValue) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: nextRole })
     });
-    showToast(`Rol actualizado a ${getAdminRoleLabel(nextRole)}.`, 'success');
+    showToast(`${t('toast.roleUpdated')} ${getAdminRoleLabel(nextRole)}.`, 'success');
     await loadAdminUsers({ silent: true });
 
     const editingId = Number(usersAdminId?.value || 0);
@@ -1559,7 +1559,7 @@ async function updateUserRoleFromBadge(userId, nextRoleValue) {
       if (refreshedUser) resetUsersAdminForm(refreshedUser);
     }
   } catch (error) {
-    showToast(error.message || 'No se pudo actualizar el rol del usuario.', 'error');
+    showToast(error.message || t('toast.roleUpdateError'), 'error');
   }
 }
 
@@ -1794,7 +1794,7 @@ if (usersAdminForm) {
     if (!isEditing) {
       payload.username = String(usersAdminUsername?.value || '').trim().toLowerCase();
       if (!payload.pin) {
-        showToast('PIN obligatorio para crear usuario.', 'error');
+        showToast(t('toast.pinRequired'), 'error');
         usersAdminPin?.focus();
         return;
       }
@@ -1807,20 +1807,20 @@ if (usersAdminForm) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        showToast('Usuario actualizado.', 'success');
+        showToast(t('toast.userUpdated'), 'success');
       } else {
         await requestJson('/api/admin/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        showToast('Usuario creado.', 'success');
+        showToast(t('toast.userCreated'), 'success');
       }
       resetUsersAdminForm(null);
       setUsersAdminFormOpen(true, { focusUsername: true });
       await loadAdminUsers({ silent: true });
     } catch (error) {
-      showToast(error.message || 'No se pudo guardar el usuario.', 'error');
+      showToast(error.message || t('toast.userSaveError'), 'error');
     }
   });
 }
@@ -2314,7 +2314,7 @@ function initializeLeadsColumnResize() {
 
       const handle = document.createElement('span');
       handle.className = 'col-resize-handle';
-      handle.title = 'Arrastra para ajustar ancho. Doble clic para autoajustar.';
+      handle.title = t('col.resizeHint');
       headerCell.appendChild(handle);
 
       handle.addEventListener('dblclick', (event) => {
@@ -2710,10 +2710,14 @@ function toIsoDateLocal(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getCurrentLangLocale() {
+  return window.i18n?.getLang?.() === 'es' ? 'es-ES' : 'en-US';
+}
+
 function formatScheduleDateLabel(isoDate) {
   const date = parseIsoDateLocal(isoDate);
-  if (!date) return 'Fecha invalida';
-  return date.toLocaleDateString('es-ES', {
+  if (!date) return t('calendar.invalidDate');
+  return date.toLocaleDateString(getCurrentLangLocale(), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -3026,13 +3030,13 @@ function setScheduleTaskLeadSelection(lead) {
       scheduleTaskLeadLink.classList.add('hidden');
       scheduleTaskLeadLink.removeAttribute('href');
     }
-    scheduleTaskLeadHint.textContent = 'Sin lead seleccionado.';
+    scheduleTaskLeadHint.textContent = t('empty.noLead');
     return;
   }
 
   scheduleTaskLeadIdInput.value = String(leadId);
   scheduleTaskLeadSearchInput.value = formatScheduleLeadPrimaryLabel(lead);
-  scheduleTaskLeadHint.textContent = `Lead seleccionado: ${formatScheduleLeadPrimaryLabel(lead)}`;
+  scheduleTaskLeadHint.textContent = `${t('misc.leadSelected')} ${formatScheduleLeadPrimaryLabel(lead)}`;
   scheduleTaskLeadLink.href = `/client.html?id=${leadId}`;
   scheduleTaskLeadLink.classList.remove('hidden');
 }
@@ -3159,23 +3163,23 @@ async function submitScheduleTaskModal(event) {
   event.preventDefault();
   if (!scheduleTaskForm || scheduleTaskSubmitInFlight) return;
   if (!hasCurrentSessionPermission('tasks.manage')) {
-    showToast('No tienes permisos para crear tareas.', 'error');
+    showToast(t('toast.noTaskPermission'), 'error');
     return;
   }
 
   const targetOwner = getScheduleCreationOwnerUsername();
   if (!targetOwner) {
-    showToast('No se pudo determinar el usuario dueno del evento.', 'error');
+    showToast(t('toast.noEventOwner'), 'error');
     return;
   }
   if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
-    showToast('Selecciona una fecha valida en el calendario.', 'error');
+    showToast(t('toast.invalidDate'), 'error');
     return;
   }
 
   const title = String(scheduleTaskTitleInput?.value || '').trim();
   if (!title) {
-    showToast('El titulo no puede quedar vacio.', 'error');
+    showToast(t('toast.emptyTitle'), 'error');
     scheduleTaskTitleInput?.focus();
     return;
   }
@@ -3202,10 +3206,10 @@ async function submitScheduleTaskModal(event) {
     });
 
     closeScheduleTaskModal();
-    showToast(result?.message || 'Evento creado correctamente.', 'success');
+    showToast(result?.message || t('toast.eventCreated'), 'success');
     await loadScheduleTasks({ force: true });
   } catch (error) {
-    showToast(error.message || 'No se pudo crear el evento.', 'error');
+    showToast(error.message || t('toast.eventCreateError'), 'error');
     scheduleTaskSubmitInFlight = false;
     updateScheduleTaskSubmitUi();
   }
@@ -3214,15 +3218,15 @@ async function submitScheduleTaskModal(event) {
 async function openScheduleTaskModal(taskType = 'general') {
   if (!scheduleTaskModal) return;
   if (!hasCurrentSessionPermission('tasks.manage')) {
-    showToast('No tienes permisos para crear tareas.', 'error');
+    showToast(t('toast.noTaskPermission'), 'error');
     return;
   }
   if (!parseIsoDateLocal(scheduleSelectedDateKey)) {
-    showToast('Selecciona una fecha valida en el calendario.', 'error');
+    showToast(t('toast.invalidDate'), 'error');
     return;
   }
   if (scheduleScope === 'team' && !scheduleOwnerFilter) {
-    showToast('Selecciona una agenda de usuario especifico para crearle un evento.', 'info');
+    showToast(t('toast.selectUserSchedule'), 'info');
     return;
   }
 
@@ -3231,9 +3235,9 @@ async function openScheduleTaskModal(taskType = 'general') {
   scheduleTaskModalOpen = true;
   scheduleTaskModal.classList.remove('hidden');
 
-  const ownerLabel = getScheduleCreationOwnerLabel() || 'Sin usuario';
+  const ownerLabel = getScheduleCreationOwnerLabel() || t('misc.noUser');
   if (scheduleTaskModalTitle) {
-    scheduleTaskModalTitle.textContent = scheduleTaskDraftType === 'callback' ? 'Nuevo callback' : 'Nueva task';
+    scheduleTaskModalTitle.textContent = scheduleTaskDraftType === 'callback' ? t('misc.newCallback') : t('misc.newTask');
   }
   if (scheduleTaskOwnerInput) scheduleTaskOwnerInput.value = ownerLabel;
   if (scheduleTaskDateInput) scheduleTaskDateInput.value = formatScheduleDateLabel(scheduleSelectedDateKey);
@@ -3343,7 +3347,7 @@ function renderScheduleNotes() {
   if (!calendarNotesBoard) return;
 
   if (!scheduleNotes.length) {
-    calendarNotesBoard.innerHTML = '<p class="schedule-notes-empty">Sin notas por ahora. Crea una para tu to-do.</p>';
+    calendarNotesBoard.innerHTML = `<p class="schedule-notes-empty">${t('empty.noNotes')}</p>`;
     return;
   }
 
@@ -3353,10 +3357,10 @@ function renderScheduleNotes() {
     const tilt = getScheduleNoteTilt(note.id);
     return `
       <article class="schedule-note is-${note.color}" data-note-id="${escapeHtml(note.id)}" style="left:${left}px; top:${top}px; --note-tilt:${tilt}deg;">
-        <button type="button" class="schedule-note-delete" data-note-delete="${escapeHtml(note.id)}" aria-label="Eliminar post-it">
+        <button type="button" class="schedule-note-delete" data-note-delete="${escapeHtml(note.id)}" aria-label="${escapeHtml(t('schedule.deletePostIt'))}">
           <svg viewBox="0 0 14 14" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
         </button>
-        <textarea class="schedule-note-text" data-note-text="${escapeHtml(note.id)}" maxlength="${SCHEDULE_NOTE_MAX_LENGTH}" placeholder="Escribe algo...">${escapeHtml(note.text)}</textarea>
+        <textarea class="schedule-note-text" data-note-text="${escapeHtml(note.id)}" maxlength="${SCHEDULE_NOTE_MAX_LENGTH}" placeholder="${escapeHtml(t('schedule.writeSomething'))}">${escapeHtml(note.text)}</textarea>
       </article>
     `;
   }).join('');
@@ -3380,7 +3384,7 @@ function updateScheduleNotePosition(noteId, leftPx, topPx, { persist = false } =
 
 function createScheduleNote() {
   if (scheduleNotes.length >= 42) {
-    showToast('Limite de 42 post-its alcanzado.', 'info');
+    showToast(t('toast.postItLimit'), 'info');
     return;
   }
 
@@ -3493,15 +3497,15 @@ function getScheduleTaskState(task, todayKey) {
 
 function getScheduleTaskPresentation(task, todayKey) {
   const state = getScheduleTaskState(task, todayKey);
-  if (state === 'completed') return { state, statusLabel: 'Completada', statusClass: 'is-completed' };
-  if (state === 'missed') return { state, statusLabel: 'Vencida', statusClass: 'is-overdue' };
+  if (state === 'completed') return { state, statusLabel: t('schedule.completed'), statusClass: 'is-completed' };
+  if (state === 'missed') return { state, statusLabel: t('schedule.overdue'), statusClass: 'is-overdue' };
   if (String(task?.status || '').trim().toLowerCase() === 'in_progress') {
-    return { state, statusLabel: 'En progreso', statusClass: 'is-pending' };
+    return { state, statusLabel: t('schedule.inProgress'), statusClass: 'is-pending' };
   }
   if (String(task?.status || '').trim().toLowerCase() === 'escalated') {
-    return { state, statusLabel: 'Escalada', statusClass: 'is-overdue' };
+    return { state, statusLabel: t('schedule.escalated'), statusClass: 'is-overdue' };
   }
-  return { state, statusLabel: 'Pendiente', statusClass: 'is-pending' };
+  return { state, statusLabel: t('schedule.pending'), statusClass: 'is-pending' };
 }
 
 function renderScheduleMonth() {
@@ -3515,7 +3519,7 @@ function renderScheduleMonth() {
   const mondayStartOffset = (firstDayOfMonth.getDay() + 6) % 7;
   const todayKey = toIsoDateLocal(new Date());
 
-  calendarMonthLabel.textContent = firstDayOfMonth.toLocaleDateString('es-ES', {
+  calendarMonthLabel.textContent = firstDayOfMonth.toLocaleDateString(getCurrentLangLocale(), {
     month: 'long',
     year: 'numeric'
   });
@@ -3566,7 +3570,7 @@ function renderScheduleMonth() {
 
     cells.push(`
       <button type="button" class="schedule-day${outsideMonth ? ' is-outside' : ''}${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${dayStatusClass}" data-date-key="${dateKey}">
-        ${isToday ? '<span class="schedule-day-tag">HOY</span>' : '<span class="schedule-day-tag schedule-day-tag-spacer" aria-hidden="true"></span>'}
+        ${isToday ? `<span class="schedule-day-tag">${escapeHtml(t('schedule.todayTag'))}</span>` : '<span class="schedule-day-tag schedule-day-tag-spacer" aria-hidden="true"></span>'}
         <span class="schedule-day-number">${dayNumber}</span>
         ${taskCount > 0 ? `<span class="schedule-day-dot">${taskCount}</span>` : ''}
       </button>
@@ -3577,15 +3581,17 @@ function renderScheduleMonth() {
 }
 
 function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = {}) {
-  const caseLabel = task.caseId ? `Caso #${escapeHtml(String(task.caseId))}` : 'Caso sin ID';
+  const caseLabel = task.caseId ? `${t('schedule.case')} #${escapeHtml(String(task.caseId))}` : t('schedule.caseNoId');
   const presentation = getScheduleTaskPresentation(task, todayKey);
   const actionButtons = [];
   const priorityLabel = String(task.priority || '').trim().toLowerCase();
   const taskOwnerLabel = String(task.assignedTo || '').trim();
-  const typeLabel = String(task.taskType || '').trim().toLowerCase() === 'callback' ? 'Callback' : 'Task';
+  const typeLabel = String(task.taskType || '').trim().toLowerCase() === 'callback'
+    ? t('schedule.callbackLabel')
+    : t('schedule.taskLabel');
 
   if (task.leadId) {
-    actionButtons.push(`<button type="button" class="schedule-open-lead-btn" data-open-lead-id="${task.leadId}">Abrir lead</button>`);
+    actionButtons.push(`<button type="button" class="schedule-open-lead-btn" data-open-lead-id="${task.leadId}">${escapeHtml(t('schedule.openLead'))}</button>`);
   }
 
   const canCompleteToday = showCompleteAction
@@ -3595,7 +3601,7 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
 
   if (canCompleteToday) {
     const isSaving = scheduleCompleteLeadInFlight === task.taskId;
-    actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-task-id="${task.taskId}" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Guardando...' : 'Marcar completada'}</button>`);
+    actionButtons.push(`<button type="button" class="schedule-complete-btn" data-complete-task-id="${task.taskId}" ${isSaving ? 'disabled' : ''}>${isSaving ? escapeHtml(t('status.saving')) : escapeHtml(t('schedule.markCompleted'))}</button>`);
   }
 
   const canDeleteEvent = hasCurrentSessionPermission('callbacks.view_all')
@@ -3603,7 +3609,7 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
     && task.taskId > 0;
   if (canDeleteEvent) {
     const isDeleting = scheduleDeleteTaskInFlight === task.taskId;
-    actionButtons.push(`<button type="button" class="schedule-delete-btn" data-delete-task-id="${task.taskId}" ${isDeleting ? 'disabled' : ''}>${isDeleting ? 'Eliminando...' : 'Eliminar'}</button>`);
+    actionButtons.push(`<button type="button" class="schedule-delete-btn" data-delete-task-id="${task.taskId}" ${isDeleting ? 'disabled' : ''}>${isDeleting ? escapeHtml(t('schedule.deleting')) : escapeHtml(t('action.delete'))}</button>`);
   }
 
   const ownerMeta = scheduleScope === 'team' && taskOwnerLabel
@@ -3630,7 +3636,7 @@ function buildScheduleTaskCard(task, { todayKey, showCompleteAction = false } = 
       </div>
       <div class="schedule-task-side">
         <div class="schedule-task-menu" data-task-menu>
-          <button type="button" class="schedule-task-menu-toggle" aria-label="Mas acciones" aria-expanded="false" data-task-menu-toggle>
+          <button type="button" class="schedule-task-menu-toggle" aria-label="${escapeHtml(t('schedule.moreActions'))}" aria-expanded="false" data-task-menu-toggle>
             <span class="schedule-task-menu-icon" aria-hidden="true">&#8942;</span>
           </button>
           <div class="schedule-task-menu-panel">
@@ -3667,10 +3673,10 @@ async function markScheduleTaskCompleted(taskId) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' }
     });
-    showToast(result?.message || 'Task marcada como completada.', 'success');
+    showToast(result?.message || t('toast.taskCompleted'), 'success');
     await loadScheduleTasks({ force: true });
   } catch (error) {
-    showToast(error.message || 'No se pudo marcar la task como completada.', 'error');
+    showToast(error.message || t('toast.taskCompleteError'), 'error');
   } finally {
     scheduleCompleteLeadInFlight = null;
     renderScheduleAgenda();
@@ -3682,14 +3688,14 @@ async function deleteScheduleTask(taskId) {
   const numericTaskId = Number(taskId);
   if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) return;
   if (!hasCurrentSessionPermission('callbacks.view_all')) {
-    showToast('Solo admin/sup puede eliminar eventos de agenda.', 'error');
+    showToast(t('toast.onlyAdminDelete'), 'error');
     return;
   }
   if (scheduleDeleteTaskInFlight) return;
 
   const task = scheduleTasks.find((entry) => Number(entry.taskId) === numericTaskId);
   const taskLabel = String(task?.name || `Task #${numericTaskId}`).trim() || `Task #${numericTaskId}`;
-  if (!window.confirm(`Eliminar evento "${taskLabel}"?`)) return;
+  if (!window.confirm(`${t('confirm.deleteEvent')} "${taskLabel}"?`)) return;
 
   scheduleDeleteTaskInFlight = numericTaskId;
   renderScheduleAgenda();
@@ -3697,10 +3703,10 @@ async function deleteScheduleTask(taskId) {
     const result = await requestJson(`/api/tasks/${numericTaskId}`, {
       method: 'DELETE'
     });
-    showToast(result?.message || 'Evento eliminado correctamente.', 'success');
+    showToast(result?.message || t('toast.eventDeleted'), 'success');
     await loadScheduleTasks({ force: true });
   } catch (error) {
-    showToast(error.message || 'No se pudo eliminar el evento.', 'error');
+    showToast(error.message || t('toast.eventDeleteError'), 'error');
   } finally {
     scheduleDeleteTaskInFlight = null;
     renderScheduleAgenda();
@@ -3738,10 +3744,10 @@ function renderScheduleAgenda() {
     calendarAgendaList.innerHTML = scheduleScope === 'team'
       ? (
         selectedOwnerLabel
-          ? `<p class="schedule-empty-message">Aun no hay tasks asignadas a ${escapeHtml(selectedOwnerLabel)}.</p>`
-          : '<p class="schedule-empty-message">Aun no hay tasks en la bandeja de equipo.</p>'
+          ? `<p class="schedule-empty-message">${escapeHtml(t('schedule.teamEmptyOwner'))} ${escapeHtml(selectedOwnerLabel)}.</p>`
+          : `<p class="schedule-empty-message">${escapeHtml(t('schedule.teamEmpty'))}</p>`
       )
-      : '<p class="schedule-empty-message">Aun no hay tasks asignadas para ti.</p>';
+      : `<p class="schedule-empty-message">${escapeHtml(t('schedule.mineEmpty'))}</p>`;
     return;
   }
 
@@ -3751,7 +3757,7 @@ function renderScheduleAgenda() {
     const canCompleteSelectedDate = scheduleSelectedDateKey === todayKey;
     sections.push(`
       <section class="schedule-task-section">
-        <h4 class="schedule-task-section-title">Fecha seleccionada</h4>
+        <h4 class="schedule-task-section-title">${escapeHtml(t('schedule.selectedDate'))}</h4>
         ${selectedOpenTasks.map((task) => buildScheduleTaskCard(task, { todayKey, showCompleteAction: canCompleteSelectedDate })).join('')}
       </section>
     `);
@@ -3760,14 +3766,14 @@ function renderScheduleAgenda() {
   if (selectedCompletedTasks.length) {
     sections.push(`
       <section class="schedule-task-section">
-        <h4 class="schedule-task-section-title">Completadas</h4>
+        <h4 class="schedule-task-section-title">${escapeHtml(t('schedule.completedSection'))}</h4>
         ${selectedCompletedTasks.map((task) => buildScheduleTaskCard(task, { todayKey })).join('')}
       </section>
     `);
   }
 
   if (!sections.length) {
-    calendarAgendaList.innerHTML = '<p class="schedule-empty-message">No hay tasks para esta fecha.</p>';
+    calendarAgendaList.innerHTML = `<p class="schedule-empty-message">${escapeHtml(t('empty.noTasks'))}</p>`;
     return;
   }
 
@@ -3923,8 +3929,8 @@ function updateEmailsRoleUi() {
 
   if (emailsRoleHint) {
     emailsRoleHint.textContent = hasGlobalAccess
-      ? 'Vista global de administracion'
-      : 'Vista Seller: autoria y leads asignados';
+      ? t('emails.adminView')
+      : t('emails.sellerView');
   }
 
   if (emailsDeleteSelectedBtn) {
@@ -3949,7 +3955,7 @@ function syncEmailSelectionUi() {
 
   if (emailsSelectionCount) {
     emailsSelectionCount.classList.toggle('hidden', !(canDeleteEmails && selected > 0));
-    emailsSelectionCount.textContent = `${selected} seleccionado${selected === 1 ? '' : 's'}`;
+    emailsSelectionCount.textContent = `${selected} ${t(selected === 1 ? 'emails.selectedOne' : 'emails.selectedMany')}`;
   }
 
   if (emailsDeleteSelectedBtn) {
@@ -3964,7 +3970,7 @@ function syncEmailSelectionUi() {
   }
 }
 
-function renderEmailsEmptyState(title = 'No hay correos para mostrar', subtitle = 'Cuando la plataforma envie correos, apareceran aqui.') {
+function renderEmailsEmptyState(title = t('emails.emptyTitle'), subtitle = t('emails.emptySubtitle')) {
   if (!emailsTableBody) return;
 
   emailsTableBody.innerHTML = `
@@ -4004,7 +4010,7 @@ function renderEmailsRows(emails) {
     const statusMeta = getEmailStatusMeta(email.status);
     const relatedLabel = email.lead_id
       ? `Lead #${email.lead_case_id || email.lead_id}${email.lead_full_name ? ` · ${email.lead_full_name}` : ''}`
-      : (email.to_email || 'Sin lead relacionado');
+      : (email.to_email || t('emails.noRelatedLead'));
     const relatedCellHtml = email.lead_id
       ? `<a class="email-related-link" href="/client.html?id=${email.lead_id}">${escapeHtml(relatedLabel)}</a>`
       : `<span class="email-related-fallback">${escapeHtml(relatedLabel)}</span>`;
@@ -4019,13 +4025,13 @@ function renderEmailsRows(emails) {
         </td>
         <td class="email-author">@${escapeHtml(email.author_username || '-')}</td>
         <td class="email-related">${relatedCellHtml}</td>
-        <td class="email-subject" title="${escapeHtml(email.subject || '')}">${escapeHtml(email.subject || '(Sin asunto)')}</td>
+        <td class="email-subject" title="${escapeHtml(email.subject || '')}">${escapeHtml(email.subject || t('emails.noSubject'))}</td>
         <td class="email-destination">${escapeHtml(email.to_email || '-')}</td>
         <td class="email-date">${formatEmailDateTime(email.sent_at || email.created_at)}</td>
         <td><span class="email-status-badge ${statusMeta.className}">${statusMeta.label}</span></td>
         <td class="emails-actions-col">
           ${canDeleteEmails
-            ? `<button class="email-row-delete-btn" type="button" data-email-id="${emailId}" title="Eliminar correo" aria-label="Eliminar correo">Eliminar</button>`
+            ? `<button class="email-row-delete-btn" type="button" data-email-id="${emailId}" title="${escapeHtml(t('confirm.deleteEmail'))}" aria-label="${escapeHtml(t('confirm.deleteEmail'))}">${escapeHtml(t('action.delete'))}</button>`
             : '<span class="email-no-actions">-</span>'
           }
         </td>
@@ -4104,7 +4110,7 @@ async function loadEmails(forceReload = false) {
       console.error('Error cargando correos:', error);
       allEmailsCache = [];
       emailsLoaded = false;
-      renderEmailsEmptyState('No se pudieron cargar los correos', error.message || 'Intenta actualizar nuevamente.');
+      renderEmailsEmptyState(t('emails.loadErrorTitle'), error.message || t('emails.loadErrorSubtitle'));
       updateEmailsCounter(0);
       return [];
     } finally {
@@ -4119,13 +4125,13 @@ async function deleteEmailById(emailId) {
   const numericId = Number(emailId);
   if (!Number.isInteger(numericId) || numericId <= 0) return;
   if (!hasCurrentSessionPermission('emails.delete')) {
-    showToast('No tienes permisos para eliminar correos.', 'error');
+    showToast(t('toast.noEmailDeletePerm'), 'error');
     return;
   }
 
   const targetEmail = allEmailsCache.find((entry) => Number(entry.id) === numericId);
   const subjectPreview = String(targetEmail?.subject || '').trim() || `ID ${numericId}`;
-  if (!window.confirm(`Eliminar correo "${subjectPreview}"?`)) return;
+  if (!window.confirm(`${t('confirm.deleteEmail')} "${subjectPreview}"?`)) return;
 
   const identity = getSessionIdentity();
   const params = new URLSearchParams();
@@ -4142,22 +4148,22 @@ async function deleteEmailById(emailId) {
   allEmailsCache = allEmailsCache.filter((entry) => Number(entry.id) !== numericId);
   selectedEmailIds.delete(numericId);
   renderEmailsRows(allEmailsCache);
-  showToast('Correo eliminado correctamente.', 'success');
+  showToast(t('toast.emailDeleted'), 'success');
 }
 
 async function deleteSelectedEmails() {
   if (!hasCurrentSessionPermission('emails.delete')) {
-    showToast('No tienes permisos para eliminar correos.', 'error');
+    showToast(t('toast.noEmailDeletePerm'), 'error');
     return;
   }
 
   const ids = Array.from(selectedEmailIds).filter((id) => Number.isInteger(id) && id > 0);
   if (!ids.length) {
-    showToast('Selecciona al menos un correo.', 'info');
+    showToast(t('toast.selectEmail'), 'info');
     return;
   }
 
-  if (!window.confirm(`Eliminar ${ids.length} correo${ids.length === 1 ? '' : 's'} seleccionados?`)) {
+  if (!window.confirm(`${t('confirm.deleteEmails')} (${ids.length})`)) {
     return;
   }
 
@@ -4179,7 +4185,7 @@ async function deleteSelectedEmails() {
   allEmailsCache = allEmailsCache.filter((entry) => !deletedSet.has(Number(entry.id)));
   selectedEmailIds = new Set(Array.from(selectedEmailIds).filter((id) => !deletedSet.has(id)));
   renderEmailsRows(allEmailsCache);
-  showToast(`Se eliminaron ${deletedSet.size || ids.length} correos.`, 'success');
+  showToast(`${deletedSet.size || ids.length} ${t('toast.emailsDeleted')}`, 'success');
 }
 
 function initializeEmailsInteractions() {
@@ -4214,7 +4220,7 @@ function initializeEmailsInteractions() {
 
       deleteEmailById(emailId).catch((error) => {
         console.error('Error eliminando correo:', error);
-        showToast(error.message || 'No se pudo eliminar el correo.', 'error');
+        showToast(error.message || t('toast.emailDeleteError'), 'error');
       });
     });
   }
@@ -4239,7 +4245,7 @@ function initializeEmailsInteractions() {
     emailsDeleteSelectedBtn.addEventListener('click', () => {
       deleteSelectedEmails().catch((error) => {
         console.error('Error en borrado masivo de correos:', error);
-        showToast(error.message || 'No se pudieron eliminar los correos.', 'error');
+        showToast(error.message || t('toast.emailsDeleteError'), 'error');
       });
     });
   }
@@ -4248,7 +4254,7 @@ function initializeEmailsInteractions() {
     emailsRefreshBtn.addEventListener('click', () => {
       loadEmails(true).catch((error) => {
         console.error('Error al refrescar correos:', error);
-        showToast(error.message || 'No se pudieron actualizar los correos.', 'error');
+        showToast(error.message || t('toast.emailsUpdateError'), 'error');
       });
     });
   }
@@ -5281,18 +5287,18 @@ if (newLeadForm) {
     const normalizedPhone = crmHelpers.normalizePhoneForLead(phone);
     
     if (!fullName || !phone) {
-      alert('Por favor completa todos los campos obligatorios.');
+      alert(t('val.requiredFields'));
       return;
     }
 
     if (!normalizedPhone) {
-      alert('Ingresa un teléfono válido de 10 dígitos (ej: 305-555-0123).');
+      alert(t('val.invalidPhone'));
       if (phoneInput) phoneInput.focus();
       return;
     }
-    
+
     if (!stateCode) {
-      alert('Por favor selecciona un estado.');
+      alert(t('val.selectState'));
       stateSearchInput.focus();
       return;
     }
@@ -5342,7 +5348,7 @@ if (newLeadForm) {
       
     } catch (error) {
       console.error('Error:', error);
-      alert(error.message || 'No se pudo crear el lead. Intenta de nuevo.');
+      alert(error.message || t('val.createError'));
     }
   });
 }
@@ -5557,10 +5563,10 @@ async function updateLeadAssignee(leadId, nextAssignee) {
 
     const matches = searchLeadsByQuery(currentLeadSearchQuery);
     renderLeadsRows(matches);
-    showToast(`Lead reasignado a @${normalizedAssignee}`, 'success');
+    showToast(`${t('toast.leadReassigned')} @${normalizedAssignee}`, 'success');
     return true;
   } catch (error) {
-    showToast(error.message || 'No se pudo reasignar el lead.', 'error');
+    showToast(error.message || t('toast.leadReassignError'), 'error');
     return false;
   } finally {
     leadAssigneeUpdateInFlight = false;
@@ -5584,7 +5590,7 @@ function formatLeadDocsDate(dateValue) {
   if (!dateValue) return '-';
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('es-ES', {
+  return date.toLocaleString(getCurrentLangLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -5629,12 +5635,12 @@ function renderLeadDocsPanelList(panelEl, files = [], leadId = 0) {
 
   const safeFiles = Array.isArray(files) ? files : [];
   if (!safeFiles.length) {
-    listEl.innerHTML = '<div class="lead-docs-panel-empty">Este lead no tiene archivos cargados.</div>';
+    listEl.innerHTML = `<div class="lead-docs-panel-empty">${escapeHtml(t('files.noLeadFiles'))}</div>`;
     return;
   }
 
   listEl.innerHTML = safeFiles.map((file) => {
-    const typeLabel = String(file.type || '').trim() || 'tipo sin definir';
+    const typeLabel = String(file.type || '').trim() || t('files.typeUndefined');
     const sizeLabel = formatLeadDocsFileSize(file.size);
     const dateLabel = formatLeadDocsDate(file.uploadedAt);
     return `
@@ -5649,7 +5655,7 @@ function renderLeadDocsPanelList(panelEl, files = [], leadId = 0) {
           data-lead-id="${Number(leadId) || 0}"
           data-file-id="${Number(file.id) || 0}"
         >
-          Abrir
+          ${escapeHtml(t('action.open'))}
         </button>
       </article>
     `;
@@ -5733,7 +5739,7 @@ async function openLeadDocFileFromPanel(leadId, fileId, buttonEl = null) {
   const files = leadDocsFilesByLeadId.get(numericLeadId) || [];
   const file = files.find((entry) => Number(entry.id) === numericFileId);
   if (!file) {
-    showToast('Archivo no encontrado.', 'error');
+    showToast(t('toast.fileNotFound'), 'error');
     return;
   }
 
@@ -5753,7 +5759,7 @@ async function openLeadDocFileFromPanel(leadId, fileId, buttonEl = null) {
     const blob = dataUrlToBlob(dataUrl);
     openBlobInNewTab(blob, file.name);
   } catch (error) {
-    showToast(error.message || 'No se pudo abrir el archivo.', 'error');
+    showToast(error.message || t('toast.fileOpenError'), 'error');
   } finally {
     if (buttonEl) buttonEl.disabled = false;
   }
@@ -6144,18 +6150,18 @@ function renderLeadsRows(leads) {
       const leadId = btn.dataset.id;
       const leadName = btn.dataset.name;
 
-      if (confirm(`¿Estás seguro de eliminar el lead "${leadName}"?\n\nEsta acción no se puede deshacer.`)) {
+      if (confirm(`${t('confirm.deleteLead')} "${leadName}"?\n\n${t('confirm.cantUndo')}`)) {
         try {
           const response = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
           if (response.ok) {
             await loadLeads(true);
-            showToast('Lead eliminado correctamente', 'success');
+            showToast(t('toast.leadDeleted'), 'success');
           } else {
-            showToast('Error al eliminar el lead', 'error');
+            showToast(t('toast.leadDeleteError'), 'error');
           }
         } catch (error) {
           console.error('Error:', error);
-          showToast('Error al eliminar el lead', 'error');
+          showToast(t('toast.leadDeleteError'), 'error');
         }
       }
     });
@@ -6176,7 +6182,7 @@ function renderLeadsRows(leads) {
         textToCopy = '';
       }
       if (!textToCopy) {
-        showToast(`No hay ${label} para copiar`, 'info');
+        showToast(`${t('toast.nothingToCopy')} ${label}`, 'info');
         return;
       }
 
@@ -6184,10 +6190,10 @@ function renderLeadsRows(leads) {
         await navigator.clipboard.writeText(textToCopy);
         btn.classList.add('copied');
         setTimeout(() => btn.classList.remove('copied'), 900);
-        showToast(`${label} copiado: ${textToCopy}`, 'success');
+        showToast(`${label} ${t('toast.copied')} ${textToCopy}`, 'success');
       } catch (error) {
         console.error('Error al copiar desde leads:', error);
-        showToast('Error al copiar', 'error');
+        showToast(t('toast.copyError'), 'error');
       }
     });
   });
@@ -6272,7 +6278,7 @@ function formatDate(dateString) {
   }
   if (!dateString) return '-';
   const date = new Date(dateString);
-  return date.toLocaleDateString('es-ES');
+  return date.toLocaleDateString(getCurrentLangLocale());
 }
 
 function getStatusBadge(status, isTest) {
@@ -6350,16 +6356,16 @@ if (loginForm) {
     };
 
     if (!payload.identifier) {
-      loginStatus.textContent = 'Ingresa usuario o correo.';
+      loginStatus.textContent = t('login.enterUser');
       return;
     }
     if (payload.pin.length !== LOGIN_PIN_LENGTH) {
-      loginStatus.textContent = 'El PIN debe tener 6 digitos.';
+      loginStatus.textContent = t('login.pinLength');
       focusLoginPinInput();
       return;
     }
 
-    loginStatus.textContent = 'Validando acceso...';
+    loginStatus.textContent = t('login.validating');
 
     try {
       const data = await requestJson('/api/auth/login', {
@@ -6369,7 +6375,7 @@ if (loginForm) {
       });
 
       if (!data?.token) {
-        throw new Error('No se recibio token de sesion. Contacta al administrador.');
+        throw new Error(t('login.noToken'));
       }
       saveAuthToken(data.token);
       saveSession(data.user);
@@ -6881,11 +6887,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const from = dateFromEl?.value || '...';
       const to = dateToEl?.value || '...';
       const dateLabel = activeDatePreset || `${from} → ${to}`;
-      chips.push({ label: 'Fecha', value: dateLabel, clear: () => {
+      chips.push({ label: t('filter.date'), value: dateLabel, clear: () => {
         if (dateFromEl) dateFromEl.value = '';
         if (dateToEl) dateToEl.value = '';
         activeDatePreset = '';
-        if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Fecha';
+        if (dateTrigger) dateTrigger.querySelector('span').textContent = t('filter.date');
         dateDropdown?.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
       }});
     }
@@ -6932,10 +6938,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateToEl = document.getElementById('leadsFilterDateTo');
         let fromDate = new Date();
         const toISO = now.toISOString().split('T')[0];
-        if (preset === 'today') { fromDate = now; activeDatePreset = 'Hoy'; }
-        else if (preset === '7d') { fromDate.setDate(now.getDate() - 7); activeDatePreset = 'Ultimos 7 dias'; }
-        else if (preset === '30d') { fromDate.setDate(now.getDate() - 30); activeDatePreset = 'Ultimos 30 dias'; }
-        else if (preset === '90d') { fromDate.setDate(now.getDate() - 90); activeDatePreset = 'Ultimos 90 dias'; }
+        if (preset === 'today') { fromDate = now; activeDatePreset = t('filter.today'); }
+        else if (preset === '7d') { fromDate.setDate(now.getDate() - 7); activeDatePreset = t('filter.last7'); }
+        else if (preset === '30d') { fromDate.setDate(now.getDate() - 30); activeDatePreset = t('filter.last30'); }
+        else if (preset === '90d') { fromDate.setDate(now.getDate() - 90); activeDatePreset = t('filter.last90'); }
         if (dateFromEl) dateFromEl.value = fromDate.toISOString().split('T')[0];
         if (dateToEl) dateToEl.value = toISO;
         dateDropdown.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
@@ -6950,7 +6956,7 @@ document.addEventListener('DOMContentLoaded', () => {
       customApply.addEventListener('click', () => {
         activeDatePreset = '';
         dateDropdown.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
-        if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Rango custom';
+        if (dateTrigger) dateTrigger.querySelector('span').textContent = t('filter.customRange');
         dateDropdown.classList.add('hidden');
         applyLeadsFilters();
       });
@@ -6969,7 +6975,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dateFromEl) dateFromEl.value = '';
       if (dateToEl) dateToEl.value = '';
       activeDatePreset = '';
-      if (dateTrigger) dateTrigger.querySelector('span').textContent = 'Fecha';
+      if (dateTrigger) dateTrigger.querySelector('span').textContent = t('filter.date');
       dateDropdown?.querySelectorAll('.lf-date-preset').forEach(b => b.classList.remove('lf-preset-active'));
       applyLeadsFilters();
     });
@@ -7155,6 +7161,34 @@ document.addEventListener('DOMContentLoaded', () => {
       if (emailsSpecificSearch) emailsSpecificSearch.value = '';
       applyEmailsFilters();
     });
+  }
+});
+
+// ─── i18n: re-render dynamic UI on language change ───
+window.addEventListener('langchange', () => {
+  if (typeof window.i18n?.applyToDOM === 'function') window.i18n.applyToDOM();
+
+  // Schedule modal title
+  if (typeof scheduleTaskDraftType !== 'undefined' && document.getElementById('scheduleTaskModalTitle')) {
+    document.getElementById('scheduleTaskModalTitle').textContent =
+      scheduleTaskDraftType === 'callback' ? t('misc.newCallback') : t('misc.newTask');
+  }
+
+  // Notif empty state
+  if (notifList) {
+    const emptyP = notifList.querySelector('.notif-empty');
+    if (emptyP) emptyP.textContent = NOTIF_EMPTY_TEXT();
+  }
+
+  renderScheduleNotes();
+  renderScheduleMonth();
+  renderScheduleAgenda();
+  updateEmailsRoleUi();
+  syncEmailSelectionUi();
+  if (!allEmailsCache.length) {
+    renderEmailsEmptyState();
+  } else {
+    renderFilteredEmails();
   }
 });
 

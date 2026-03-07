@@ -455,20 +455,33 @@
       return parsed.toISOString().slice(0, 10);
     }
 
+    function getCurrentLocale() {
+      return window.i18n?.getLang?.() === 'es' ? 'es-ES' : 'en-US';
+    }
+
+    function isCurrentLangSpanish() {
+      return window.i18n?.getLang?.() === 'es';
+    }
+
+    function getNotesCountLabel(count) {
+      const safeCount = Math.max(0, Number(count) || 0);
+      return isCurrentLangSpanish()
+        ? `${safeCount} nota${safeCount === 1 ? '' : 's'}`
+        : `${safeCount} note${safeCount === 1 ? '' : 's'}`;
+    }
+
     function formatDateEs(dateValue) {
-      if (crmHelpers.formatDateEs) return crmHelpers.formatDateEs(dateValue);
       if (!dateValue) return '-';
       const parsed = new Date(dateValue);
       if (Number.isNaN(parsed.getTime())) return '-';
-      return parsed.toLocaleDateString('es-ES');
+      return parsed.toLocaleDateString(getCurrentLocale());
     }
 
     function formatDateTimeEs(dateValue) {
-      if (crmHelpers.formatDateTimeEs) return crmHelpers.formatDateTimeEs(dateValue);
       if (!dateValue) return '-';
       const parsed = new Date(dateValue);
       if (Number.isNaN(parsed.getTime())) return '-';
-      return parsed.toLocaleString('es-ES');
+      return parsed.toLocaleString(getCurrentLocale());
     }
 
     function normalizeCreditScore(value) {
@@ -1443,7 +1456,7 @@
       if (!assigneeVisibleUsers.length) {
         const emptyState = document.createElement('div');
         emptyState.className = 'lead-assignee-empty';
-        emptyState.textContent = 'Sin coincidencias';
+        emptyState.textContent = t('client.noMatch');
         leadAssigneeSuggestions.appendChild(emptyState);
       } else {
         assigneeVisibleUsers.forEach((username, index) => {
@@ -1497,7 +1510,7 @@
       const selectedAssignee = normalizeAssigneeName(leadAssigneeInput.value);
       const currentAssignee = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
       if (!selectedAssignee) {
-        showToast('Selecciona un usuario valido.', 'error');
+        showToast(t('client.selectValidUser'), 'error');
         return;
       }
       if (selectedAssignee.toLowerCase() === currentAssignee.toLowerCase()) {
@@ -1514,9 +1527,9 @@
         const nextDisplay = normalizeAssigneeName(updatedLead?.assigned_to) || selectedAssignee;
         mergeAssignableUsers([nextDisplay]);
         syncLeadAssigneeControl(updatedLead || currentLeadData);
-        showToast(`Lead asignado a ${nextDisplay}.`, 'success');
+        showToast(`${t('client.leadAssigned')} ${nextDisplay}.`, 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo asignar el lead.', 'error');
+        showToast(error.message || t('client.leadAssignError'), 'error');
         syncLeadAssigneeControl(currentLeadData);
       } finally {
         assigneeSaving = false;
@@ -1739,7 +1752,7 @@
       pullCreditBtn.addEventListener('click', () => {
         const applicantEligibility = getApplicantPullCreditEligibility(currentLeadData);
         if (!applicantEligibility.isEligible) {
-          showToast('Completa Informacion de Contacto, City y ZIP Code antes de Pull Credit.', 'info');
+          showToast(t('client.pullCreditInfo'), 'info');
           updatePullCreditAvailability(currentLeadData);
           return;
         }
@@ -1820,7 +1833,7 @@
         const selfFieldColumn = resolveLeadColumnForParty('self_employed');
         const selfValue = Boolean((currentLeadData || {})[selfFieldColumn]);
         selfToggle.checked = selfValue;
-        if (selfLabel) selfLabel.textContent = selfValue ? 'Si' : 'No';
+        if (selfLabel) selfLabel.textContent = selfValue ? t('client.selfEmployedYes') : t('client.selfEmployedNo');
       }
     }
 
@@ -1861,9 +1874,9 @@
         
         // Actualizar etiqueta y estilos
         if (isApplicant) {
-          applicantTypeLabel.textContent = 'Applicant';
+          applicantTypeLabel.textContent = t('common.applicant');
           applicantTypeLabel.classList.remove('co-applicant');
-          applicantToggleBtn.title = 'Cambiar a Co-Applicant';
+          applicantToggleBtn.title = t('lead.toggleApplicant');
           
           // Ocultar toggle de "Incluir en contrato"
           if (includeToggleWrapper) {
@@ -1871,9 +1884,9 @@
           }
           
         } else {
-          applicantTypeLabel.textContent = 'Co-Applicant';
+          applicantTypeLabel.textContent = t('common.coApplicant');
           applicantTypeLabel.classList.add('co-applicant');
-          applicantToggleBtn.title = 'Cambiar a Applicant';
+          applicantToggleBtn.title = t('lead.toggleCoApplicant');
           
           // Mostrar toggle de "Incluir en contrato"
           if (includeToggleWrapper) {
@@ -1885,7 +1898,7 @@
 
         refreshPartyContactView();
         
-        showToast(`Cambiado a ${isApplicant ? 'Applicant' : 'Co-Applicant'}`, 'info');
+        showToast(`${t('client.switchedTo')} ${isApplicant ? t('common.applicant') : t('common.coApplicant')}`, 'info');
       });
       
       // Event listener para el toggle "Incluir en contrato"
@@ -1905,8 +1918,8 @@
             }));
             showToast(
               persistedValue
-                ? 'Co-Applicant será incluido en el contrato'
-                : 'Co-Applicant no será incluido en el contrato',
+                ? t('client.includeCoappOn')
+                : t('client.includeCoappOff'),
               persistedValue ? 'success' : 'info'
             );
           } catch (error) {
@@ -1915,7 +1928,7 @@
             window.dispatchEvent(new CustomEvent('lead:coapp-include-toggle-changed', {
               detail: { enabled: previousValue }
             }));
-            showToast(error.message || 'No se pudo guardar el cambio en base de datos.', 'error');
+            showToast(error.message || t('client.dbSaveError'), 'error');
           }
         });
       }
@@ -1969,7 +1982,7 @@
       if (newName && newName !== currentOriginal) {
         try {
           if (!currentLeadId) {
-            showToast('Error: No se encontró el ID del lead', 'error');
+            showToast(t('client.leadIdNotFound'), 'error');
             leadNameEl.textContent = currentOriginal;
             return;
           }
@@ -1990,10 +2003,10 @@
           syncLeadDataState(updatedLead);
           refreshPartyContactView();
           
-          showToast(`${isApplicant ? 'Applicant' : 'Co-Applicant'} actualizado correctamente`, 'success');
+          showToast(`${isApplicant ? t('common.applicant') : t('common.coApplicant')} ${t('client.applicantUpdated')}`, 'success');
         } catch (error) {
           console.error('Error:', error);
-          showToast(error.message || 'Error al actualizar el nombre', 'error');
+          showToast(error.message || t('client.nameUpdateError'), 'error');
           leadNameEl.textContent = getCurrentPartyName();
         }
       } else {
@@ -2200,7 +2213,7 @@
 
         const leadId = getActiveLeadIdNumber();
         if (!leadId) {
-          showToast('No hay lead activo para deshacer.', 'error');
+          showToast(t('client.noLeadUndo'), 'error');
           return;
         }
 
@@ -2216,11 +2229,11 @@
             throw new Error(data.message || 'No se pudo deshacer el cambio.');
           }
 
-          showToast('Cambio deshecho correctamente.', 'success');
+          showToast(t('client.undoSuccess'), 'success');
           await loadLead();
           await loadLeadAuditHistory();
         } catch (error) {
-          showToast(error.message || 'No se pudo deshacer el cambio.', 'error');
+          showToast(error.message || t('client.undoError'), 'error');
         } finally {
           leadAuditUndoInFlightId = null;
           renderLeadAuditEntries();
@@ -2296,7 +2309,7 @@
       if (!leadId) {
         leadAuditEntries = [];
         renderLeadAuditEntries();
-        if (leadAuditSummaryEl) leadAuditSummaryEl.textContent = 'Lead no seleccionado.';
+        if (leadAuditSummaryEl) leadAuditSummaryEl.textContent = t('client.leadNotSelected');
         return;
       }
 
@@ -2315,7 +2328,7 @@
       } catch (error) {
         leadAuditEntries = [];
         if (leadAuditSummaryEl) leadAuditSummaryEl.textContent = error.message || 'No se pudo cargar historial.';
-        showToast(error.message || 'No se pudo cargar historial de cambios.', 'error');
+        showToast(error.message || t('client.auditLoadError'), 'error');
       } finally {
         leadAuditLoading = false;
         renderLeadAuditEntries();
@@ -2324,7 +2337,7 @@
 
     async function openLeadAuditHistoryModal() {
       if (!hasLeadAuditAccess()) {
-        showToast('Solo admin/sup puede ver auditoria.', 'error');
+        showToast(t('client.auditPermission'), 'error');
         return;
       }
       const modal = ensureLeadAuditModal();
@@ -3184,7 +3197,7 @@
       calculateAll();
       if (persist) queuePersistCalculatorConfig();
       if (toast) {
-        showToast(`Total Debt actualizado desde Creditors: ${formatCurrency(totalIncludedDebt)}`, 'success');
+        showToast(`${t('client.totalDebtUpdated')} ${formatCurrency(totalIncludedDebt)}`, 'success');
       }
     }
 
@@ -3855,21 +3868,21 @@
       activeLeadNoteMenuId = null;
 
       if (!Array.isArray(leadNotes) || leadNotes.length === 0) {
-        notesList.innerHTML = '<div class="notes-feed-empty">Aun no hay notas en este lead.</div>';
+        notesList.innerHTML = `<div class="notes-feed-empty">${escapeHtml(t('notes.emptyState'))}</div>`;
         return;
       }
 
       notesList.innerHTML = leadNotes.map((note) => `
         <article class="note-card note-color-${escapeHtml(normalizeLeadNoteColorTag(note.color_tag))}" data-note-id="${escapeHtml(String(note.id))}">
           <div class="note-card-meta">
-            <span class="note-card-author">${escapeHtml(note.author_username || 'Sistema')}</span>
+            <span class="note-card-author">${escapeHtml(note.author_username || t('common.system'))}</span>
             <div class="note-card-meta-right">
               <span class="note-card-time">${escapeHtml(formatNoteTimestamp(note.created_at))}</span>
               ${Number.isInteger(Number(note.id)) && !note.is_legacy ? `
                 <button
                   class="note-card-menu-btn"
                   type="button"
-                  title="Acciones de nota"
+                  title="${escapeHtml(t('notes.noteActions'))}"
                   aria-expanded="false"
                   data-note-id="${escapeHtml(String(note.id))}">
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -3894,9 +3907,9 @@
       renderLeadNotesList();
       setNotesComposerVisible(false, { preserveText: false });
       if (leadId) {
-        setNotesStatus('Sin notas', 'neutral');
+        setNotesStatus(t('notes.noneStatus'), 'neutral');
       } else {
-        setNotesStatus('Selecciona un lead', 'warning');
+        setNotesStatus(t('notes.selectLeadStatus'), 'warning');
       }
     }
 
@@ -3917,7 +3930,7 @@
 
     async function requestLeadNotes(pathname = '', options = {}) {
       if (!currentLeadId) {
-        throw new Error('No se encontro el ID del lead.');
+        throw new Error(t('client.noteLeadError'));
       }
 
       const headers = new Headers(options.headers || {});
@@ -3932,7 +3945,7 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'No se pudo completar la accion de notas.');
+        throw new Error(data.message || t('client.notesActionError'));
       }
       return data;
     }
@@ -3950,7 +3963,7 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'No se pudo completar la accion de templates.');
+        throw new Error(data.message || t('client.templatesActionError'));
       }
       return data;
     }
@@ -3963,7 +3976,7 @@
 
     function sortNoteTemplates(templates) {
       return [...(templates || [])].sort((a, b) => {
-        const byName = String(a?.name || '').localeCompare(String(b?.name || ''), 'es', { sensitivity: 'base' });
+        const byName = String(a?.name || '').localeCompare(String(b?.name || ''), getCurrentLocale(), { sensitivity: 'base' });
         if (byName !== 0) return byName;
         return Number(b?.id || 0) - Number(a?.id || 0);
       });
@@ -4028,7 +4041,7 @@
       const sortedTemplates = sortNoteTemplates(noteTemplates);
 
       if (notesTemplateSelect) {
-        notesTemplateSelect.innerHTML = '<option value="">Seleccionar template...</option>';
+        notesTemplateSelect.innerHTML = `<option value="">${escapeHtml(t('notes.selectTemplate'))}</option>`;
         sortedTemplates.forEach((template) => {
           const option = document.createElement('option');
           option.value = String(template.id);
@@ -4103,14 +4116,14 @@
         return leadNotesLoadingPromise;
       }
 
-      setNotesStatus('Cargando notas...', 'neutral');
+      setNotesStatus(t('notes.loading'), 'neutral');
       leadNotesLoadingPromise = (async () => {
         const data = await requestLeadNotes('');
         const notes = Array.isArray(data.notes) ? data.notes : [];
         leadNotes = notes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         notesLoadedForLeadId = String(currentLeadId);
         renderLeadNotesList();
-        setNotesStatus(`${leadNotes.length} nota${leadNotes.length === 1 ? '' : 's'}`, 'neutral');
+        setNotesStatus(getNotesCountLabel(leadNotes.length), 'neutral');
         return leadNotes;
       })();
 
@@ -4124,19 +4137,19 @@
     async function addLeadNote() {
       if (!notesComposer) return;
       if (!currentLeadId) {
-        showToast('No se encontro el lead activo para guardar notas.', 'error');
+        showToast(t('client.noteLeadError'), 'error');
         return;
       }
 
       if (!notesComposerVisible) {
         setNotesComposerVisible(true, { focus: true });
-        setNotesStatus('Escribe la nota y vuelve a presionar Agregar nota.', 'warning');
+        setNotesStatus(t('notes.readyToAdd'), 'warning');
         return;
       }
 
       const content = trimNoteText(notesComposer.value).trim();
       if (!content) {
-        setNotesStatus('Escribe una nota antes de agregar.', 'warning');
+        setNotesStatus(t('notes.writeBeforeAdd'), 'warning');
         return;
       }
       if (notesAdding) return;
@@ -4144,7 +4157,7 @@
       notesAdding = true;
       if (notesAddBtn) notesAddBtn.disabled = true;
       notesComposer.disabled = true;
-      setNotesStatus('Agregando nota...', 'neutral');
+      setNotesStatus(t('notes.adding'), 'neutral');
 
       try {
         const data = await requestLeadNotes('', {
@@ -4159,11 +4172,11 @@
         }
         notesComposer.value = '';
         setNotesComposerVisible(false, { preserveText: false });
-        setNotesStatus(`${leadNotes.length} nota${leadNotes.length === 1 ? '' : 's'}`, 'success');
-        showToast('Nota agregada correctamente.', 'success');
+        setNotesStatus(getNotesCountLabel(leadNotes.length), 'success');
+        showToast(t('client.noteAdded'), 'success');
       } catch (error) {
-        setNotesStatus(error.message || 'No se pudo agregar la nota.', 'error');
-        showToast(error.message || 'No se pudo agregar la nota.', 'error');
+        setNotesStatus(error.message || t('client.noteAddError'), 'error');
+        showToast(error.message || t('client.noteAddError'), 'error');
       } finally {
         notesAdding = false;
         if (notesAddBtn) notesAddBtn.disabled = false;
@@ -4177,16 +4190,16 @@
 
       const targetNote = findLeadNoteById(noteId);
       if (!targetNote || targetNote.is_legacy) {
-        showToast('No se pudo editar la nota seleccionada.', 'error');
+        showToast(t('client.noteEditError'), 'error');
         return;
       }
 
-      const proposedContent = window.prompt('Editar nota:', String(targetNote.content || ''));
+      const proposedContent = window.prompt(t('prompt.editNote'), String(targetNote.content || ''));
       if (proposedContent === null) return;
 
       const content = trimNoteText(proposedContent).trim();
       if (!content) {
-        showToast('La nota no puede quedar vacia.', 'error');
+        showToast(t('client.noteEmpty'), 'error');
         return;
       }
 
@@ -4201,11 +4214,11 @@
             Number(note.id) === noteId ? { ...note, ...updatedNote } : note
           ));
           renderLeadNotesList();
-          setNotesStatus(`${leadNotes.length} nota${leadNotes.length === 1 ? '' : 's'}`, 'success');
+          setNotesStatus(getNotesCountLabel(leadNotes.length), 'success');
         }
-        showToast('Nota actualizada correctamente.', 'success');
+        showToast(t('client.noteUpdated'), 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo actualizar la nota.', 'error');
+        showToast(error.message || t('client.noteUpdateError'), 'error');
       }
     }
 
@@ -4215,21 +4228,21 @@
 
       const targetNote = findLeadNoteById(noteId);
       if (!targetNote || targetNote.is_legacy) {
-        showToast('No se pudo eliminar la nota seleccionada.', 'error');
+        showToast(t('client.noteDeleteSelectError'), 'error');
         return;
       }
 
-      const confirmed = window.confirm('Eliminar esta nota?');
+      const confirmed = window.confirm(t('confirm.deleteNote'));
       if (!confirmed) return;
 
       try {
         await requestLeadNotes(`/${noteId}`, { method: 'DELETE' });
         leadNotes = leadNotes.filter((note) => Number(note.id) !== noteId);
         renderLeadNotesList();
-        setNotesStatus(`${leadNotes.length} nota${leadNotes.length === 1 ? '' : 's'}`, 'success');
-        showToast('Nota eliminada correctamente.', 'success');
+        setNotesStatus(getNotesCountLabel(leadNotes.length), 'success');
+        showToast(t('client.noteDeleted'), 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo eliminar la nota.', 'error');
+        showToast(error.message || t('client.noteDeleteError'), 'error');
       }
     }
 
@@ -4240,7 +4253,7 @@
 
       const targetNote = findLeadNoteById(noteId);
       if (!targetNote || targetNote.is_legacy) {
-        showToast('No se pudo actualizar el color de la nota.', 'error');
+        showToast(t('client.noteColorError'), 'error');
         return;
       }
 
@@ -4261,20 +4274,20 @@
           ));
           renderLeadNotesList();
         }
-        showToast('Color de nota actualizado.', 'success');
+        showToast(t('client.noteColorUpdated'), 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo actualizar el color de la nota.', 'error');
+        showToast(error.message || t('client.noteColorUpdateError'), 'error');
       }
     }
 
-    async function createNoteTemplateFromManager(successMessage = 'Template creado correctamente.') {
+    async function createNoteTemplateFromManager(successMessage = t('client.templateCreated')) {
       const { name, content } = getNoteTemplateDraftFromManager();
       if (!name) {
-        showToast('Debes escribir un nombre para el template.', 'error');
+        showToast(t('client.templateNameRequired'), 'error');
         return null;
       }
       if (!content) {
-        showToast('Debes escribir contenido para el template.', 'error');
+        showToast(t('client.templateContentRequired'), 'error');
         return null;
       }
 
@@ -4291,10 +4304,10 @@
           showToast(successMessage, 'success');
           return createdTemplate;
         }
-        showToast('No se pudo crear el template.', 'error');
+        showToast(t('client.templateCreateError'), 'error');
         return null;
       } catch (error) {
-        showToast(error.message || 'No se pudo crear el template.', 'error');
+        showToast(error.message || t('client.templateCreateError'), 'error');
         return null;
       }
     }
@@ -4302,17 +4315,17 @@
     async function saveTemplateFromManager() {
       const selectedTemplate = findNoteTemplateById(selectedNoteTemplateId);
       if (!selectedTemplate) {
-        await createNoteTemplateFromManager('Template creado correctamente.');
+        await createNoteTemplateFromManager(t('client.templateCreated'));
         return;
       }
 
       const { name, content } = getNoteTemplateDraftFromManager();
       if (!name) {
-        showToast('Debes escribir un nombre para el template.', 'error');
+        showToast(t('client.templateNameRequired'), 'error');
         return;
       }
       if (!content) {
-        showToast('Debes escribir contenido para el template.', 'error');
+        showToast(t('client.templateContentRequired'), 'error');
         return;
       }
 
@@ -4329,24 +4342,28 @@
           selectedNoteTemplateId = Number(updatedTemplate.id);
         }
         renderNoteTemplateSelect();
-        showToast('Template actualizado.', 'success');
+        showToast(t('client.templateUpdated'), 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo actualizar el template.', 'error');
+        showToast(error.message || t('client.templateUpdateError'), 'error');
       }
     }
 
     async function saveTemplateAsNewFromManager() {
-      await createNoteTemplateFromManager('Template guardado como nuevo.');
+      await createNoteTemplateFromManager(t('client.templateSavedAsNew'));
     }
 
     async function deleteSelectedTemplateFromManager() {
       const selectedTemplate = findNoteTemplateById(selectedNoteTemplateId);
       if (!selectedTemplate) {
-        showToast('Selecciona un template para eliminar.', 'info');
+        showToast(t('client.templateSelectDelete'), 'info');
         return;
       }
 
-      const confirmed = window.confirm(`Eliminar template "${selectedTemplate.name}"?`);
+      const confirmed = window.confirm(
+        isCurrentLangSpanish()
+          ? `Eliminar template "${selectedTemplate.name}"?`
+          : `Delete template "${selectedTemplate.name}"?`
+      );
       if (!confirmed) return;
 
       try {
@@ -4354,24 +4371,24 @@
         noteTemplates = noteTemplates.filter((item) => Number(item.id) !== Number(selectedTemplate.id));
         selectedNoteTemplateId = null;
         renderNoteTemplateSelect();
-        showToast('Template eliminado.', 'success');
+        showToast(t('client.templateDeleted'), 'success');
       } catch (error) {
-        showToast(error.message || 'No se pudo eliminar el template.', 'error');
+        showToast(error.message || t('client.templateDeleteError'), 'error');
       }
     }
 
     function applySelectedTemplateToNotes() {
       const selectedTemplate = findNoteTemplateById(selectedNoteTemplateId);
       if (!selectedTemplate) {
-        showToast('Selecciona un template para aplicar.', 'info');
+        showToast(t('client.templateSelectApply'), 'info');
         return;
       }
       if (!notesComposer) return;
 
       setNotesComposerVisible(true, { focus: true });
       notesComposer.value = trimNoteText(selectedTemplate.content || '');
-      setNotesStatus('Template aplicado. Presiona Agregar nota para guardar.', 'warning');
-      showToast('Template aplicado a la nota.', 'success');
+      setNotesStatus(t('notes.templateAppliedStatus'), 'warning');
+      showToast(t('client.templateApplied'), 'success');
     }
 
     function setNotesTemplatesModalOpen(nextOpen) {
@@ -4416,7 +4433,7 @@
               loadLeadNotes()
             ]);
           } catch (error) {
-            showToast(error.message || 'No se pudo cargar el panel de notas.', 'error');
+            showToast(error.message || t('client.notesLoadError'), 'error');
           }
         }
       });
@@ -4494,7 +4511,7 @@
             await loadNoteTemplates();
             setNotesTemplatesModalOpen(true);
           } catch (error) {
-            showToast(error.message || 'No se pudo abrir el editor de templates.', 'error');
+            showToast(error.message || t('client.templatesLoadError'), 'error');
           }
         })();
       });
@@ -4649,10 +4666,10 @@
           const updatedLead = await patchLead({ bestTime: nextValue });
           syncLeadDataState(updatedLead);
           bestTimeSelect.value = normalizeBestTimeValue(updatedLead?.best_time);
-          showToast('Best time to call actualizado', 'success');
+          showToast(t('client.bestTimeUpdated'), 'success');
         } catch (error) {
           bestTimeSelect.value = previousValue;
-          showToast(error.message || 'No se pudo actualizar Best time to call.', 'error');
+          showToast(error.message || t('client.bestTimeError'), 'error');
         } finally {
           setElementSavingState(bestTimeSelect, false);
         }
@@ -4793,7 +4810,7 @@
       if (!filteredOptions.length) {
         const emptyEl = document.createElement('div');
         emptyEl.className = 'lead-status-badge-option-empty';
-        emptyEl.textContent = 'Sin coincidencias.';
+        emptyEl.textContent = t('client.noMatch');
         leadStatusBadgeOptionsList.appendChild(emptyEl);
         return;
       }
@@ -4898,10 +4915,10 @@
           const updatedLead = await patchLead({ status: nextStatus });
           const persistedStatus = normalizeLeadStatus(updatedLead?.status) || nextStatus;
           renderLeadStatusBadgeOptions(persistedStatus);
-          showToast(`Status actualizado a ${persistedStatus}.`, 'success');
+          showToast(`${t('client.statusUpdated')} ${persistedStatus}.`, 'success');
         } catch (error) {
           renderLeadStatusBadgeOptions(previousStatus);
-          showToast(error.message || 'No se pudo actualizar el status.', 'error');
+          showToast(error.message || t('client.statusError'), 'error');
         } finally {
           leadStatusSaving = false;
           leadStatusBadgeSelect.disabled = false;
@@ -4935,7 +4952,7 @@
       if (!Number.isInteger(relatedLeadId) || relatedLeadId <= 0) {
         relatedBadge.classList.add('hidden');
         relatedBadge.href = '#';
-        relatedBadgeText.textContent = 'Relacionado con #';
+        relatedBadgeText.textContent = t('client.relatedWith');
         return;
       }
 
@@ -4957,7 +4974,7 @@
         if (!relatedLead) {
           relatedBadge.classList.add('hidden');
           relatedBadge.href = '#';
-          relatedBadgeText.textContent = 'Relacionado con #';
+          relatedBadgeText.textContent = t('client.relatedWith');
           return;
         }
         const relatedCase = relatedLead?.case_id ? `#${relatedLead.case_id}` : `#${relatedLeadId}`;
@@ -4969,7 +4986,7 @@
         if (requestVersion !== relatedBadgeRequestVersion) return;
         relatedBadge.classList.add('hidden');
         relatedBadge.href = '#';
-        relatedBadgeText.textContent = 'Relacionado con #';
+        relatedBadgeText.textContent = t('client.relatedWith');
       }
     }
     
@@ -5395,12 +5412,12 @@
         const parsedSavedDate = toCalendarDate(initialCallbackDate);
         if (parsedSavedDate) {
           currentCalendarDate = new Date(parsedSavedDate.getFullYear(), parsedSavedDate.getMonth(), 1);
-          dateDisplay.textContent = parsedSavedDate.toLocaleDateString('es-ES');
+            dateDisplay.textContent = parsedSavedDate.toLocaleDateString(getCurrentLocale());
         }
         if (macBtn) macBtn.classList.remove('hidden');
       } else {
         selectedCallbackDate = null;
-        dateDisplay.textContent = 'Seleccionar fecha';
+        dateDisplay.textContent = t('client.selectDate');
       }
 
       callbackCalendarController = createUnifiedCalendarController({
@@ -5440,16 +5457,16 @@
             selectedCallbackDate = persistedDate;
 
             const parsedDate = toCalendarDate(persistedDate);
-            dateDisplay.textContent = parsedDate ? parsedDate.toLocaleDateString('es-ES') : 'Seleccionar fecha';
+            dateDisplay.textContent = parsedDate ? parsedDate.toLocaleDateString(getCurrentLocale()) : t('client.selectDate');
 
             const mb = document.getElementById('callbackMacBtn');
             if (mb) mb.classList.remove('hidden');
 
-            showToast(`Callback programado para: ${dateDisplay.textContent}`, 'success');
+            showToast(`${t('client.callbackScheduled')} ${dateDisplay.textContent}`, 'success');
             void _refreshClientNotifications();
             return true;
           } catch (error) {
-            showToast(error.message || 'No se pudo guardar callback.', 'error');
+            showToast(error.message || t('client.callbackSaveError'), 'error');
             return false;
           }
         }
@@ -5461,14 +5478,14 @@
             await patchLead({ callbackDate: null });
             selectedCallbackDate = null;
             macBtn.classList.add('hidden');
-            dateDisplay.textContent = 'Seleccionar fecha';
-            showToast('Callback eliminado', 'info');
+            dateDisplay.textContent = t('client.selectDate');
+            showToast(t('client.callbackDeleted'), 'info');
             void _refreshClientNotifications();
             if (callbackCalendarController) {
               callbackCalendarController.render();
             }
           } catch (error) {
-            showToast(error.message || 'No se pudo eliminar callback.', 'error');
+            showToast(error.message || t('client.callbackDeleteError'), 'error');
           }
         });
       }
@@ -5494,15 +5511,15 @@
           copyIcon.setAttribute('stroke-width', '2');
           copyIcon.classList.add('copy-icon');
           copyIcon.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
-          copyIcon.title = 'Copiar';
+          copyIcon.title = t('action.copy');
           
           copyIcon.addEventListener('click', (e) => {
             e.stopPropagation();
             const textToCopy = field.textContent.trim();
             navigator.clipboard.writeText(textToCopy).then(() => {
-              showToast('Copiado al portapapeles', 'success');
+              showToast(t('client.copiedClipboard'), 'success');
             }).catch(() => {
-              showToast('Error al copiar', 'error');
+              showToast(t('toast.copyError'), 'error');
             });
           });
           
@@ -5651,9 +5668,9 @@
           }
 
           if (safeFieldName === 'zip_code' && zipLocation) {
-            showToast(`ZIP actualizado: ${zipLocation.city}, ${zipLocation.stateCode}`, 'success');
+            showToast(`${t('client.zipUpdated')} ${zipLocation.city}, ${zipLocation.stateCode}`, 'success');
           } else {
-            showToast('Campo actualizado', 'success');
+            showToast(t('client.fieldUpdated'), 'success');
           }
           if (safeFieldName === 'zip_code' && zipLookupWarning) {
             showToast(zipLookupWarning, 'info');
@@ -5661,7 +5678,7 @@
         } catch (error) {
           console.error('Error al guardar campo editable:', error);
           restoreField(currentDisplayValue || EMPTY_FIELD_LABEL);
-          showToast(error.message || 'No se pudo guardar el campo.', 'error');
+          showToast(error.message || t('client.fieldSaveError'), 'error');
         } finally {
           setElementSavingState(field, false);
         }
@@ -5743,11 +5760,11 @@
             selectedDOB = isApplicant ? applicantData.dob : coApplicantData.dob;
             if (!selectedDOB) selectedDOB = isoDate;
             document.getElementById('dobValue').textContent = formatDateEs(selectedDOB);
-            showToast('Fecha de nacimiento actualizada', 'success');
+            showToast(t('client.dobUpdated'), 'success');
             return true;
           } catch (error) {
             selectedDOB = previousDOB;
-            showToast(error.message || 'No se pudo guardar la fecha de nacimiento.', 'error');
+            showToast(error.message || t('client.dobSaveError'), 'error');
             return false;
           } finally {
             setElementSavingState(dayEl, false);
@@ -5993,7 +6010,7 @@
         }
       } catch (error) {
         console.error('Error al guardar configuracion de calculadora:', error);
-        showToast('No se pudo sincronizar la calculadora.', 'error');
+        showToast(t('client.calcSyncError'), 'error');
       }
     }
 
@@ -6102,7 +6119,7 @@
           const formattedValue = '$' + formatMoneyInput(parseCurrency(value));
           navigator.clipboard.writeText(formattedValue).then(() => {
             copyTotalDebt.classList.add('copied');
-            showToast('Total Debt copiado: ' + formattedValue, 'success');
+            showToast(`${t('client.totalDebtCopied')} ${formattedValue}`, 'success');
             setTimeout(() => copyTotalDebt.classList.remove('copied'), 1000);
           });
         });
@@ -6119,7 +6136,7 @@
           const textToCopy = payments + ' ' + freqTag + ' ' + amount;
           navigator.clipboard.writeText(textToCopy).then(() => {
             copyMonthlyPayment.classList.add('copied');
-            showToast('Copiado: ' + textToCopy, 'success');
+            showToast(`${t('toast.copied')} ${textToCopy}`, 'success');
             setTimeout(() => copyMonthlyPayment.classList.remove('copied'), 1000);
           });
         });
@@ -6152,19 +6169,19 @@
             btn.classList.add('unlocked');
             lockedIcon.classList.add('hidden');
             unlockedIcon.classList.remove('hidden');
-            btn.title = 'Click para bloquear';
+            btn.title = t('client.clickToLock');
             input.focus();
             input.select();
-            showToast('Campo desbloqueado', 'info');
+            showToast(t('client.fieldUnlocked'), 'info');
           } else {
             // Bloquear
             input.readOnly = true;
             btn.classList.remove('unlocked');
             lockedIcon.classList.remove('hidden');
             unlockedIcon.classList.add('hidden');
-            btn.title = 'Click para desbloquear';
+            btn.title = t('client.clickToUnlock');
             calculateAll();
-            showToast('Campo bloqueado', 'success');
+            showToast(t('client.fieldLocked'), 'success');
           }
         });
         
@@ -6465,8 +6482,8 @@
 
     function formatCalcPaymentDayDisplay(isoDate) {
       const parsed = parseISODate(isoDate);
-      if (!parsed) return 'Seleccionar fecha';
-      return parsed.toLocaleDateString('es-ES');
+      if (!parsed) return t('client.selectDate');
+      return parsed.toLocaleDateString(getCurrentLocale());
     }
 
     function getCalcFirstDepositStorageKey() {
@@ -6503,7 +6520,7 @@
         }
       } catch (error) {
         console.error('Error al guardar firstDepositDate en backend:', error);
-        showToast('No se pudo sincronizar la fecha en el servidor', 'info');
+        showToast(t('client.dateSyncError'), 'info');
       }
     }
 
@@ -6560,7 +6577,7 @@
         selectedCalcPaymentDay = null;
         calcPaymentDayCalendarDate = new Date();
         hiddenInput.value = '';
-        displayEl.textContent = 'Seleccionar fecha';
+        displayEl.textContent = t('client.selectDate');
       }
 
       // Fechas límite: hoy y 30 días después
@@ -6615,7 +6632,7 @@
           }
           
           calculateAll();
-          showToast(`Primer deposito: ${formatCalcPaymentDayDisplay(isoDate)}`, 'success');
+          showToast(`${t('client.firstDeposit')} ${formatCalcPaymentDayDisplay(isoDate)}`, 'success');
           return true;
         }
       });
@@ -6861,17 +6878,17 @@
         try {
           syncing = true;
           toggle.disabled = true;
-          label.textContent = toggle.checked ? 'Si' : 'No';
+          label.textContent = toggle.checked ? t('client.selfEmployedYes') : t('client.selfEmployedNo');
           const payloadKey = resolvePayloadKeyForParty('self_employed');
           const updatedLead = await patchLead({ [payloadKey]: toggle.checked });
           if (updatedLead) {
             syncLeadDataState(updatedLead);
           }
-          showToast(`Self Employed: ${toggle.checked ? 'Si' : 'No'}`, 'success');
+          showToast(`${t('client.selfEmployed')} ${toggle.checked ? t('client.selfEmployedYes') : t('client.selfEmployedNo')}`, 'success');
         } catch (error) {
           toggle.checked = previousValue;
-          label.textContent = previousValue ? 'Si' : 'No';
-          showToast(error.message || 'No se pudo actualizar Self Employed.', 'error');
+          label.textContent = previousValue ? t('client.selfEmployedYes') : t('client.selfEmployedNo');
+          showToast(error.message || t('client.selfEmployedError'), 'error');
         } finally {
           toggle.disabled = false;
           syncing = false;
@@ -7003,7 +7020,9 @@
     let _clientNotifListEventsBound = false;
     let _clientNotifOpen = false;
     let _clientNotifUnreadCount = 0;
-    const CLIENT_NOTIF_EMPTY_TEXT = 'ni un grillo por estas lineas zzzz';
+    function CLIENT_NOTIF_EMPTY_TEXT() {
+      return t('empty.notifs');
+    }
 
     function _syncClientNotifRefs() {
       if (!clientNotifPanel) clientNotifPanel = document.getElementById('clientNotifPanel');
@@ -7013,7 +7032,7 @@
 
     function _renderClientNotifEmptyState() {
       if (!clientNotifList) return;
-      clientNotifList.innerHTML = `<p class="notif-empty">${CLIENT_NOTIF_EMPTY_TEXT}</p>`;
+      clientNotifList.innerHTML = `<p class="notif-empty">${escapeHtml(CLIENT_NOTIF_EMPTY_TEXT())}</p>`;
     }
 
     function isClientToolbarExpanded() {
@@ -7267,7 +7286,7 @@
           persistCalcFirstDepositDate(normalizedFirstDepositDate, { saveToBackend: false });
         } else {
           if (firstDepositInput) firstDepositInput.value = '';
-          if (firstDepositDisplay) firstDepositDisplay.textContent = 'Seleccionar fecha';
+          if (firstDepositDisplay) firstDepositDisplay.textContent = t('client.selectDate');
           persistCalcFirstDepositDate(null, { saveToBackend: false });
         }
         
@@ -7316,7 +7335,7 @@
           try {
             await loadLeadNotes({ force: true });
           } catch (error) {
-            showToast(error.message || 'No se pudieron cargar las notas.', 'error');
+            showToast(error.message || t('client.notesLoadError'), 'error');
           }
         }
         
@@ -7873,7 +7892,7 @@
       async function uploadFileToServer(leadId, payload) {
         const normalizedLeadId = Number(leadId || 0);
         if (!normalizedLeadId) {
-          throw new Error('No hay lead seleccionado.');
+        throw new Error(t('client.noLeadSelected'));
         }
 
         const response = await fetch(`/api/leads/${normalizedLeadId}/files`, {
@@ -7921,7 +7940,7 @@
         const response = await fetch(`/api/leads/${normalizedLeadId}/files/${normalizedFileId}/content`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(data.message || 'No se pudo leer el archivo desde base de datos.');
+            throw new Error(data.message || t('client.fileReadDbError'));
         }
 
         return String(data.dataUrl || '');
@@ -8011,7 +8030,7 @@
           return await syncFilesMetadataFromServer(normalizedLeadId);
         } catch (error) {
           if (!silent) {
-            showToast(error.message || 'No se pudieron sincronizar los archivos.', 'error');
+            showToast(error.message || t('client.fileSyncError'), 'error');
           }
           throw error;
         }
@@ -8107,7 +8126,7 @@
         event.preventDefault();
         const documentCategory = String(fileDocType?.value || '').trim();
         if (!documentCategory) {
-          showToast('Debes seleccionar el tipo de archivo.', 'error');
+          showToast(t('client.selectFileType'), 'error');
           return;
         }
 
@@ -8115,7 +8134,7 @@
         if (documentCategory === 'credit_report') {
           creditReportParty = String(fileCreditParty?.value || '').trim();
           if (!creditReportParty) {
-            showToast('Selecciona si la deuda es de Applicant o Co-Applicant.', 'error');
+            showToast(t('client.selectApplicantType'), 'error');
             return;
           }
         }
@@ -8223,26 +8242,26 @@
       function getDocumentCategoryLabel(category) {
         switch (String(category || '').toLowerCase()) {
           case 'official_document':
-            return 'Documento oficial';
+            return t('files.categoryOfficialDocument');
           case 'credit_report':
-            return 'Reporte de crédito';
+            return t('files.categoryCreditReport');
           case 'income_proof':
-            return 'Prueba de ingresos';
+            return t('files.categoryIncomeProof');
           case 'bank_statement':
-            return 'Estado bancario';
+            return t('files.categoryBankStatement');
           case 'contract':
-            return 'Contrato';
+            return t('files.categoryContract');
           case 'other':
-            return 'Otro';
+            return t('files.categoryOther');
           default:
-            return 'Sin clasificar';
+            return t('files.categoryUnclassified');
         }
       }
 
       function getCreditPartyLabel(value) {
         const normalized = String(value || '').toLowerCase();
-        if (normalized === 'coapp') return 'Co-Applicant';
-        if (normalized === 'applicant') return 'Applicant';
+        if (normalized === 'coapp') return t('common.coApplicant');
+        if (normalized === 'applicant') return t('common.applicant');
         return '';
       }
 
@@ -8262,7 +8281,7 @@
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (event) => resolve(event.target?.result || '');
-          reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+          reader.onerror = () => reject(new Error(t('client.fileReadError')));
           reader.readAsDataURL(file);
         });
       }
@@ -8277,7 +8296,7 @@
           resolveMetaSelection = null;
         }
 
-        fileMetaFileName.textContent = String(file?.name || 'Archivo');
+        fileMetaFileName.textContent = String(file?.name || t('files.classifyFile'));
         fileDocType.value = '';
         fileCreditParty.value = '';
         fileCreditParty.required = false;
@@ -8306,7 +8325,7 @@
         if (!files.length) return;
 
         if (!currentLeadId) {
-          showToast('No hay lead seleccionado', 'error');
+          showToast(t('client.noLeadSelected'), 'error');
           return;
         }
 
@@ -8328,18 +8347,18 @@
         const mimeType = getMimeTypeFromFile(file);
 
         if (!allowedTypes.has(mimeType)) {
-          showToast(`Tipo de archivo no permitido: ${file.name}`, 'error');
+          showToast(`${t('client.fileTypeNotAllowed')} ${file.name}`, 'error');
           return;
         }
 
         if (file.size > maxSize) {
-          showToast(`Archivo muy grande: ${file.name} (máx 10MB)`, 'error');
+          showToast(`${t('client.fileTooLarge')} ${file.name} ${t('client.maxSize')}`, 'error');
           return;
         }
 
         const metadata = await openFileMetaModal(file);
         if (!metadata) {
-          showToast(`Carga cancelada: ${file.name}`, 'info');
+          showToast(`${t('client.uploadCancelled')} ${file.name}`, 'info');
           return;
         }
 
@@ -8363,12 +8382,12 @@
 
           const persisted = persistFilesMetadata(currentLeadId, existingFiles);
           if (!persisted) {
-            throw new Error('No se pudo guardar el archivo localmente por limite de almacenamiento.');
+            throw new Error(t('client.fileLocalSaveLimit'));
           }
           cacheSharedLeadFiles(currentLeadId, existingFiles);
 
           await loadFilesList({ forceServer: true, silent: true });
-          showToast(`Archivo subido: ${file.name}`, 'success');
+          showToast(`${t('client.fileUploaded')} ${file.name}`, 'success');
 
           window.dispatchEvent(new CustomEvent('lead:file-uploaded', {
             detail: {
@@ -8383,7 +8402,7 @@
           }));
         } catch (error) {
           console.error('Error subiendo archivo:', error);
-          showToast(error.message || 'No se pudo subir el archivo.', 'error');
+          showToast(error.message || t('client.fileUploadError'), 'error');
         }
       }
 
@@ -8417,8 +8436,8 @@
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14,2 14,8 20,8"/>
               </svg>
-              <p>No hay archivos aun</p>
-              <span>Los archivos subidos apareceran aqui</span>
+              <p>${escapeUnsafeHtml(t('files.empty'))}</p>
+              <span>${escapeUnsafeHtml(t('files.emptySub'))}</span>
             </div>
           `;
           return;
@@ -8426,7 +8445,7 @@
 
         filesList.innerHTML = safeFiles.map((file) => {
           const size = formatFileSize(Number(file.size || 0));
-          const date = new Date(file.uploadedAt).toLocaleDateString('es-ES');
+          const date = new Date(file.uploadedAt).toLocaleDateString(getCurrentLocale());
           const fileType = String(file.type || '').toLowerCase();
           const isImage = fileType.includes('image');
           const isPdf = fileType === 'application/pdf';
@@ -8444,20 +8463,20 @@
                 <div class="file-meta-row">${metadataBadges}</div>
               </div>
               <div class="file-actions">
-                <button class="file-btn" title="Ver" onclick="openFile('${file.id}')">
+                <button class="file-btn" title="${escapeUnsafeHtml(t('action.open'))}" onclick="openFile('${file.id}')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                     <circle cx="12" cy="12" r="3"/>
                   </svg>
                 </button>
-                <button class="file-btn" title="Descargar" onclick="downloadFile('${file.id}')">
+                <button class="file-btn" title="${escapeUnsafeHtml(t('action.download'))}" onclick="downloadFile('${file.id}')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                   </svg>
                 </button>
-                <button class="file-btn delete" title="Eliminar" onclick="deleteFile('${file.id}')">
+                <button class="file-btn delete" title="${escapeUnsafeHtml(t('action.delete'))}" onclick="deleteFile('${file.id}')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <polyline points="3 6 5 6 21 6"/>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -8468,6 +8487,10 @@
           `;
         }).join('');
       }
+
+      window.__clientRenderFilesList = function() {
+        renderFilesList(readStoredFilesMetadata(currentLeadId));
+      };
 
       async function loadFilesList(options = {}) {
         const { forceServer = false, silent = false } = options;
@@ -8486,7 +8509,7 @@
             renderFilesList(cachedFiles);
           }
           if (!silent) {
-            showToast(error.message || 'No se pudieron sincronizar los archivos.', 'error');
+            showToast(error.message || t('client.fileSyncError'), 'error');
           }
         }
       }
@@ -8501,7 +8524,7 @@
           leadId: currentLeadId
         });
         if (!dataUrl) {
-          showToast('No se encontro el contenido del archivo.', 'error');
+          showToast(t('client.fileContentNotFound'), 'error');
           return;
         }
 
@@ -8514,7 +8537,7 @@
       };
 
       window.deleteFile = async function(fileId) {
-        if (!confirm('Eliminar este archivo?')) return;
+        if (!confirm(t('confirm.deleteFile'))) return;
 
         const files = readStoredFilesMetadata(currentLeadId);
         const deletedFile = files.find((item) => String(item.id) === String(fileId)) || null;
@@ -8523,7 +8546,7 @@
         try {
           await deleteFileFromServer(currentLeadId, deletedFile.id);
         } catch (error) {
-          showToast(error.message || 'No se pudo eliminar el archivo.', 'error');
+          showToast(error.message || t('client.fileDeleteError'), 'error');
           return;
         }
 
@@ -8540,7 +8563,7 @@
           }
         }));
 
-        showToast('Archivo eliminado', 'success');
+        showToast(t('client.fileDeleted'), 'success');
         await loadFilesList({ forceServer: true, silent: true });
       };
 
@@ -8549,7 +8572,7 @@
         const file = files.find((item) => String(item.id) === String(fileId));
 
         if (!file) {
-          showToast('Archivo no encontrado', 'error');
+          showToast(t('client.fileNotFound'), 'error');
           return;
         }
 
@@ -8572,7 +8595,7 @@
         });
 
         if (!dataUrl) {
-          showToast('Archivo no encontrado', 'error');
+          showToast(t('client.fileNotFound'), 'error');
           return;
         }
 
@@ -8755,15 +8778,27 @@
     function buildFollowupEmailBody() {
       const leadName = getLeadDisplayName();
       const caseLabel = getLeadCaseLabel();
-      const caseText = caseLabel ? ` para tu caso ${caseLabel}` : '';
+      if (isCurrentLangSpanish()) {
+        const caseText = caseLabel ? ` para tu caso ${caseLabel}` : '';
+        return [
+          `Hola ${leadName},`,
+          '',
+          `Te escribo para dar seguimiento${caseText}.`,
+          '',
+          'Si tienes alguna duda, respondeme este correo y con gusto te apoyo.',
+          '',
+          'Saludos,'
+        ].join('\n');
+      }
+      const caseText = caseLabel ? ` regarding your case ${caseLabel}` : '';
       return [
-        `Hola ${leadName},`,
+        `Hi ${leadName},`,
         '',
-        `Te escribo para dar seguimiento${caseText}.`,
+        `I am following up${caseText}.`,
         '',
-        'Si tienes alguna duda, respondeme este correo y con gusto te apoyo.',
+        'If you have any questions, reply to this email and I will be glad to help.',
         '',
-        'Saludos,'
+        'Best regards,'
       ].join('\n');
     }
 
@@ -8773,14 +8808,14 @@
       const caseLabel = getLeadCaseLabel() || String(currentLeadId || '-');
       const includeCoapp = readCoappIncludeContractFlag(lead);
       const coappName = String(lead.co_applicant_name || '').trim();
-      const phone = getPrimaryLeadPhone() || 'No disponible';
-      const email = getPrimaryLeadEmail() || 'No disponible';
+      const phone = getPrimaryLeadPhone() || t('common.notAvailable');
+      const email = getPrimaryLeadEmail() || t('common.notAvailable');
       const address = [
         String(lead.address_street || '').trim(),
         String(lead.city || '').trim(),
         String(lead.state_code || lead.state || '').trim(),
         String(lead.zip_code || '').trim()
-      ].filter(Boolean).join(', ') || 'No disponible';
+      ].filter(Boolean).join(', ') || t('common.notAvailable');
 
       const totalDebt = formatCurrency(parseCurrency(document.getElementById('calcTotalDebt')?.value || lead.calc_total_debt || 0));
       const estSettlement = String(document.getElementById('resultSettlement')?.textContent || formatCurrency(0)).trim();
@@ -8839,7 +8874,7 @@
       const identity = getCurrentEmailIdentity();
       const leadId = Number(currentLeadId || currentLeadData?.id || 0);
       if (!Number.isInteger(leadId) || leadId <= 0) {
-        throw new Error('No hay lead activo para enviar correo.');
+        throw new Error(t('client.noLeadEmail'));
       }
 
       const response = await fetch('/api/emails/send', {
@@ -8858,7 +8893,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.message || 'No se pudo registrar el correo.');
+        throw new Error(data?.message || t('client.emailRegisterError'));
       }
       return data;
     }
@@ -8866,7 +8901,7 @@
     async function generateLeadContractPdf() {
       const leadId = Number(currentLeadId || currentLeadData?.id || 0);
       if (!Number.isInteger(leadId) || leadId <= 0) {
-        throw new Error('No hay lead activo para generar contrato.');
+        throw new Error(t('client.noLeadContract'));
       }
 
       const response = await fetch(`/api/leads/${leadId}/contracts/generate`, {
@@ -8877,7 +8912,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.message || 'No se pudo generar el contrato.');
+        throw new Error(data?.message || t('client.contractGenError'));
       }
       return data;
     }
@@ -8921,8 +8956,8 @@
       let sendingComposerEmail = false;
       let sendingContractEmail = false;
       let activeContractPdfObjectUrl = '';
-      const defaultContractPanelBtnTitle = String(emailSendContractBtnTitle?.textContent || 'Generar contrato').trim() || 'Generar contrato';
-      const defaultContractPanelBtnSubtitle = String(emailSendContractBtnSubtitle?.textContent || 'Crear PDF del contrato en Files').trim() || 'Crear PDF del contrato en Files';
+      const defaultContractPanelBtnTitle = String(emailSendContractBtnTitle?.textContent || t('email.genContract')).trim() || t('email.genContract');
+      const defaultContractPanelBtnSubtitle = String(emailSendContractBtnSubtitle?.textContent || t('email.genContractSub')).trim() || t('email.genContractSub');
       const contractStateByLead = new Map();
 
       function setEmailPanelOpen(nextOpen) {
@@ -8954,7 +8989,8 @@
         const recipient = getPrimaryLeadEmail();
         const leadName = getLeadDisplayName();
         const caseLabel = getLeadCaseLabel();
-        const subject = `Seguimiento ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
+        const subjectPrefix = isCurrentLangSpanish() ? 'Seguimiento' : 'Follow-up';
+        const subject = `${subjectPrefix} ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
 
         if (emailComposerTo) emailComposerTo.value = recipient;
         if (emailComposerCc) emailComposerCc.value = '';
@@ -8962,7 +8998,7 @@
         if (emailComposerBody) emailComposerBody.value = buildFollowupEmailBody();
         if (emailComposerSendBtn) {
           emailComposerSendBtn.disabled = false;
-          emailComposerSendBtn.textContent = 'Enviar correo';
+          emailComposerSendBtn.textContent = t('client.sendEmail');
         }
 
         setEmailPanelOpen(false);
@@ -9063,11 +9099,11 @@
         if (emailSendContractBtn) {
           emailSendContractBtn.disabled = Boolean(state.isGenerating);
           if (state.isGenerating) {
-            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = 'Generando contrato...';
-            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = 'Creando PDF en Files';
+            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = t('client.generatingContract');
+            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = t('client.creatingPdf');
           } else if (hasContract) {
-            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = 'Abrir contrato';
-            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = 'Ver vista previa del contrato';
+            if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = t('client.openContract');
+            if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = t('client.previewContract');
           } else {
             if (emailSendContractBtnTitle) emailSendContractBtnTitle.textContent = defaultContractPanelBtnTitle;
             if (emailSendContractBtnSubtitle) emailSendContractBtnSubtitle.textContent = defaultContractPanelBtnSubtitle;
@@ -9076,14 +9112,18 @@
 
         if (contractRegenerateBtn) {
           contractRegenerateBtn.disabled = Boolean(state.isGenerating);
-          contractRegenerateBtn.textContent = state.isGenerating ? 'Regenerando...' : 'Regenerar contrato';
+          contractRegenerateBtn.textContent = state.isGenerating ? t('client.regeneratingContract') : t('client.regenerateContract');
         }
 
         if (contractSendEmailBtn && !sendingContractEmail) {
           contractSendEmailBtn.disabled = Boolean(state.isGenerating) || !hasContract;
-          contractSendEmailBtn.textContent = 'Enviar contrato';
+          contractSendEmailBtn.textContent = t('client.sendContract');
         }
       }
+
+      window.__clientSyncContractUi = function() {
+        syncContractActionButtons();
+      };
 
       async function fetchLeadFileDataUrlForContract(leadId, fileId) {
         const normalizedLeadId = Number(leadId || 0);
@@ -9093,7 +9133,7 @@
         const response = await fetch(`/api/leads/${normalizedLeadId}/files/${normalizedFileId}/content`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(data?.message || 'No se pudo cargar el PDF del contrato.');
+          throw new Error(data?.message || t('client.contractPreviewLoadError'));
         }
         return String(data?.dataUrl || '');
       }
@@ -9159,20 +9199,32 @@
         const recipientPhone = getPrimaryLeadPhone();
         const caseLabel = getLeadCaseLabel();
         const leadName = getLeadDisplayName();
-        const subject = `Contrato ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
+        const subjectPrefix = isCurrentLangSpanish() ? 'Contrato' : 'Contract';
+        const subject = `${subjectPrefix} ${caseLabel ? `${caseLabel} - ` : ''}${leadName}`.trim();
 
-        if (contractContactPhone) contractContactPhone.textContent = recipientPhone || 'No disponible';
-        if (contractContactEmail) contractContactEmail.textContent = recipientEmail || 'No disponible';
+        if (contractContactPhone) contractContactPhone.textContent = recipientPhone || t('common.notAvailable');
+        if (contractContactEmail) contractContactEmail.textContent = recipientEmail || t('common.notAvailable');
         if (contractEmailSubject) contractEmailSubject.value = subject;
         if (contractEmailIntro) {
-          contractEmailIntro.value = [
-            `Hola ${leadName},`,
-            '',
-            `Te comparto tu contrato ${caseLabel || ''}.`,
-            'Por favor revisalo y respondeme con cualquier duda.',
-            '',
-            'Saludos,'
-          ].join('\n').trim();
+          contractEmailIntro.value = (
+            isCurrentLangSpanish()
+              ? [
+                `Hola ${leadName},`,
+                '',
+                `Te comparto tu contrato ${caseLabel || ''}.`,
+                'Por favor revisalo y respondeme con cualquier duda.',
+                '',
+                'Saludos,'
+              ]
+              : [
+                `Hi ${leadName},`,
+                '',
+                `I am sharing your contract ${caseLabel || ''}.`,
+                'Please review it and reply with any questions.',
+                '',
+                'Best regards,'
+              ]
+          ).join('\n').trim();
         }
 
         if (dataUrl) {
@@ -9186,7 +9238,7 @@
           setContractPreviewState(loadingMessage, 'loading');
         } else {
           if (!keepCurrentPreview) setContractPdfFrameSrc('');
-          setContractPreviewState('Aun no hay contrato para mostrar.', 'error');
+          setContractPreviewState(t('client.noContractPreview'), 'error');
         }
 
         setEmailPanelOpen(false);
@@ -9199,14 +9251,14 @@
         const { force = false } = options;
         const leadId = getActiveLeadId();
         if (!leadId) {
-          showToast('No hay lead activo para generar contrato.', 'error');
+          showToast(t('client.noLeadContract'), 'error');
           return;
         }
 
         const state = getOrCreateContractState(leadId);
         if (state.isGenerating) {
           openContractComposerModal({
-            loadingMessage: 'Generando contrato, espera un momento...',
+            loadingMessage: t('client.contractLoadingWait'),
             keepCurrentPreview: Boolean(state.dataUrl)
           });
           return;
@@ -9220,10 +9272,10 @@
         state.isGenerating = true;
         syncContractActionButtons(leadId);
         openContractComposerModal({
-          loadingMessage: 'Generando contrato, espera un momento...',
+          loadingMessage: t('client.contractLoadingWait'),
           keepCurrentPreview: Boolean(state.dataUrl)
         });
-        showToast('Generando contrato...', 'info');
+        showToast(t('client.generatingContract'), 'info');
 
         try {
           const result = await generateLeadContractPdf();
@@ -9232,7 +9284,7 @@
           }
           const resolved = await resolveGeneratedContractData(result, leadId);
           if (!resolved.dataUrl) {
-            throw new Error('El contrato se genero, pero no se pudo cargar la vista previa.');
+            throw new Error(t('client.contractPreviewLoadError'));
           }
 
           state.dataUrl = resolved.dataUrl;
@@ -9240,13 +9292,13 @@
           state.updatedAt = new Date().toISOString();
 
           openContractComposerModal({ dataUrl: state.dataUrl });
-          showToast('Contrato generado correctamente.', 'success');
+          showToast(t('client.contractGenerated'), 'success');
         } catch (error) {
           openContractComposerModal({
-            errorMessage: error.message || 'No se pudo generar el contrato.',
+            errorMessage: error.message || t('client.contractGenError'),
             keepCurrentPreview: Boolean(state.dataUrl)
           });
-          showToast(error.message || 'No se pudo generar el contrato.', 'error');
+          showToast(error.message || t('client.contractGenError'), 'error');
         } finally {
           state.isGenerating = false;
           syncContractActionButtons(leadId);
@@ -9256,14 +9308,14 @@
       async function openExistingOrGenerateContract() {
         const leadId = getActiveLeadId();
         if (!leadId) {
-          showToast('No hay lead activo para generar contrato.', 'error');
+          showToast(t('client.noLeadContract'), 'error');
           return;
         }
 
         const state = getOrCreateContractState(leadId);
         if (state.isGenerating) {
           openContractComposerModal({
-            loadingMessage: 'Generando contrato, espera un momento...',
+            loadingMessage: t('client.contractLoadingWait'),
             keepCurrentPreview: Boolean(state.dataUrl)
           });
           return;
@@ -9359,22 +9411,22 @@
         const ccResult = parseCcEmailsInput(emailComposerCc?.value || '');
 
         if (!isValidEmailFormat(toEmail)) {
-          showToast('El destinatario no tiene un correo valido.', 'error');
+          showToast(t('client.invalidRecipient'), 'error');
           emailComposerTo?.focus();
           return;
         }
         if (!ccResult.ok) {
-          showToast(ccResult.message || 'Revisa los correos en CC.', 'error');
+          showToast(ccResult.message || t('client.checkCc'), 'error');
           emailComposerCc?.focus();
           return;
         }
         if (!subject) {
-          showToast('Debes escribir un asunto.', 'error');
+          showToast(t('client.subjectRequired'), 'error');
           emailComposerSubject?.focus();
           return;
         }
         if (!body) {
-          showToast('Debes escribir el cuerpo del correo.', 'error');
+          showToast(t('client.bodyRequired'), 'error');
           emailComposerBody?.focus();
           return;
         }
@@ -9382,7 +9434,7 @@
         sendingComposerEmail = true;
         if (emailComposerSendBtn) {
           emailComposerSendBtn.disabled = true;
-          emailComposerSendBtn.textContent = 'Enviando...';
+          emailComposerSendBtn.textContent = t('client.sending');
         }
 
         try {
@@ -9393,15 +9445,15 @@
             body,
             provider: 'platform'
           });
-          showToast('Correo enviado correctamente.', 'success');
+          showToast(t('client.emailSent'), 'success');
           setComposerModalOpen(false);
         } catch (error) {
-          showToast(error.message || 'No se pudo enviar el correo.', 'error');
+          showToast(error.message || t('client.emailSendError'), 'error');
         } finally {
           sendingComposerEmail = false;
           if (emailComposerSendBtn) {
             emailComposerSendBtn.disabled = false;
-            emailComposerSendBtn.textContent = 'Enviar correo';
+            emailComposerSendBtn.textContent = t('client.sendEmail');
           }
         }
       });
@@ -9410,31 +9462,31 @@
         if (sendingContractEmail) return;
         const recipientEmail = getPrimaryLeadEmail();
         if (!recipientEmail) {
-          showToast('El cliente no tiene email registrado.', 'error');
+          showToast(t('client.noClientEmail'), 'error');
           return;
         }
 
         sendingContractEmail = true;
         contractSendEmailBtn.disabled = true;
-        contractSendEmailBtn.textContent = 'Enviando...';
+        contractSendEmailBtn.textContent = t('client.sending');
 
         try {
           const subject = String(contractEmailSubject?.value || '').trim();
           if (contractEmailSubject && !subject) {
-            showToast('Agrega un asunto para el correo.', 'error');
+            showToast(t('client.addSubject'), 'error');
             contractEmailSubject?.focus();
             return;
           }
 
-          showToast('Contrato guardado en Files. Envio por email pendiente de integrar.', 'info');
+          showToast(t('client.contractSavedPending'), 'info');
           setContractModalOpen(false);
         } catch (error) {
-          showToast(error.message || 'No se pudo enviar el contrato.', 'error');
+          showToast(error.message || t('client.contractSendError'), 'error');
         } finally {
           sendingContractEmail = false;
           if (contractSendEmailBtn) {
             contractSendEmailBtn.disabled = false;
-            contractSendEmailBtn.textContent = 'Enviar contrato';
+            contractSendEmailBtn.textContent = t('client.sendContract');
           }
         }
       });
@@ -9465,6 +9517,37 @@
 
       syncContractActionButtons();
     }
+
+    window.addEventListener('langchange', () => {
+      if (typeof window.i18n?.applyToDOM === 'function') window.i18n.applyToDOM();
+
+      if (notesList) renderLeadNotesList();
+      if (typeof renderNoteTemplateSelect === 'function') renderNoteTemplateSelect();
+
+      if (currentLeadId) {
+        if (leadNotesLoadingPromise) {
+          setNotesStatus(t('notes.loading'), 'neutral');
+        } else if (Array.isArray(leadNotes) && leadNotes.length) {
+          setNotesStatus(getNotesCountLabel(leadNotes.length), 'neutral');
+        } else {
+          setNotesStatus(t('notes.noneStatus'), 'neutral');
+        }
+      } else {
+        setNotesStatus(t('notes.selectLeadStatus'), 'warning');
+      }
+
+      if (clientNotifList?.querySelector('.notif-empty')) {
+        _renderClientNotifEmptyState();
+      }
+
+      if (typeof window.__clientRenderFilesList === 'function') {
+        window.__clientRenderFilesList();
+      }
+
+      if (typeof window.__clientSyncContractUi === 'function') {
+        window.__clientSyncContractUi();
+      }
+    });
 
     // Cargar datos
     initNotesPanel();
