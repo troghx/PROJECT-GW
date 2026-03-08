@@ -1359,6 +1359,10 @@
       return String(value || '').trim().slice(0, 120);
     }
 
+    function normalizeAssigneeKey(value) {
+      return normalizeAssigneeName(value).toLowerCase();
+    }
+
     function getLeadAssignedToDisplay(lead = currentLeadData) {
       const assignedTo = normalizeAssigneeName(lead?.assigned_to);
       if (assignedTo) return assignedTo;
@@ -1366,15 +1370,99 @@
       return currentUser || 'admin';
     }
 
+    function formatAssigneeLabel(username, displayName = '') {
+      const normalizedUsername = normalizeAssigneeName(username);
+      const normalizedDisplayName = normalizeAssigneeName(displayName);
+      if (normalizedDisplayName && normalizeAssigneeKey(normalizedDisplayName) !== normalizeAssigneeKey(normalizedUsername)) {
+        return `${normalizedDisplayName} (@${normalizedUsername})`;
+      }
+      return normalizedDisplayName || normalizedUsername;
+    }
+
+    function createAssigneeOption(candidate) {
+      if (!candidate) return null;
+
+      let username = '';
+      let displayName = '';
+      if (typeof candidate === 'string') {
+        username = normalizeAssigneeName(candidate);
+      } else if (typeof candidate === 'object') {
+        username = normalizeAssigneeName(candidate.username || candidate.value || candidate.name || '');
+        displayName = normalizeAssigneeName(candidate.displayName || candidate.display_name || candidate.label || '');
+      }
+
+      if (!username && displayName) {
+        username = displayName;
+      }
+      if (!username) return null;
+
+      const resolvedDisplayName = displayName || username;
+      return {
+        username,
+        displayName: resolvedDisplayName,
+        label: formatAssigneeLabel(username, resolvedDisplayName)
+      };
+    }
+
+    function getAssigneeLookupKeys(option) {
+      if (!option) return [];
+      return Array.from(new Set([
+        normalizeAssigneeKey(option.username),
+        normalizeAssigneeKey(option.displayName),
+        normalizeAssigneeKey(option.label)
+      ].filter(Boolean)));
+    }
+
+    function mergeAssigneeOptions(currentOption, incomingOption) {
+      const currentUsernameKey = normalizeAssigneeKey(currentOption?.username);
+      const currentDisplayKey = normalizeAssigneeKey(currentOption?.displayName);
+      const incomingUsernameKey = normalizeAssigneeKey(incomingOption?.username);
+      const incomingDisplayKey = normalizeAssigneeKey(incomingOption?.displayName);
+
+      let username = normalizeAssigneeName(currentOption?.username || '');
+      if ((!username || currentUsernameKey === currentDisplayKey) && incomingOption?.username && incomingUsernameKey !== incomingDisplayKey) {
+        username = incomingOption.username;
+      }
+      if (!username) {
+        username = normalizeAssigneeName(incomingOption?.username || incomingOption?.displayName || '');
+      }
+
+      let displayName = normalizeAssigneeName(currentOption?.displayName || '');
+      if ((!displayName || normalizeAssigneeKey(displayName) === normalizeAssigneeKey(username))
+        && incomingOption?.displayName
+        && incomingDisplayKey !== incomingUsernameKey) {
+        displayName = incomingOption.displayName;
+      }
+      if (!displayName) {
+        displayName = normalizeAssigneeName(incomingOption?.displayName || username);
+      }
+
+      return createAssigneeOption({ username, displayName });
+    }
+
     function buildUniqueAssigneeList(candidates = []) {
-      const valuesByKey = new Map();
-      candidates.forEach((rawValue) => {
-        const value = normalizeAssigneeName(rawValue);
-        if (!value) return;
-        const key = value.toLowerCase();
-        if (!valuesByKey.has(key)) valuesByKey.set(key, value);
+      const optionsByKey = new Map();
+      candidates.forEach((candidate) => {
+        const option = createAssigneeOption(candidate);
+        if (!option) return;
+
+        let existingKey = '';
+        const optionKeys = getAssigneeLookupKeys(option);
+        for (const [key, existingOption] of optionsByKey.entries()) {
+          const existingKeys = getAssigneeLookupKeys(existingOption);
+          if (optionKeys.some((optionKey) => existingKeys.includes(optionKey))) {
+            existingKey = key;
+            break;
+          }
+        }
+
+        const resolvedKey = existingKey || normalizeAssigneeKey(option.username);
+        const mergedOption = existingKey
+          ? mergeAssigneeOptions(optionsByKey.get(existingKey), option)
+          : option;
+        optionsByKey.set(resolvedKey, mergedOption);
       });
-      return Array.from(valuesByKey.values()).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+      return Array.from(optionsByKey.values()).sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
     }
 
     function mergeAssignableUsers(candidates = []) {
@@ -1384,35 +1472,75 @@
       }
     }
 
+    function findAssignableUserByValue(rawValue = '') {
+      const lookupKey = normalizeAssigneeKey(rawValue);
+      if (!lookupKey) return null;
+      return assignableUsers.find((option) => getAssigneeLookupKeys(option).includes(lookupKey)) || null;
+    }
+
+    function resolveAssigneeSelectionFromInput({ allowFreeText = false } = {}) {
+      if (!leadAssigneeInput) return '';
+      const matchedOption = findAssignableUserByValue(leadAssigneeInput.value);
+      if (matchedOption?.username) {
+        return matchedOption.username;
+      }
+      return allowFreeText ? normalizeAssigneeName(leadAssigneeInput.value) : '';
+    }
+
+    function syncAssigneeSelectionFromInput() {
+      if (!leadAssigneeInput) return;
+      const matchedOption = findAssignableUserByValue(leadAssigneeInput.value);
+      if (matchedOption?.username) {
+        leadAssigneeInput.dataset.selectedAssignee = matchedOption.username;
+      } else {
+        delete leadAssigneeInput.dataset.selectedAssignee;
+      }
+    }
+
     function updateAssigneeConfirmVisibility() {
       if (!leadAssigneeInput || !confirmAssigneeBtn) return;
-      const currentValue = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
-      const selectedValue = normalizeAssigneeName(leadAssigneeInput.value);
-      const hasChanged = Boolean(selectedValue) && selectedValue.toLowerCase() !== currentValue.toLowerCase();
+      const currentValue = normalizeAssigneeKey(leadAssigneeInput.dataset.currentAssignee || '');
+      const selectedValue = normalizeAssigneeKey(
+        leadAssigneeInput.dataset.selectedAssignee || resolveAssigneeSelectionFromInput({ allowFreeText: true })
+      );
+      const hasChanged = Boolean(selectedValue) && selectedValue !== currentValue;
       confirmAssigneeBtn.classList.toggle('hidden', !hasChanged);
     }
 
     function syncLeadAssigneeControl(lead = currentLeadData) {
       if (!leadAssigneeInput) return;
       const displayValue = getLeadAssignedToDisplay(lead);
-      leadAssigneeInput.value = displayValue;
-      leadAssigneeInput.dataset.currentAssignee = displayValue;
-      mergeAssignableUsers([displayValue, getCurrentUsername()]);
+      const sessionUser = readSessionUser();
+      mergeAssignableUsers([
+        displayValue,
+        {
+          username: getCurrentUsername(),
+          displayName: sessionUser?.displayName || sessionUser?.name || ''
+        }
+      ]);
+      const selectedOption = findAssignableUserByValue(displayValue);
+      leadAssigneeInput.value = selectedOption?.label || displayValue;
+      leadAssigneeInput.dataset.currentAssignee = selectedOption?.username || displayValue;
+      if (selectedOption?.username || displayValue) {
+        leadAssigneeInput.dataset.selectedAssignee = selectedOption?.username || displayValue;
+      } else {
+        delete leadAssigneeInput.dataset.selectedAssignee;
+      }
       updateAssigneeConfirmVisibility();
       closeAssigneeSuggestions();
     }
 
     function getAssigneeMatches(rawQuery = '') {
-      const query = normalizeAssigneeName(rawQuery).toLowerCase();
+      const query = normalizeAssigneeKey(rawQuery);
       if (!query) return [...assignableUsers];
 
       const prefix = [];
       const contains = [];
       assignableUsers.forEach((user) => {
-        const lowerUser = user.toLowerCase();
-        if (lowerUser.startsWith(query)) {
+        const lookupKeys = getAssigneeLookupKeys(user);
+        if (lookupKeys.some((key) => key.startsWith(query))) {
           prefix.push(user);
-        } else if (lowerUser.includes(query)) {
+        } else if (lookupKeys.some((key) => key.includes(query))) {
           contains.push(user);
         }
       });
@@ -1440,7 +1568,9 @@
     function selectAssigneeAt(index) {
       if (!leadAssigneeInput) return;
       if (!Number.isInteger(index) || index < 0 || index >= assigneeVisibleUsers.length) return;
-      leadAssigneeInput.value = assigneeVisibleUsers[index];
+      const selectedOption = assigneeVisibleUsers[index];
+      leadAssigneeInput.value = selectedOption.label;
+      leadAssigneeInput.dataset.selectedAssignee = selectedOption.username;
       closeAssigneeSuggestions();
       updateAssigneeConfirmVisibility();
     }
@@ -1459,11 +1589,11 @@
         emptyState.textContent = t('client.noMatch');
         leadAssigneeSuggestions.appendChild(emptyState);
       } else {
-        assigneeVisibleUsers.forEach((username, index) => {
+        assigneeVisibleUsers.forEach((option, index) => {
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'lead-assignee-option';
-          button.textContent = username;
+          button.textContent = option.label;
           button.dataset.index = String(index);
           button.addEventListener('mousedown', (event) => {
             event.preventDefault();
@@ -1491,10 +1621,22 @@
           if (!response.ok) {
             throw new Error(payload.message || 'No se pudieron cargar usuarios.');
           }
-          const usersFromApi = Array.isArray(payload.users) ? payload.users : [];
-          mergeAssignableUsers(usersFromApi);
+          const membersFromApi = Array.isArray(payload.members) ? payload.members : [];
+          if (membersFromApi.length) {
+            mergeAssignableUsers(membersFromApi);
+          } else {
+            const usersFromApi = Array.isArray(payload.users) ? payload.users : [];
+            mergeAssignableUsers(usersFromApi);
+          }
         } catch (_error) {
-          mergeAssignableUsers([getCurrentUsername(), currentLeadData?.assigned_to]);
+          const sessionUser = readSessionUser();
+          mergeAssignableUsers([
+            currentLeadData?.assigned_to,
+            {
+              username: getCurrentUsername(),
+              displayName: sessionUser?.displayName || sessionUser?.name || ''
+            }
+          ]);
         } finally {
           assignableUsersLoadingPromise = null;
         }
@@ -1507,7 +1649,9 @@
       if (!leadAssigneeInput || !confirmAssigneeBtn) return;
       if (assigneeSaving) return;
 
-      const selectedAssignee = normalizeAssigneeName(leadAssigneeInput.value);
+      const selectedAssignee = normalizeAssigneeName(
+        leadAssigneeInput.dataset.selectedAssignee || resolveAssigneeSelectionFromInput({ allowFreeText: true })
+      );
       const currentAssignee = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
       if (!selectedAssignee) {
         showToast(t('client.selectValidUser'), 'error');
@@ -1548,9 +1692,12 @@
       leadAssigneeInput.addEventListener('click', () => {
         if (assigneeSaving || leadAssigneeInput.disabled) return;
         const currentAssignee = normalizeAssigneeName(leadAssigneeInput.dataset.currentAssignee || '');
-        const currentValue = normalizeAssigneeName(leadAssigneeInput.value);
+        const currentValue = normalizeAssigneeName(
+          leadAssigneeInput.dataset.selectedAssignee || resolveAssigneeSelectionFromInput()
+        );
         if (!currentValue || currentValue.toLowerCase() !== currentAssignee.toLowerCase()) return;
         leadAssigneeInput.value = '';
+        delete leadAssigneeInput.dataset.selectedAssignee;
         updateAssigneeConfirmVisibility();
         void loadAssignableUsers().then(() => openAssigneeSuggestions(''));
       });
@@ -1560,11 +1707,13 @@
       });
 
       leadAssigneeInput.addEventListener('input', () => {
+        syncAssigneeSelectionFromInput();
         updateAssigneeConfirmVisibility();
         openAssigneeSuggestions(leadAssigneeInput.value);
       });
 
       leadAssigneeInput.addEventListener('change', () => {
+        syncAssigneeSelectionFromInput();
         updateAssigneeConfirmVisibility();
       });
 
